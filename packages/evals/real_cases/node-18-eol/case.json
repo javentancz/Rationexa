@@ -1,0 +1,39 @@
+{
+  "id": "node-18-eol",
+  "title": "Node.js 18 end-of-life",
+  "criticality": "important",
+  "decision_source_url": "https://github.com/OleksandrKucherenko/webpack.config/blob/48de6d8e437ad0715015dc7b62f85ce84060bf06/doc/adr/0002-start-from-node-18-lts.md",
+  "decision_date": "2023-11-18",
+  "evidence_source_urls": [
+    "https://nodejs.org/en/about/previous-releases",
+    "https://nodejs.org/en/about/eol"
+  ],
+  "evidence_date": "2025-03-27",
+  "extraction_expectations": [
+    {"kind": "assumption", "keywords": ["Node 18", "supported"]},
+    {"kind": "revisit_condition", "keywords": ["newer", "migration"]}
+  ],
+  "canonical_premises": [
+    {
+      "premise_id": "node-supported-runtime",
+      "kind": "assumption",
+      "statement": "Node 18.18.2 remains a supported production runtime.",
+      "old_excerpt": "The pin assumes Node 18 remains a supported production runtime.",
+      "expected_relationships": ["weakens", "contradicts", "supersedes"]
+    },
+    {
+      "premise_id": "node-migration-work",
+      "kind": "revisit_condition",
+      "statement": "Moving to a newer major version requires a deliberate toolchain and compatibility update.",
+      "old_excerpt": "Moving to a newer major version will require a deliberate toolchain and compatibility update.",
+      "expected_relationships": ["supports"]
+    },
+    {
+      "premise_id": "node-repeatability",
+      "kind": "requirement",
+      "statement": "The project needs a repeatable local Node.js toolchain.",
+      "old_excerpt": "The project needs a repeatable local Node.js toolchain.",
+      "expected_relationships": []
+    }
+  ]
+}

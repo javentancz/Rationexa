@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from rationexa_api.config import Settings
-from rationexa_api.providers import OllamaProvider, _normalize_extraction
+from rationexa_api.providers import OllamaProvider, _ground_excerpt, _normalize_extraction
 from rationexa_api.schemas import ExtractionResult, Relationship, RevisitPremiseInput
 
 
@@ -76,6 +76,18 @@ def test_ollama_provider_wraps_timeout() -> None:
 
     with pytest.raises(ValueError, match="configured timeout"):
         provider.extract("A decision was made.", "decision.txt")
+
+
+def test_ground_excerpt_recovers_exact_source_whitespace() -> None:
+    source = "Node 18 is end-of-life, with its last update\non March 27, 2025."
+
+    grounded = _ground_excerpt(
+        "Node 18 is end-of-life, with its last update on March 27, 2025.",
+        source,
+    )
+
+    assert grounded == source
+    assert _ground_excerpt("an invented quote", source) is None
 
 
 def test_extraction_trust_boundary_repairs_obvious_fact_collapse() -> None:

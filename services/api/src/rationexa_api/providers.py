@@ -407,13 +407,12 @@ def _validated_findings(
     findings = []
     for assessment in batch.findings:
         premise = premise_by_id.get(assessment.premise_id)
-        excerpt = assessment.new_excerpt.strip()
+        excerpt = _ground_excerpt(assessment.new_excerpt, new_evidence)
         if (
             not assessment.relevant
             or premise is None
             or assessment.premise_id in seen
             or not excerpt
-            or excerpt not in new_evidence
         ):
             continue
         seen.add(assessment.premise_id)
@@ -433,6 +432,20 @@ def _validated_findings(
             )
         )
     return findings
+
+
+def _ground_excerpt(candidate: str, source_text: str) -> str | None:
+    """Return the exact source span, tolerating whitespace collapsed by a model."""
+    candidate = candidate.strip()
+    if not candidate:
+        return None
+    if candidate in source_text:
+        return candidate
+    tokens = candidate.split()
+    if not tokens:
+        return None
+    match = re.search(r"\s+".join(re.escape(token) for token in tokens), source_text)
+    return match.group(0) if match else None
 
 
 def get_provider(settings: Settings) -> ExtractionProvider:

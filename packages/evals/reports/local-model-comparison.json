@@ -1,0 +1,1217 @@
+{
+  "generated_at": "2026-08-25T05:07:35.701092+00:00",
+  "cases": [
+    "ingress-nginx-retirement",
+    "node-18-eol",
+    "postgresql-open-source"
+  ],
+  "models": [
+    {
+      "model": "qwen3.5:9b",
+      "aggregate": {
+        "cases_passed": 3,
+        "cases_total": 3,
+        "concept_recall": 0.667,
+        "anchor_rate": 0.296,
+        "revisit_detection_recall": 0.667,
+        "relationship_accuracy": 0.667,
+        "false_positive_count": 0,
+        "total_seconds": 302.61
+      },
+      "cases": [
+        {
+          "case_id": "ingress-nginx-retirement",
+          "status": "passed",
+          "extraction_seconds": 85.94,
+          "revisit_seconds": 55.9,
+          "extraction": {
+            "premise_count": 15,
+            "anchor_rate": 0.333,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "familiar",
+                  "documented"
+                ],
+                "matched": true,
+                "premise": "The controller is familiar to Kubernetes operators and widely documented."
+              },
+              {
+                "kind": "hard_constraint",
+                "keywords": [
+                  "responsibility",
+                  "upgrades"
+                ],
+                "matched": true,
+                "premise": "- The team accepts responsibility for controller upgrades, monitoring, and"
+              },
+              {
+                "kind": "revisit_condition",
+                "keywords": [
+                  "migration",
+                  "Gateway API"
+                ],
+                "matched": true,
+                "premise": "A later migration to Gateway API or another controller is possible but would require additional work."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "hard_constraint",
+                "statement": "The project needs fast and reliable preview URLs for pull requests.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "The project needs fast and reliable preview URLs for pull requests.",
+                  "start_offset": 48,
+                  "end_offset": 120,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "hard_constraint",
+                "statement": "Creating a separate GKE ingress and load balancer for every preview was slow and produced multiple external IPs.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "Creating a separate GKE ingress and load balancer for every preview was slow and produced multiple external IPs.",
+                  "start_offset": 122,
+                  "end_offset": 230,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "hard_constraint",
+                "statement": "A Traefik-based approach added operational complexity, custom permissions, and another routing layer to debug.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "A Traefik-based approach added operational complexity, custom permissions, and another routing layer to debug.",
+                  "start_offset": 232,
+                  "end_offset": 340,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-4",
+                "kind": "requirement",
+                "statement": "The desired design should use one external IP with wildcard DNS, minimize moving parts, and keep the contributor workflow close to standard Kubernetes Ingress patterns.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The desired design should use one external IP with wildcard DNS, minimize moving parts, and keep the contributor workflow close to standard Kubernetes Ingress patterns.",
+                  "start_offset": 342,
+                  "end_offset": 506,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-6",
+                "kind": "assumption",
+                "statement": "The controller is familiar to Kubernetes operators and widely documented.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The controller is familiar to Kubernetes operators and widely documented.",
+                  "start_offset": 630,
+                  "end_offset": 702,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-7",
+                "kind": "assumption",
+                "statement": "It discovers new Ingress resources quickly enough for preview environments.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "It discovers new Ingress resources quickly enough for preview environments.",
+                  "start_offset": 704,
+                  "end_offset": 782,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-8",
+                "kind": "assumption",
+                "statement": "One controller and external IP are simpler than one cloud load balancer per preview.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "One controller and external IP are simpler than one cloud load balancer per preview.",
+                  "start_offset": 784,
+                  "end_offset": 862,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-9",
+                "kind": "assumption",
+                "statement": "The team accepts responsibility for controller upgrades, monitoring, and troubleshooting.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The team accepts responsibility for controller upgrades, monitoring, and troubleshooting.",
+                  "start_offset": 864,
+                  "end_offset": 952,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-10",
+                "kind": "revisit_condition",
+                "statement": "A later migration to Gateway API or another controller is possible but would require additional work.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition requires review",
+                "anchor": {
+                  "exact_excerpt": "A later migration to Gateway API or another controller is possible but would require additional work.",
+                  "start_offset": 954,
+                  "end_offset": 1052,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-11",
+                "kind": "revisit_condition",
+                "statement": "The project must operate the controller and may eventually need to migrate its routing configuration.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition requires review",
+                "anchor": {
+                  "exact_excerpt": "The project must operate the controller and may eventually need to migrate its routing configuration.",
+                  "start_offset": 1076,
+                  "end_offset": 1172,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-11",
+                "kind": "assumption",
+                "statement": "- The controller is familiar to Kubernetes operators and widely documented.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The controller is familiar to Kubernetes operators and widely documented.",
+                  "start_offset": 1000,
+                  "end_offset": 1075,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-12",
+                "kind": "assumption",
+                "statement": "- It discovers new Ingress resources quickly enough for preview environments.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- It discovers new Ingress resources quickly enough for preview environments.",
+                  "start_offset": 1076,
+                  "end_offset": 1153,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-13",
+                "kind": "assumption",
+                "statement": "- One controller and external IP are simpler than one cloud load balancer per",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- One controller and external IP are simpler than one cloud load balancer per",
+                  "start_offset": 1154,
+                  "end_offset": 1231,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-14",
+                "kind": "hard_constraint",
+                "statement": "- The team accepts responsibility for controller upgrades, monitoring, and",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The team accepts responsibility for controller upgrades, monitoring, and",
+                  "start_offset": 1243,
+                  "end_offset": 1317,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-15",
+                "kind": "revisit_condition",
+                "statement": "- A later migration to Gateway API or another controller is possible but would",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- A later migration to Gateway API or another controller is possible but would",
+                  "start_offset": 1337,
+                  "end_offset": 1415,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 1,
+            "detection_recall": 0.5,
+            "relationship_accuracy": 0.5,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "ingress-maintenance",
+                "premise_statement": "The community NGINX Ingress Controller will remain an operable and upgradeable platform component.",
+                "relationship": "supersedes",
+                "confidence_band": "high",
+                "explanation": "The premise assumes the controller will remain an 'operable and upgradeable platform component.' The evidence explicitly states that the project was retired on March 24, 2026, and no longer receives releases or security updates. This authoritative retirement directly supersedes the assumption of ongoing operability and upgradability.",
+                "missing_context_question": null,
+                "old_excerpt": "The team accepts responsibility for controller upgrades, monitoring, and troubleshooting.",
+                "new_excerpt": "The Kubernetes project retired the community Ingress NGINX controller on\nMarch 24, 2026. Existing deployments and installation artifacts continue to\nwork, but the retired project no longer receives releases, bug fixes, or\nsecurity updates.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "node-18-eol",
+          "status": "passed",
+          "extraction_seconds": 39.39,
+          "revisit_seconds": 36.53,
+          "extraction": {
+            "premise_count": 7,
+            "anchor_rate": 0.429,
+            "concept_recall": 0.5,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "Node 18",
+                  "supported"
+                ],
+                "matched": true,
+                "premise": "Node 18 remains a supported production runtime."
+              },
+              {
+                "kind": "revisit_condition",
+                "keywords": [
+                  "newer",
+                  "migration"
+                ],
+                "matched": false,
+                "premise": null
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "requirement",
+                "statement": "The project needs a repeatable local Node.js toolchain.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The project needs a repeatable local Node.js toolchain.",
+                  "start_offset": 245,
+                  "end_offset": 289,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "hard_constraint",
+                "statement": "Pin Node 18.18.2 LTS for the project.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "Use Direnv and Volta, and pin Node 18.18.2 LTS for the project.",
+                  "start_offset": 206,
+                  "end_offset": 273,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "assumption",
+                "statement": "Node 18 remains a supported production runtime.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The pin assumes Node 18 remains a supported production runtime.",
+                  "start_offset": 295,
+                  "end_offset": 360,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-4",
+                "kind": "revisit_condition",
+                "statement": "Moving to a newer major version will require a deliberate toolchain and compatibility update.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition requires review",
+                "anchor": {
+                  "exact_excerpt": "Moving to a newer major version will require a deliberate toolchain and compatibility update.",
+                  "start_offset": 362,
+                  "end_offset": 450,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "material_claim",
+                "statement": "Use Direnv and Volta, and pin Node 18.18.2 LTS for the project.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Use Direnv and Volta, and pin Node 18.18.2 LTS for the project.",
+                  "start_offset": 377,
+                  "end_offset": 440,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-6",
+                "kind": "material_claim",
+                "statement": "The `.envrc` file enables Node 18.18.2 LTS.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "The `.envrc` file enables Node 18.18.2 LTS.",
+                  "start_offset": 459,
+                  "end_offset": 502,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-7",
+                "kind": "assumption",
+                "statement": "The pin assumes Node 18 remains a",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "The pin assumes Node 18 remains a",
+                  "start_offset": 503,
+                  "end_offset": 536,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 1,
+            "detection_recall": 0.5,
+            "relationship_accuracy": 0.5,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "node-supported-runtime",
+                "premise_statement": "Node 18.18.2 remains a supported production runtime.",
+                "relationship": "contradicts",
+                "confidence_band": "high",
+                "explanation": "The evidence explicitly states that Node.js v18 is 'end-of-life' and no longer receives updates or security patches. This directly contradicts the premise that Node 18.18.2 remains a 'supported production runtime.' The text confirms that pinning this version creates security risks, negating its status as supported for production.",
+                "missing_context_question": null,
+                "old_excerpt": "The pin assumes Node 18 remains a supported production runtime.",
+                "new_excerpt": "The Node.js project lists v18 (Hydrogen) as end-of-life, with its last update\non March 27, 2025. Node.js explains that an end-of-life release line no longer\nreceives updates, including security patches.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "postgresql-open-source",
+          "status": "passed",
+          "extraction_seconds": 53.64,
+          "revisit_seconds": 31.21,
+          "extraction": {
+            "premise_count": 8,
+            "anchor_rate": 0.125,
+            "concept_recall": 0.5,
+            "expectation_matches": [
+              {
+                "kind": "fact",
+                "keywords": [
+                  "open-source",
+                  "relational"
+                ],
+                "matched": true,
+                "premise": "Choose PostgreSQL because it is an open-source relational DBMS, the team can"
+              },
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "quickly",
+                  "APIs"
+                ],
+                "matched": false,
+                "premise": null
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "requirement",
+                "statement": "The team needs a DBMS for a web application.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The team needs a DBMS for a web application.",
+                  "start_offset": 24,
+                  "end_offset": 65,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "requirement",
+                "statement": "Decision drivers include support for the team's programming language, ease of learning, and storing large files.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "Decision drivers include support for the team's programming language, ease of learning, and storing large files.",
+                  "start_offset": 66,
+                  "end_offset": 159,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "assumption",
+                "statement": "PostgreSQL, Redis, and Elasticsearch were considered.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "PostgreSQL, Redis, and Elasticsearch were considered.",
+                  "start_offset": 160,
+                  "end_offset": 209,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-4",
+                "kind": "hard_constraint",
+                "statement": "The chosen DBMS must be an open-source relational DBMS.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "Choose PostgreSQL because it is an open-source relational DBMS",
+                  "start_offset": 210,
+                  "end_offset": 269,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-5",
+                "kind": "hard_constraint",
+                "statement": "The team must be able to implement the APIs quickly.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "the team can implement the APIs quickly",
+                  "start_offset": 270,
+                  "end_offset": 310,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-6",
+                "kind": "hard_constraint",
+                "statement": "Several contributors must already know SQL.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "and several contributors already know SQL",
+                  "start_offset": 311,
+                  "end_offset": 352,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-7",
+                "kind": "requirement",
+                "statement": "Input data must conform to a schema.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "Input data must conform to a schema.",
+                  "start_offset": 364,
+                  "end_offset": 401,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-8",
+                "kind": "fact",
+                "statement": "Choose PostgreSQL because it is an open-source relational DBMS, the team can",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "Choose PostgreSQL because it is an open-source relational DBMS, the team can",
+                  "start_offset": 475,
+                  "end_offset": 551,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 1,
+            "finding_count": 1,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "postgres-open-source",
+                "premise_statement": "PostgreSQL is an actively maintained open-source relational database.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence explicitly states that PostgreSQL is released under a liberal open-source license and remains committed to being free and open source in perpetuity. This directly confirms the premise that it is an actively maintained open-source relational database.",
+                "missing_context_question": null,
+                "old_excerpt": "Choose PostgreSQL because it is an open-source relational DBMS",
+                "new_excerpt": "The PostgreSQL Global Development Group states that PostgreSQL is released\nunder the PostgreSQL License, a liberal open-source license similar to BSD or\nMIT. The project says it remains committed to making PostgreSQL free and open\nsource in perpetuity",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gemma4:e4b",
+      "aggregate": {
+        "cases_passed": 3,
+        "cases_total": 3,
+        "concept_recall": 0.5,
+        "anchor_rate": 0.533,
+        "revisit_detection_recall": 1.0,
+        "relationship_accuracy": 1.0,
+        "false_positive_count": 1,
+        "total_seconds": 122.1
+      },
+      "cases": [
+        {
+          "case_id": "ingress-nginx-retirement",
+          "status": "passed",
+          "extraction_seconds": 37.33,
+          "revisit_seconds": 18.42,
+          "extraction": {
+            "premise_count": 10,
+            "anchor_rate": 0.6,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "familiar",
+                  "documented"
+                ],
+                "matched": true,
+                "premise": "- The controller is familiar to Kubernetes operators and widely documented."
+              },
+              {
+                "kind": "hard_constraint",
+                "keywords": [
+                  "responsibility",
+                  "upgrades"
+                ],
+                "matched": true,
+                "premise": "- The team accepts responsibility for controller upgrades, monitoring, and"
+              },
+              {
+                "kind": "revisit_condition",
+                "keywords": [
+                  "migration",
+                  "Gateway API"
+                ],
+                "matched": true,
+                "premise": "- A later migration to Gateway API or another controller is possible but would"
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "requirement",
+                "statement": "The project needs fast and reliable preview URLs for pull requests.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The project needs fast and reliable preview URLs for pull requests.",
+                  "start_offset": 0,
+                  "end_offset": 64,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "hard_constraint",
+                "statement": "Creating a separate GKE ingress and load balancer for every preview was slow and produced multiple external IPs.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "Creating a separate GKE ingress and load balancer for every preview was slow and produced multiple external IPs.",
+                  "start_offset": 101,
+                  "end_offset": 174,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "hard_constraint",
+                "statement": "A Traefik-based approach added operational complexity, custom permissions, and another routing layer to debug.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "A Traefik-based approach added operational complexity, custom permissions, and another routing layer to debug.",
+                  "start_offset": 190,
+                  "end_offset": 257,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-4",
+                "kind": "requirement",
+                "statement": "The desired design should use one external IP with wildcard DNS, minimize moving parts, and keep the contributor workflow close to standard Kubernetes Ingress patterns.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The desired design should use one external IP with wildcard DNS, minimize moving parts, and keep the contributor workflow close to standard Kubernetes Ingress patterns.",
+                  "start_offset": 281,
+                  "end_offset": 379,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "assumption",
+                "statement": "- The controller is familiar to Kubernetes operators and widely documented.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The controller is familiar to Kubernetes operators and widely documented.",
+                  "start_offset": 1000,
+                  "end_offset": 1075,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-6",
+                "kind": "assumption",
+                "statement": "- It discovers new Ingress resources quickly enough for preview environments.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- It discovers new Ingress resources quickly enough for preview environments.",
+                  "start_offset": 1076,
+                  "end_offset": 1153,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-7",
+                "kind": "assumption",
+                "statement": "- One controller and external IP are simpler than one cloud load balancer per",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- One controller and external IP are simpler than one cloud load balancer per",
+                  "start_offset": 1154,
+                  "end_offset": 1231,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-8",
+                "kind": "hard_constraint",
+                "statement": "- The team accepts responsibility for controller upgrades, monitoring, and",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The team accepts responsibility for controller upgrades, monitoring, and",
+                  "start_offset": 1243,
+                  "end_offset": 1317,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-9",
+                "kind": "revisit_condition",
+                "statement": "- A later migration to Gateway API or another controller is possible but would",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- A later migration to Gateway API or another controller is possible but would",
+                  "start_offset": 1337,
+                  "end_offset": 1415,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-10",
+                "kind": "revisit_condition",
+                "statement": "must operate the controller and may eventually need to migrate its routing",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "must operate the controller and may eventually need to migrate its routing",
+                  "start_offset": 1536,
+                  "end_offset": 1610,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 2,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "ingress-maintenance",
+                "premise_statement": "The community NGINX Ingress Controller will remain an operable and upgradeable platform component.",
+                "relationship": "contradicts",
+                "confidence_band": "low",
+                "explanation": "The evidence explicitly states, \"The Kubernetes project retired the community Ingress NGINX controller on March 24, 2026,\" which contradicts the premise that it will remain an operable and upgradeable platform component.",
+                "missing_context_question": null,
+                "old_excerpt": "The team accepts responsibility for controller upgrades, monitoring, and troubleshooting.",
+                "new_excerpt": "The Kubernetes project retired the community Ingress NGINX controller on\nMarch 24, 2026.",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "ingress-migration",
+                "premise_statement": "A later migration to Gateway API or another controller is possible but requires additional work.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence confirms the need for migration by stating, \"Kubernetes recommends migrating to Gateway API or another maintained ingress controller.\"",
+                "missing_context_question": null,
+                "old_excerpt": "A later migration to Gateway API or another controller is possible but would require additional work.",
+                "new_excerpt": "Kubernetes recommends migrating to Gateway API or another maintained ingress\ncontroller.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "node-18-eol",
+          "status": "passed",
+          "extraction_seconds": 15.5,
+          "revisit_seconds": 15.97,
+          "extraction": {
+            "premise_count": 5,
+            "anchor_rate": 0.6,
+            "concept_recall": 0.0,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "Node 18",
+                  "supported"
+                ],
+                "matched": false,
+                "premise": null
+              },
+              {
+                "kind": "revisit_condition",
+                "keywords": [
+                  "newer",
+                  "migration"
+                ],
+                "matched": false,
+                "premise": null
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "assumption",
+                "statement": "The solution is used for composing a React application with modern features enabled.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The solution is used for composing a React application with modern features\nenabled.",
+                  "start_offset": 3,
+                  "end_offset": 73,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "requirement",
+                "statement": "The project needs a repeatable local Node.js toolchain.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The project needs a repeatable local Node.js toolchain.",
+                  "start_offset": 77,
+                  "end_offset": 107,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-3",
+                "kind": "material_claim",
+                "statement": "Use Direnv and Volta, and pin Node 18.18.2 LTS for the project.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Use Direnv and Volta, and pin Node 18.18.2 LTS for the project.",
+                  "start_offset": 377,
+                  "end_offset": 440,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "material_claim",
+                "statement": "The `.envrc` file enables Node 18.18.2 LTS.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "The `.envrc` file enables Node 18.18.2 LTS.",
+                  "start_offset": 459,
+                  "end_offset": 502,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "assumption",
+                "statement": "The pin assumes Node 18 remains a",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "The pin assumes Node 18 remains a",
+                  "start_offset": 503,
+                  "end_offset": 536,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 3,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 1,
+            "false_positive_ids": [
+              "node-repeatability"
+            ],
+            "findings": [
+              {
+                "premise_id": "node-supported-runtime",
+                "premise_statement": "Node 18.18.2 remains a supported production runtime.",
+                "relationship": "contradicts",
+                "confidence_band": "high",
+                "explanation": "The evidence explicitly states that Node.js v18 is end-of-life and no longer receives updates, contradicting the assumption that Node 18.18.2 remains a supported production runtime.",
+                "missing_context_question": null,
+                "old_excerpt": "The pin assumes Node 18 remains a supported production runtime.",
+                "new_excerpt": "The Node.js project lists v18 (Hydrogen) as end-of-life, with its last update\non March 27, 2025.",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "node-migration-work",
+                "premise_statement": "Moving to a newer major version requires a deliberate toolchain and compatibility update.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence advises that the decision should be revisited and the project should test a migration to a supported LTS release, which aligns with the need for deliberate updates.",
+                "missing_context_question": null,
+                "old_excerpt": "Moving to a newer major version will require a deliberate toolchain and compatibility update.",
+                "new_excerpt": "The decision should be revisited and the\nproject should test a migration to a supported LTS release.",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "node-repeatability",
+                "premise_statement": "The project needs a repeatable local Node.js toolchain.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence highlights the risk of 'toolchain... drift' associated with the current runtime, reinforcing the need for a repeatable and supported toolchain.",
+                "missing_context_question": null,
+                "old_excerpt": "The project needs a repeatable local Node.js toolchain.",
+                "new_excerpt": "it creates security,\ntoolchain, and ecosystem-drift risk.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "postgresql-open-source",
+          "status": "passed",
+          "extraction_seconds": 19.25,
+          "revisit_seconds": 15.63,
+          "extraction": {
+            "premise_count": 5,
+            "anchor_rate": 0.4,
+            "concept_recall": 0.5,
+            "expectation_matches": [
+              {
+                "kind": "fact",
+                "keywords": [
+                  "open-source",
+                  "relational"
+                ],
+                "matched": true,
+                "premise": "Choose PostgreSQL because it is an open-source relational DBMS, the team can"
+              },
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "quickly",
+                  "APIs"
+                ],
+                "matched": false,
+                "premise": null
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "requirement",
+                "statement": "The team needs a DBMS for a web application.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The team needs a DBMS for a web application.",
+                  "start_offset": 0,
+                  "end_offset": 41,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "Decision drivers include support for the team's programming language, ease of learning, and storing large files.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Decision drivers include support for the team's programming language, ease of learning, and storing large files.",
+                  "start_offset": 57,
+                  "end_offset": 138,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "assumption",
+                "statement": "PostgreSQL, Redis, and Elasticsearch were considered.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "PostgreSQL, Redis, and Elasticsearch were considered.",
+                  "start_offset": 151,
+                  "end_offset": 191,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "fact",
+                "statement": "Choose PostgreSQL because it is an open-source relational DBMS, the team can",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "Choose PostgreSQL because it is an open-source relational DBMS, the team can",
+                  "start_offset": 475,
+                  "end_offset": 551,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "hard_constraint",
+                "statement": "must conform to a schema.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "must conform to a schema.",
+                  "start_offset": 717,
+                  "end_offset": 742,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 1,
+            "finding_count": 1,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "postgres-open-source",
+                "premise_statement": "PostgreSQL is an actively maintained open-source relational database.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence explicitly states that PostgreSQL is released under the PostgreSQL License, a liberal open-source license, and that the project remains committed to making it free and open source in perpetuity.",
+                "missing_context_question": null,
+                "old_excerpt": "Choose PostgreSQL because it is an open-source relational DBMS",
+                "new_excerpt": "The project says it remains committed to making PostgreSQL free and open\nsource in perpetuity and has no plans to change the license.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

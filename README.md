@@ -41,6 +41,26 @@ Open `http://localhost:3000`. The default provider is local Ollama running Qwen3
 
 For fast tests without starting Ollama, set `AI_PROVIDER=deterministic`. To use the optional hosted adapter, set `AI_PROVIDER=openai`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
 
+## Compare local models on real cases
+
+The real-case suite contains public decisions paired with later authoritative
+evidence. To compare Qwen 3.5 with Gemma 4 locally:
+
+```bash
+ollama pull qwen3.5:9b
+ollama pull gemma4:e4b
+.venv/bin/python -m rationexa_api.evaluation \
+  --models qwen3.5:9b gemma4:e4b
+```
+
+The command writes a detailed JSON result and a readable Markdown summary to
+`packages/evals/reports/`. Extraction and revisit are scored separately; each
+model receives the same curated premises for revisit so the comparison is fair.
+
+To try Gemma 4 in the web app instead of Qwen, set
+`OLLAMA_MODEL=gemma4:e4b` in `.env` and restart the API. The model only reasons
+over text supplied to Rationexa; it does not browse the live web by itself.
+
 ## Quality checks
 
 ```bash

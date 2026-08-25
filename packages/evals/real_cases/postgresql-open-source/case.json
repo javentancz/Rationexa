@@ -1,0 +1,40 @@
+{
+  "id": "postgresql-open-source",
+  "title": "PostgreSQL remains open source",
+  "criticality": "important",
+  "decision_source_url": "https://github.com/tomorrowdevs-projects/team3-real-world-app/blob/4ddcbbd010e4b8dd276c165871a1c8be4902b25b/docs/decisions/ADR_database_001.md",
+  "decision_date": "2022-01-13",
+  "evidence_source_urls": [
+    "https://www.postgresql.org/about/licence/",
+    "https://www.postgresql.org/support/versioning/",
+    "https://www.postgresql.org/support/"
+  ],
+  "evidence_date": "2026-08-13",
+  "extraction_expectations": [
+    {"kind": "fact", "keywords": ["open-source", "relational"]},
+    {"kind": "assumption", "keywords": ["quickly", "APIs"]}
+  ],
+  "canonical_premises": [
+    {
+      "premise_id": "postgres-open-source",
+      "kind": "material_claim",
+      "statement": "PostgreSQL is an actively maintained open-source relational database.",
+      "old_excerpt": "Choose PostgreSQL because it is an open-source relational DBMS",
+      "expected_relationships": ["supports"]
+    },
+    {
+      "premise_id": "postgres-sql-familiarity",
+      "kind": "fact",
+      "statement": "Several project contributors already know SQL.",
+      "old_excerpt": "several contributors already know SQL",
+      "expected_relationships": []
+    },
+    {
+      "premise_id": "postgres-api-speed",
+      "kind": "assumption",
+      "statement": "The team can implement the application APIs quickly with PostgreSQL.",
+      "old_excerpt": "the team can implement the APIs quickly",
+      "expected_relationships": []
+    }
+  ]
+}

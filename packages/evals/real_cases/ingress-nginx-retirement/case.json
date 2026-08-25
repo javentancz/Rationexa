@@ -1,0 +1,41 @@
+{
+  "id": "ingress-nginx-retirement",
+  "title": "Ingress NGINX retirement",
+  "criticality": "critical",
+  "decision_source_url": "https://github.com/creaturekell/github-preview/blob/2a136dd149184cdd5dbaeb76d519d22b8be85803/docs/decisions/004-nginx-ingress.md",
+  "decision_date": "2026-02-10",
+  "evidence_source_urls": [
+    "https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/",
+    "https://kubernetes.io/blog/2026/03/30/kubernetes-v1-36-sneak-peek/",
+    "https://kubernetes.io/blog/2026/03/20/ingress2gateway-1-0-release/"
+  ],
+  "evidence_date": "2026-03-24",
+  "extraction_expectations": [
+    {"kind": "assumption", "keywords": ["familiar", "documented"]},
+    {"kind": "hard_constraint", "keywords": ["responsibility", "upgrades"]},
+    {"kind": "revisit_condition", "keywords": ["migration", "Gateway API"]}
+  ],
+  "canonical_premises": [
+    {
+      "premise_id": "ingress-maintenance",
+      "kind": "assumption",
+      "statement": "The community NGINX Ingress Controller will remain an operable and upgradeable platform component.",
+      "old_excerpt": "The team accepts responsibility for controller upgrades, monitoring, and troubleshooting.",
+      "expected_relationships": ["weakens", "contradicts", "supersedes"]
+    },
+    {
+      "premise_id": "ingress-migration",
+      "kind": "revisit_condition",
+      "statement": "A later migration to Gateway API or another controller is possible but requires additional work.",
+      "old_excerpt": "A later migration to Gateway API or another controller is possible but would require additional work.",
+      "expected_relationships": ["supports"]
+    },
+    {
+      "premise_id": "ingress-speed",
+      "kind": "assumption",
+      "statement": "The controller discovers new Ingress resources quickly enough for preview environments.",
+      "old_excerpt": "It discovers new Ingress resources quickly enough for preview environments.",
+      "expected_relationships": []
+    }
+  ]
+}
