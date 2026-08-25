@@ -108,11 +108,17 @@ wrong.
   that it was fulfilled; the requirement-support guard now rejects that pattern, and the focused
   rerun retained the real security finding with zero false positives.
 - Initial extraction scoring was 78.3%, primarily because grounded expectation and mandatory
-  statements were assigned the wrong premise kind. Source-grounded kind normalization raises the
-  same output set to 96.7%; a fresh five-case rerun covering those patterns reached 100% concept
-  recall and 100% valid anchors.
-- These are development results, not independent release evidence. Gemma remains the established
-  extraction baseline until the frozen 30-case set is rerun under the updated extraction pipeline.
+  statements were assigned the wrong premise kind.
+- The complete post-fix 30-case rerun passed every model gate: 96.7% extraction recall, 99.5%
+  anchor validity, 98.3% revisit recall, 100% relationship precision, zero false positives,
+  zero critical misses, and zero fabricated quotes.
+- Two final general corrections added `mandatory` constraint handling and explicit runtime-review
+  trigger recovery. Focused reruns of the remaining valid failure patterns reached 100% extraction
+  and revisit recall with no false positives. The only unresolved extraction-score disagreement is
+  a development label that calls an explicit `must include` statement a requirement rather than a
+  hard constraint; this label requires independent review rather than a production-code exception.
+- These are development results, not independent release evidence. Ornith is the strongest current
+  local candidate, but a default-model change still requires independent review or real-user pilot data.
 
 ### Gate 4: real-user trust — instrumentation ready, sessions not started
 

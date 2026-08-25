@@ -150,6 +150,7 @@ class DeterministicProvider(ExtractionProvider):
     @staticmethod
     def _classify(sentence: str) -> PremiseKind | None:
         value = " ".join(sentence.lower().split())
+        value = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", value)
         if _is_structure_only(sentence) or value.startswith(("#", "date:", "status:", "source:")):
             return None
         if (
@@ -166,7 +167,15 @@ class DeterministicProvider(ExtractionProvider):
             return PremiseKind.UNKNOWN
         if any(
             word in value
-            for word in ("must not", "cannot", "prohibited", "must ", "required", "accepts responsibility")
+            for word in (
+                "must not",
+                "cannot",
+                "prohibited",
+                "must ",
+                "required",
+                "mandatory",
+                "accepts responsibility",
+            )
         ) or re.search(r"\b(?:hard|non-negotiable)\b.*\brequirement\b", value):
             return PremiseKind.HARD_CONSTRAINT
         if any(
@@ -717,7 +726,7 @@ def _safety_net_finding(
         (
             (len(premise_terms & meaningful_terms(sentence)), premise_terms & meaningful_terms(sentence), sentence)
             for sentence in sentences
-            if _has_material_change_cue(sentence)
+            if _has_material_change_cue(sentence) and not _looks_instructional(sentence)
         ),
         reverse=True,
     )
@@ -726,7 +735,7 @@ def _safety_net_finding(
     overlap, shared_terms, excerpt = ranked[0]
     statement = premise.statement.lower()
     is_explicit_trigger = premise.kind == PremiseKind.REVISIT_CONDITION and bool(
-        re.search(r"\b(revisit|if|when|after|once|migrat\w*|upgrad\w*)\b", statement)
+        re.search(r"\b(revisit\w*|if|when|after|once|migrat\w*|upgrad\w*)\b", statement)
     )
     is_affected_obligation = (
         premise.kind in {PremiseKind.REQUIREMENT, PremiseKind.HARD_CONSTRAINT}
@@ -766,7 +775,8 @@ def _has_material_change_cue(value: str) -> bool:
         re.search(
             r"\b(retir\w*|deprecat\w*|end(?:ed|ing)? of (?:life|support)|eol|no longer|"
             r"turned off|revok\w*|replac\w*|transition\w*|must change|migrat\w*|"
-            r"support (?:ends|ended)|reduc\w*|postpon\w*)\b",
+            r"support (?:ends|ended)|reduc\w*|postpon\w*|"
+            r"trigger\w*\b.*\b(?:review|revisit)|(?:review|revisit)\w*\b.*\btrigger\w*)\b",
             value.lower(),
         )
     )
@@ -823,7 +833,7 @@ def available_models(settings: Settings) -> list[ModelOption]:
             "gemma4:e4b": ("Gemma 4 E4B", "Faster evidence revisits; stronger relationship recall in the current eval"),
             "ornith-1.5:9b": (
                 "Ornith 1.5 9B",
-                "Strong revisit reasoning; source-grounded local challenger",
+                "Best current local development result; independent review pending",
             ),
         }
         return [
