@@ -69,7 +69,7 @@ class DecisionRow(Base):
     preservation_policy: Mapped[str] = mapped_column(String(30), default="key_excerpts")
     status: Mapped[str] = mapped_column(String(30), default="decision_ready")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
-    premises: Mapped[list["PremiseRow"]] = relationship(cascade="all, delete-orphan")
+    premises: Mapped[list[PremiseRow]] = relationship(cascade="all, delete-orphan")
 
 
 class PremiseRow(Base):
@@ -83,7 +83,7 @@ class PremiseRow(Base):
     importance: Mapped[str] = mapped_column(String(20), default="normal")
     quality_state: Mapped[str] = mapped_column(String(20), default="confirmed")
     claim_status: Mapped[str] = mapped_column(String(20), default="not_applicable")
-    anchor: Mapped["SourceAnchorRow | None"] = relationship(cascade="all, delete-orphan")
+    anchor: Mapped[SourceAnchorRow | None] = relationship(cascade="all, delete-orphan")
 
 
 class SourceAnchorRow(Base):
@@ -120,7 +120,7 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     db = SessionLocal()
     try:
         yield db

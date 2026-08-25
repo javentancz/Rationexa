@@ -14,11 +14,17 @@ Rationexa assists review; it does not autonomously declare decisions wrong, reve
 
 ## Run locally
 
+The August 2026 development baseline is Node.js 24.19 LTS, pnpm 11.23,
+Python 3.14.7, and PostgreSQL 18. Use `.nvmrc` and `.python-version` with your
+preferred runtime manager.
+
 ```bash
+nvm use
+corepack enable
 cp .env.example .env
 ollama pull qwen3.5:9b
 docker compose up -d db
-python3 -m venv .venv
+python3.14 -m venv .venv
 . .venv/bin/activate
 pip install -e 'services/api[dev]'
 uvicorn rationexa_api.main:app --reload --port 8000
