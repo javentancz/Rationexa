@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from rationexa_api.db import ExtractionRow, SessionLocal
 from rationexa_api.main import app
 
 
@@ -72,3 +73,48 @@ def test_stage_one_vertical_slice() -> None:
         assert revisit.json()["findings"]
         assert any(finding["relationship"] == "contradicts" for finding in revisit.json()["findings"])
         assert any(finding["source_fallback_performed"] for finding in revisit.json()["findings"])
+
+
+def test_critical_decision_rejects_unanchored_consequential_premise() -> None:
+    source = "We assumed the controller would remain maintained."
+
+    with TestClient(app) as client:
+        artifact = client.post(
+            "/v1/artifacts",
+            json={"filename": "decision.txt", "media_type": "text/plain", "content": source},
+        ).json()
+        extraction = client.post(
+            "/v1/decisions/extractions",
+            json={"artifact_id": artifact["id"]},
+        ).json()
+        candidate = extraction["result"]["premises"][0]
+
+        with SessionLocal() as db:
+            row = db.get(ExtractionRow, extraction["id"])
+            output = dict(row.output)
+            output["premises"] = [dict(output["premises"][0], anchor=None)]
+            row.output = output
+            db.commit()
+
+        reviewed = client.post(
+            f"/v1/extractions/{extraction['id']}/review",
+            json={
+                "reviews": [
+                    {
+                        "candidate_id": candidate["candidate_id"],
+                        "action": "confirm",
+                        "statement": candidate["statement"],
+                        "kind": "assumption",
+                    }
+                ]
+            },
+        )
+        assert reviewed.status_code == 200
+
+        finalized = client.post(
+            f"/v1/extractions/{extraction['id']}/finalize",
+            json={"criticality": "critical"},
+        )
+
+        assert finalized.status_code == 422
+        assert "require source anchors" in finalized.json()["detail"]

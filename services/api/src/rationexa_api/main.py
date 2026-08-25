@@ -30,13 +30,23 @@ from .schemas import (
     ExtractionResult,
     ExtractionReviewRequest,
     HealthRead,
+    PremiseKind,
+    RevisitPremiseInput,
     RevisitRead,
     RevisitRequest,
     SourceAnchor,
 )
-from .services import compare_premise, extract_artifact_text, persist_artifact, validate_anchor
+from .services import extract_artifact_text, persist_artifact, validate_anchor
 
 settings = get_settings()
+
+CONSEQUENTIAL_KINDS = {
+    PremiseKind.HARD_CONSTRAINT,
+    PremiseKind.ASSUMPTION,
+    PremiseKind.UNKNOWN,
+    PremiseKind.MATERIAL_CLAIM,
+    PremiseKind.REVISIT_CONDITION,
+}
 
 
 @asynccontextmanager
@@ -68,7 +78,7 @@ def save_artifact(db: Session, filename: str, media_type: str, content: bytes, s
         text, parser_version = extract_artifact_text(content, media_type)
         digest, storage_uri = persist_artifact(content, settings.artifact_dir, filename)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     existing = db.scalar(select(ArtifactRow).where(ArtifactRow.sha256 == digest))
     if existing:
         return existing
@@ -171,6 +181,7 @@ def review_extraction(extraction_id: str, payload: ExtractionReviewRequest, db: 
             premise.statement = review.statement or premise.statement
         if review.kind is not None:
             premise.kind = review.kind or premise.kind
+            premise.importance = "high" if premise.kind in CONSEQUENTIAL_KINDS else "normal"
         if review.action == "unknown":
             premise.quality_state = "draft"
         else:
@@ -197,6 +208,20 @@ def finalize_decision(extraction_id: str, payload: DecisionFinalizeRequest, db: 
     if existing:
         return decision_read(existing)
     result = ExtractionResult.model_validate(extraction.output)
+    if payload.criticality.value == "critical":
+        unanchored = [
+            item.candidate_id
+            for item in result.premises
+            if item.quality_state == "confirmed" and item.kind in CONSEQUENTIAL_KINDS and item.anchor is None
+        ]
+        if unanchored:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    "Critical decisions require source anchors for every confirmed consequential premise. "
+                    f"Reject or mark these premises unknown before finalizing: {', '.join(unanchored)}"
+                ),
+            )
     policy = {"routine": "compact", "important": "key_excerpts", "critical": "strict"}[payload.criticality.value]
     decision = DecisionRow(
         extraction_id=extraction.id,
@@ -259,17 +284,21 @@ def create_revisit(decision_id: str, payload: RevisitRequest, db: Db) -> Revisit
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     evidence = save_artifact(db, payload.filename, payload.media_type, payload.content.encode(), "new_evidence")
-    findings = []
-    for premise in decision.premises:
-        finding = compare_premise(
-            premise.id,
-            premise.statement,
-            premise.anchor.exact_excerpt if premise.anchor else None,
-            evidence.extracted_text,
-            decision.criticality,
+    premises = [
+        RevisitPremiseInput(
+            premise_id=premise.id,
+            kind=PremiseKind(premise.kind),
+            statement=premise.statement,
+            old_excerpt=premise.anchor.exact_excerpt if premise.anchor else None,
         )
-        if finding:
-            findings.append(finding)
+        for premise in decision.premises
+        if PremiseKind(premise.kind) in CONSEQUENTIAL_KINDS
+    ]
+    provider = get_provider(settings)
+    try:
+        findings = provider.revisit(premises, evidence.extracted_text, decision.criticality)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     row = RevisitRow(
         decision_id=decision.id,
         evidence_artifact_id=evidence.id,

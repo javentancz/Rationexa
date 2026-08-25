@@ -1,5 +1,11 @@
+from pathlib import Path
+
 from rationexa_api.schemas import Relationship, SourceAnchor
 from rationexa_api.services import compare_premise, validate_anchor
+
+REAL_CASE = (
+    Path(__file__).parents[3] / "packages" / "evals" / "real_cases" / "ingress-nginx-retirement" / "new-evidence.md"
+)
 
 
 def test_anchor_is_recomputed_from_exact_source() -> None:
@@ -35,3 +41,27 @@ def test_revisit_detects_negation_change() -> None:
     assert result is not None
     assert result.relationship == Relationship.CONTRADICTS
     assert result.source_fallback_performed is True
+
+
+def test_ingress_retirement_filters_noise_and_detects_upgrade_conflict() -> None:
+    evidence = REAL_CASE.read_text()
+
+    unrelated = compare_premise(
+        premise_id="preview-speed",
+        premise_statement="The project needs fast and reliable preview URLs for pull requests.",
+        old_excerpt="The project needs fast and reliable preview URLs for pull requests.",
+        new_evidence=evidence,
+        criticality="critical",
+    )
+    conflict = compare_premise(
+        premise_id="controller-upgrades",
+        premise_statement="The team accepts responsibility for controller upgrades, monitoring, and troubleshooting.",
+        old_excerpt="The team accepts responsibility for controller upgrades, monitoring, and troubleshooting.",
+        new_evidence=evidence,
+        criticality="critical",
+    )
+
+    assert unrelated is None
+    assert conflict is not None
+    assert conflict.relationship == Relationship.CONTRADICTS
+    assert "word" not in conflict.explanation.lower()

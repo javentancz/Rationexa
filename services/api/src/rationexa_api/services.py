@@ -57,8 +57,17 @@ def _page_at_offset(source_text: str, offset: int) -> int | None:
     return int(markers[-1].group(1)) if markers else None
 
 
-NEGATION_CUES = ("no longer", "does not", "doesn't", "cannot", "removed", "ended", "deprecated")
-CHANGE_CUES = ("now supports", "introduced", "increased", "decreased", "changed", "replaced")
+NEGATION_CUES = (
+    "no longer",
+    "does not",
+    "doesn't",
+    "cannot",
+    "removed",
+    "ended",
+    "deprecated",
+    "retired",
+)
+CHANGE_CUES = ("now supports", "introduced", "increased", "decreased", "changed", "replaced", "retired")
 
 
 def compare_premise(
@@ -71,12 +80,18 @@ def compare_premise(
     premise_terms = meaningful_terms(premise_statement)
     sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+|\n+", new_evidence) if part.strip()]
     ranked = sorted(
-        ((len(premise_terms & meaningful_terms(sentence)), sentence) for sentence in sentences),
+        (
+            (len(premise_terms & meaningful_terms(sentence)), premise_terms & meaningful_terms(sentence), sentence)
+            for sentence in sentences
+        ),
         reverse=True,
     )
-    if not ranked or ranked[0][0] == 0:
+    if not ranked:
         return None
-    overlap, best = ranked[0]
+    overlap, shared_terms, best = ranked[0]
+    material_terms = {"deprecat", "maintenance", "migrat", "retir", "security", "version", "price", "limit"}
+    if overlap < 2 and not shared_terms.intersection(material_terms):
+        return None
     old_lower = premise_statement.lower()
     new_lower = best.lower()
     old_negative = any(cue in old_lower for cue in NEGATION_CUES)
@@ -85,11 +100,13 @@ def compare_premise(
 
     if old_negative != new_negative and (changed or overlap >= 2):
         relationship = Relationship.CONTRADICTS
-    elif "deprecated" in new_lower or "replaced by" in new_lower:
+    elif any(cue in new_lower for cue in ("deprecated", "retired", "replaced by")):
         relationship = Relationship.SUPERSEDES
     elif any(cue in new_lower for cue in ("reduced", "lower", "limited", "weaker")):
         relationship = Relationship.WEAKENS
-    elif any(cue in new_lower for cue in ("confirmed", "continues", "still supports", "unchanged")):
+    elif any(cue in new_lower for cue in ("confirmed", "continues", "still supports", "unchanged")) or (
+        "migrat" in meaningful_terms(premise_statement) and "recommend" in new_lower
+    ):
         relationship = Relationship.SUPPORTS
     else:
         relationship = Relationship.UNCLEAR
@@ -99,10 +116,7 @@ def compare_premise(
         premise_statement=premise_statement,
         relationship=relationship,
         confidence_band="high" if overlap >= 3 else "medium",
-        explanation=(
-            f"New evidence shares {overlap} material term(s) with the premise "
-            f"and was classified as {relationship.value}."
-        ),
+        explanation=f"The new evidence materially {relationship.value} this preserved premise.",
         missing_context_question=(
             "What operational or business threshold would make this change material?"
             if relationship in {Relationship.WEAKENS, Relationship.UNCLEAR}
@@ -132,5 +146,28 @@ def meaningful_terms(value: str) -> set[str]:
         "this",
         "that",
         "with",
+        "project",
+        "service",
+        "system",
+        "controller",
+        "ingress",
+        "existing",
+        "new",
     }
-    return {term for term in re.findall(r"[a-z0-9][a-z0-9_-]+", value.lower()) if term not in stop and len(term) > 2}
+    aliases = {
+        "deprecated": "deprecat",
+        "deprecation": "deprecat",
+        "migrate": "migrat",
+        "migrating": "migrat",
+        "migration": "migrat",
+        "retired": "retir",
+        "retirement": "retir",
+        "upgrade": "maintenance",
+        "upgrades": "maintenance",
+        "update": "maintenance",
+        "updates": "maintenance",
+        "release": "maintenance",
+        "releases": "maintenance",
+    }
+    terms = re.findall(r"[a-z0-9][a-z0-9_-]+", value.lower())
+    return {aliases.get(term, term) for term in terms if term not in stop and len(term) > 2}

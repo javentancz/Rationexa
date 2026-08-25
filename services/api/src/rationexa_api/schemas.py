@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -154,6 +155,27 @@ class RevisitFinding(BaseModel):
     old_excerpt: str | None = None
     new_excerpt: str
     source_fallback_performed: bool
+
+
+class RevisitPremiseInput(BaseModel):
+    premise_id: str
+    kind: PremiseKind
+    statement: str
+    old_excerpt: str | None = None
+
+
+class RevisitAssessment(BaseModel):
+    premise_id: str
+    relevant: bool
+    relationship: Relationship
+    confidence_band: Literal["low", "medium", "high"]
+    explanation: str
+    new_excerpt: str
+    missing_context_question: str | None = None
+
+
+class RevisitAssessmentBatch(BaseModel):
+    findings: list[RevisitAssessment]
 
 
 class RevisitRead(BaseModel):

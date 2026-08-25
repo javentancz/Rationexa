@@ -71,6 +71,7 @@ export default function Home() {
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
+  const [revisitCompleted, setRevisitCompleted] = useState(false);
   const [reviews, setReviews] = useState<Record<string, PremiseReview>>({});
   const [draft, setDraft] = useState<DecisionDraft | null>(null);
   const [criticality, setCriticality] = useState<Criticality>("important");
@@ -85,9 +86,13 @@ export default function Home() {
       confirm: values.filter((item) => item.action === "confirm").length,
       unknown: values.filter((item) => item.action === "unknown").length,
       reject: values.filter((item) => item.action === "reject").length,
-      attention: premises.filter((premise) => premise.attention_reason || attentionKinds.has(premise.kind)).length,
+      attention: premises.filter((premise) => premise.attention_reason || attentionKinds.has(reviews[premise.candidate_id]?.kind ?? premise.kind)).length,
     };
   }, [premises, reviews]);
+  const unanchoredCritical = useMemo(() => criticality === "critical" ? premises.filter((premise) => {
+    const review = reviews[premise.candidate_id];
+    return review?.action === "confirm" && attentionKinds.has(review.kind) && !premise.anchor;
+  }) : [], [criticality, premises, reviews]);
   const activePremise = premises.find((premise) => premise.candidate_id === selectedPremise) ?? premises[0];
   const stage = decision ? 4 : extraction ? 2 : 1;
 
@@ -99,6 +104,7 @@ export default function Home() {
     setSelectedPremise(next.result.premises[0]?.candidate_id ?? null);
     setDecision(null);
     setFindings([]);
+    setRevisitCompleted(false);
   }
 
   async function extract(event: FormEvent) {
@@ -164,6 +170,7 @@ export default function Home() {
     try {
       const result = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/revisit-checks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "new-evidence.txt", content: evidence }) }));
       setFindings(result.findings);
+      setRevisitCompleted(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Revisit failed");
     } finally {
@@ -172,7 +179,7 @@ export default function Home() {
   }
 
   function resetWorkspace() {
-    setExtraction(null); setDecision(null); setFindings([]); setReviews({}); setDraft(null); setSelectedPremise(null); setError(null);
+    setExtraction(null); setDecision(null); setFindings([]); setRevisitCompleted(false); setReviews({}); setDraft(null); setSelectedPremise(null); setError(null);
   }
 
   return (
@@ -255,7 +262,7 @@ export default function Home() {
                 <div className="source-help"><strong>Why this matters</strong><p>Compare the extracted statement with the exact source before confirming it.</p></div>
               </aside>
               </section>
-              <section className="finalize-bar"><div><strong>Ready to finalize?</strong><span>{counts.confirm} premises will be preserved · {counts.unknown} unknown · {counts.reject} rejected</span></div><button className="primary" disabled={busyPhase === "finalize" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0} onClick={reviewAndFinalize}>{busyPhase === "finalize" ? <><span className="spinner" />Saving decision…</> : "Save reviewed decision →"}</button></section>
+              <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Ready to finalize?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before finalizing.` : `${counts.confirm} premises will be preserved · ${counts.unknown} unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "finalize" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0 || unanchoredCritical.length > 0} onClick={reviewAndFinalize}>{busyPhase === "finalize" ? <><span className="spinner" />Saving decision…</> : "Save reviewed decision →"}</button></section>
             </> : <section className="card finalized-summary">
               <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><button className="text-button" onClick={resetWorkspace}>New review</button></div>
               <div className="record-meta"><div><span>Chosen option</span><strong>{draft.chosenOption || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div></div>
@@ -266,9 +273,9 @@ export default function Home() {
 
         {decision ? <section className="card revisit-card">
           <div className="section-heading"><div><span className="overline">Step 4 · Revisit</span><h2>What changed?</h2><p>Compare new evidence with the premises you preserved.</p></div><span className="decision-badge">{decision.criticality}</span></div>
-          <label className="field"><span>New evidence</span><textarea aria-label="New evidence" value={evidence} onChange={(event) => setEvidence(event.target.value)} rows={5} /></label>
+          <label className="field"><span>New evidence</span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); }} rows={5} /></label>
           <div className="form-footer"><span>This check flags relationships; it does not overturn the decision.</span><button className="primary" onClick={revisit} disabled={busyPhase === "revisit" || !evidence.trim()}>{busyPhase === "revisit" ? <><span className="spinner" />Checking premises…</> : "Check against premises →"}</button></div>
-          {findings.length ? <div className="findings"><div className="findings-heading"><h3>Review findings</h3><span>{findings.length} relationships found</span></div>{findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.relationship}</span><small>{finding.confidence_band} confidence</small></div><h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{finding.missing_context_question ? <div className="missing-context">Question: {finding.missing_context_question}</div> : null}</article>)}</div> : null}
+          {findings.length ? <div className="findings"><div className="findings-heading"><h3>Review findings</h3><span>{findings.length} material relationship{findings.length === 1 ? "" : "s"} found</span></div>{findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.relationship}</span><small>{finding.confidence_band} confidence</small></div><h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{finding.source_fallback_performed ? <div className="finding-provenance">Original source anchor verified</div> : null}{finding.missing_context_question ? <div className="missing-context">Question: {finding.missing_context_question}</div> : null}</article>)}</div> : revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>The evidence did not meaningfully affect the consequential premises preserved in this decision.</span></div> : null}
         </section> : null}
       </main>
     </div>
