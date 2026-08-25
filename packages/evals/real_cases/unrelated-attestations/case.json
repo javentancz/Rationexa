@@ -1,0 +1,31 @@
+{
+  "id": "unrelated-attestations",
+  "title": "Artifact attestations are irrelevant to cache eviction",
+  "category": "irrelevant",
+  "review_status": "curated_pending_independent_review",
+  "criticality": "routine",
+  "decision_source_url": "https://redis.io/docs/latest/develop/reference/eviction/",
+  "decision_date": "2024-04-10",
+  "evidence_source_urls": ["https://github.blog/changelog/2024-06-25-artifact-attestations-is-generally-available/"],
+  "evidence_date": "2024-06-25",
+  "extraction_expectations": [
+    {"kind": "requirement", "keywords": ["cache", "memory"]},
+    {"kind": "assumption", "keywords": ["least-recently-used", "traffic"]}
+  ],
+  "canonical_premises": [
+    {
+      "premise_id": "cache-memory-bound",
+      "kind": "requirement",
+      "statement": "The application cache must remain within a fixed memory budget.",
+      "old_excerpt": "The cache must remain within a fixed memory budget.",
+      "expected_relationships": []
+    },
+    {
+      "premise_id": "cache-lru-fit",
+      "kind": "assumption",
+      "statement": "Least-recently-used eviction matches the application's traffic pattern.",
+      "old_excerpt": "Least-recently-used eviction is expected to match the traffic pattern.",
+      "expected_relationships": []
+    }
+  ]
+}

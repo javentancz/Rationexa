@@ -1,0 +1,31 @@
+{
+  "id": "python-39-eol",
+  "title": "Python 3.9 end of life",
+  "category": "lifecycle",
+  "review_status": "curated_pending_independent_review",
+  "criticality": "important",
+  "decision_source_url": "https://peps.python.org/pep-0596/",
+  "decision_date": "2023-06-01",
+  "evidence_source_urls": ["https://devguide.python.org/versions/"],
+  "evidence_date": "2025-10-31",
+  "extraction_expectations": [
+    {"kind": "assumption", "keywords": ["Python 3.9", "security"]},
+    {"kind": "revisit_condition", "keywords": ["support", "ends"]}
+  ],
+  "canonical_premises": [
+    {
+      "premise_id": "python-supported-runtime",
+      "kind": "assumption",
+      "statement": "Python 3.9 will continue receiving upstream security fixes for the service lifetime.",
+      "old_excerpt": "Python 3.9 will continue receiving upstream security fixes for the expected service lifetime.",
+      "expected_relationships": ["weakens", "contradicts", "supersedes"]
+    },
+    {
+      "premise_id": "python-eol-trigger",
+      "kind": "revisit_condition",
+      "statement": "The runtime choice must be revisited before upstream support ends.",
+      "old_excerpt": "Revisit the runtime before upstream support ends.",
+      "expected_relationships": ["supports"]
+    }
+  ]
+}

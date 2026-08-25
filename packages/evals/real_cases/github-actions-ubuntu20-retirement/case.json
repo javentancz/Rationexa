@@ -1,0 +1,31 @@
+{
+  "id": "github-actions-ubuntu20-retirement",
+  "title": "GitHub Actions Ubuntu 20.04 runner retirement",
+  "category": "lifecycle",
+  "review_status": "curated_pending_independent_review",
+  "criticality": "important",
+  "decision_source_url": "https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners",
+  "decision_date": "2024-05-20",
+  "evidence_source_urls": ["https://github.blog/changelog/2025-01-15-github-actions-ubuntu-20-runner-image-brownout-dates-and-other-breaking-changes/"],
+  "evidence_date": "2025-04-15",
+  "extraction_expectations": [
+    {"kind": "assumption", "keywords": ["ubuntu-20.04", "available"]},
+    {"kind": "revisit_condition", "keywords": ["runner", "retired"]}
+  ],
+  "canonical_premises": [
+    {
+      "premise_id": "ubuntu20-availability",
+      "kind": "assumption",
+      "statement": "The GitHub-hosted ubuntu-20.04 runner will remain available for the release workflow.",
+      "old_excerpt": "The hosted ubuntu-20.04 image is expected to remain available for the release workflow.",
+      "expected_relationships": ["contradicts", "supersedes"]
+    },
+    {
+      "premise_id": "ubuntu20-retirement-trigger",
+      "kind": "revisit_condition",
+      "statement": "The workflow must move when GitHub retires the runner image.",
+      "old_excerpt": "Revisit this pin when GitHub announces that the runner image will be retired.",
+      "expected_relationships": ["supports"]
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 {
   "id": "node-18-eol",
   "title": "Node.js 18 end-of-life",
+  "category": "lifecycle",
+  "review_status": "curated_pending_independent_review",
   "criticality": "important",
   "decision_source_url": "https://github.com/OleksandrKucherenko/webpack.config/blob/48de6d8e437ad0715015dc7b62f85ce84060bf06/doc/adr/0002-start-from-node-18-lts.md",
   "decision_date": "2023-11-18",

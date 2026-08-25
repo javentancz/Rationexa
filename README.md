@@ -6,7 +6,7 @@ Rationexa is a human-in-the-loop technical decision review project. Its Stage 1 
 
 Stage 1 implementation is underway. The first vertical slice imports source text, extracts typed decision premises, validates exact source anchors, records human review, finalizes a decision record, and compares it with new evidence.
 
-See [the Stage 1 execution plan](docs/STAGE_1_EXECUTION_PLAN.md) for the proposed architecture, data contracts, APIs, evaluation strategy, acceptance gates, and first 10 working days.
+See [the Stage 1 execution plan](docs/STAGE_1_EXECUTION_PLAN.md) for the proposed architecture, data contracts, APIs, evaluation strategy, acceptance gates, and first 10 working days. The current gate-by-gate status is tracked in [Stage 1 readiness](docs/STAGE_1_READINESS.md).
 
 ## Stage 1 boundary
 
@@ -43,8 +43,11 @@ For fast tests without starting Ollama, set `AI_PROVIDER=deterministic`. To use 
 
 ## Compare local models on real cases
 
-The real-case suite contains public decisions paired with later authoritative
-evidence. To compare Qwen 3.5 with Gemma 4 locally:
+The real-case suite contains 12 curated decisions paired with later
+authoritative evidence: four lifecycle cases, three contradiction/weakening
+cases, two positive-support cases, and three irrelevant/adversarial cases.
+They are suitable for development regression testing and remain marked pending
+independent review. To compare Qwen 3.5 with Gemma 4 locally:
 
 ```bash
 ollama pull qwen3.5:9b

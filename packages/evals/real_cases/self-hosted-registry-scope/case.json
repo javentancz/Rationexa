@@ -1,0 +1,31 @@
+{
+  "id": "self-hosted-registry-scope",
+  "title": "Docker Hub limits are irrelevant to a self-hosted registry",
+  "category": "irrelevant_scope",
+  "review_status": "curated_pending_independent_review",
+  "criticality": "important",
+  "decision_source_url": "https://distribution.github.io/distribution/",
+  "decision_date": "2025-02-01",
+  "evidence_source_urls": ["https://docs.docker.com/docker-hub/usage/pulls/"],
+  "evidence_date": "2026-04-01",
+  "extraction_expectations": [
+    {"kind": "hard_constraint", "keywords": ["self-hosted", "network"]},
+    {"kind": "assumption", "keywords": ["registry", "capacity"]}
+  ],
+  "canonical_premises": [
+    {
+      "premise_id": "registry-private-network",
+      "kind": "hard_constraint",
+      "statement": "Production image pulls must stay on the private network through the self-hosted registry.",
+      "old_excerpt": "Production image pulls must remain on the private network.",
+      "expected_relationships": []
+    },
+    {
+      "premise_id": "registry-capacity",
+      "kind": "assumption",
+      "statement": "The self-hosted registry has enough capacity for production image pulls.",
+      "old_excerpt": "The self-hosted registry has enough storage and network capacity for production pulls.",
+      "expected_relationships": []
+    }
+  ]
+}

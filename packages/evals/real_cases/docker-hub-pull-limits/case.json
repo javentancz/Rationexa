@@ -1,0 +1,31 @@
+{
+  "id": "docker-hub-pull-limits",
+  "title": "Docker Hub pull limits weaken unlimited CI assumption",
+  "category": "weakening",
+  "review_status": "curated_pending_independent_review",
+  "criticality": "important",
+  "decision_source_url": "https://docs.docker.com/docker-hub/",
+  "decision_date": "2024-01-10",
+  "evidence_source_urls": ["https://docs.docker.com/docker-hub/usage/pulls/"],
+  "evidence_date": "2026-04-01",
+  "extraction_expectations": [
+    {"kind": "assumption", "keywords": ["anonymous", "unlimited"]},
+    {"kind": "revisit_condition", "keywords": ["rate", "limit"]}
+  ],
+  "canonical_premises": [
+    {
+      "premise_id": "docker-anonymous-unlimited",
+      "kind": "assumption",
+      "statement": "Anonymous Docker Hub pulls will remain effectively unlimited for CI workloads.",
+      "old_excerpt": "Anonymous pulls are expected to remain effectively unlimited at our CI volume.",
+      "expected_relationships": ["weakens", "contradicts"]
+    },
+    {
+      "premise_id": "docker-rate-trigger",
+      "kind": "revisit_condition",
+      "statement": "Introduce authentication or a mirror if pull rate limits can interrupt builds.",
+      "old_excerpt": "Revisit authentication or mirroring if rate limits can interrupt builds.",
+      "expected_relationships": ["supports"]
+    }
+  ]
+}

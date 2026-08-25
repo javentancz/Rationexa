@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from pathlib import Path
 
 from rationexa_api.evaluation import load_cases, score_extraction, score_revisit
@@ -79,3 +80,21 @@ def test_score_revisit_separates_relationship_errors_and_false_positives() -> No
     assert score["detection_recall"] == 1.0
     assert score["relationship_accuracy"] == 0.0
     assert score["false_positive_ids"] == ["unrelated"]
+
+
+def test_real_case_suite_meets_stage_one_smoke_coverage() -> None:
+    cases_dir = Path(__file__).parents[3] / "packages" / "evals" / "real_cases"
+    cases = load_cases(cases_dir)
+    categories = Counter(case.metadata["category"] for case in cases)
+
+    assert len(cases) >= 12
+    assert categories["lifecycle"] >= 4
+    assert categories["contradiction"] + categories["weakening"] >= 3
+    assert categories["positive_support"] >= 2
+    assert categories["irrelevant"] + categories["irrelevant_scope"] + categories["adversarial"] >= 3
+
+    for case in cases:
+        assert case.metadata["review_status"] == "curated_pending_independent_review"
+        assert case.metadata["evidence_source_urls"]
+        assert case.metadata["extraction_expectations"]
+        assert case.metadata["canonical_premises"]

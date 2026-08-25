@@ -1,0 +1,31 @@
+{
+  "id": "sqlite-file-compatibility",
+  "title": "SQLite confirms long-term file compatibility",
+  "category": "positive_support",
+  "review_status": "curated_pending_independent_review",
+  "criticality": "important",
+  "decision_source_url": "https://www.sqlite.org/onefile.html",
+  "decision_date": "2024-01-05",
+  "evidence_source_urls": ["https://www.sqlite.org/onefile.html", "https://sqlite.org/c3ref/experimental.html"],
+  "evidence_date": "2026-08-01",
+  "extraction_expectations": [
+    {"kind": "requirement", "keywords": ["portable", "file"]},
+    {"kind": "assumption", "keywords": ["backwards", "compatible"]}
+  ],
+  "canonical_premises": [
+    {
+      "premise_id": "sqlite-portable-format",
+      "kind": "material_claim",
+      "statement": "SQLite 3 database files are portable and backwards compatible across future SQLite 3 releases.",
+      "old_excerpt": "SQLite 3 database files are expected to remain portable and backwards compatible.",
+      "expected_relationships": ["supports"]
+    },
+    {
+      "premise_id": "sqlite-single-writer",
+      "kind": "soft_constraint",
+      "statement": "The application can tolerate a single-writer storage design.",
+      "old_excerpt": "The application can tolerate a single-writer storage design.",
+      "expected_relationships": []
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "id": "xz-security-advisory",
+  "title": "XZ Utils supply-chain compromise",
+  "category": "weakening",
+  "review_status": "curated_pending_independent_review",
+  "criticality": "critical",
+  "decision_source_url": "https://www.openwall.com/lists/oss-security/2024/03/29/4",
+  "decision_date": "2024-02-15",
+  "evidence_source_urls": ["https://www.openwall.com/lists/oss-security/2024/03/29/4", "https://nvd.nist.gov/vuln/detail/CVE-2024-3094"],
+  "evidence_date": "2024-03-29",
+  "extraction_expectations": [
+    {"kind": "assumption", "keywords": ["upstream", "release"]},
+    {"kind": "hard_constraint", "keywords": ["production", "signed"]}
+  ],
+  "canonical_premises": [
+    {
+      "premise_id": "xz-upstream-trust",
+      "kind": "assumption",
+      "statement": "A recent upstream XZ Utils release is sufficiently trustworthy for production use after checksum verification.",
+      "old_excerpt": "A recent upstream release is considered trustworthy after its published checksum is verified.",
+      "expected_relationships": ["weakens", "contradicts"]
+    },
+    {
+      "premise_id": "xz-signed-package",
+      "kind": "hard_constraint",
+      "statement": "Production dependencies must come from reviewed and signed distribution packages.",
+      "old_excerpt": "Production dependencies must normally come from reviewed and signed distribution packages.",
+      "expected_relationships": ["supports"]
+    }
+  ]
+}
