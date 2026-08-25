@@ -102,6 +102,11 @@ class PremiseReview(BaseModel):
 
 class ExtractionReviewRequest(BaseModel):
     reviews: list[PremiseReview]
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    decision_question: str | None = Field(default=None, min_length=1)
+    context: str | None = None
+    chosen_option: str | None = None
+    rationale: str | None = None
 
 
 class DecisionFinalizeRequest(BaseModel):

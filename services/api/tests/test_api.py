@@ -31,11 +31,27 @@ def test_stage_one_vertical_slice() -> None:
         )
 
         reviews = [
-            {"candidate_id": premise["candidate_id"], "action": "confirm"}
+            {
+                "candidate_id": premise["candidate_id"],
+                "action": "confirm",
+                "statement": premise["statement"],
+                "kind": premise["kind"],
+            }
             for premise in extraction_body["result"]["premises"]
         ]
-        reviewed = client.post(f"/v1/extractions/{extraction_body['id']}/review", json={"reviews": reviews})
+        reviewed = client.post(
+            f"/v1/extractions/{extraction_body['id']}/review",
+            json={
+                "reviews": reviews,
+                "title": "Reviewed vendor decision",
+                "decision_question": "Should we continue with Vendor B?",
+                "chosen_option": "Vendor B",
+                "rationale": "Current workflow fit.",
+            },
+        )
         assert reviewed.status_code == 200
+        assert reviewed.json()["result"]["title"] == "Reviewed vendor decision"
+        assert reviewed.json()["result"]["decision_question"] == "Should we continue with Vendor B?"
 
         finalized = client.post(
             f"/v1/extractions/{extraction_body['id']}/finalize",

@@ -148,6 +148,16 @@ def review_extraction(extraction_id: str, payload: ExtractionReviewRequest, db: 
     if row is None:
         raise HTTPException(status_code=404, detail="Extraction not found")
     result = ExtractionResult.model_validate(row.output)
+    if payload.title is not None:
+        result.title = payload.title
+    if payload.decision_question is not None:
+        result.decision_question = payload.decision_question
+    if payload.context is not None:
+        result.context = payload.context
+    if payload.chosen_option is not None:
+        result.chosen_option = payload.chosen_option or None
+    if payload.rationale is not None:
+        result.rationale = payload.rationale
     reviews = {review.candidate_id: review for review in payload.reviews}
     reviewed = []
     for premise in result.premises:
@@ -157,8 +167,9 @@ def review_extraction(extraction_id: str, payload: ExtractionReviewRequest, db: 
             continue
         if review.action == "reject":
             continue
-        if review.action == "edit":
+        if review.statement is not None:
             premise.statement = review.statement or premise.statement
+        if review.kind is not None:
             premise.kind = review.kind or premise.kind
         if review.action == "unknown":
             premise.quality_state = "draft"

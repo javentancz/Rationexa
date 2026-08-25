@@ -2,6 +2,9 @@
 
 import { FormEvent, useMemo, useState } from "react";
 
+type Criticality = "routine" | "important" | "critical";
+type ReviewAction = "confirm" | "unknown" | "reject";
+
 type Premise = {
   candidate_id: string;
   kind: string;
@@ -19,7 +22,10 @@ type Extraction = {
   result: {
     title: string;
     decision_question: string;
-    suggested_criticality: "routine" | "important" | "critical";
+    context: string;
+    chosen_option?: string;
+    rationale: string;
+    suggested_criticality: Criticality;
     criticality_reason: string;
     premises: Premise[];
   };
@@ -29,7 +35,7 @@ type Decision = {
   id: string;
   title: string;
   question: string;
-  criticality: string;
+  criticality: Criticality;
   premises: Array<{ id: string; kind: string; statement: string; anchor?: { exact_excerpt: string } }>;
 };
 
@@ -37,153 +43,234 @@ type Finding = {
   premise_id: string;
   premise_statement: string;
   relationship: string;
+  confidence_band: string;
   explanation: string;
   missing_context_question?: string;
   new_excerpt: string;
   source_fallback_performed: boolean;
 };
 
+type PremiseReview = { action: ReviewAction; statement: string; kind: string };
+type DecisionDraft = { title: string; question: string; context: string; chosenOption: string; rationale: string };
+
 const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
+const premiseKinds = ["requirement", "hard_constraint", "soft_constraint", "fact", "assumption", "unknown", "material_claim", "revisit_condition"];
+
+async function responseJson(response: Response) {
+  if (response.ok) return response.json();
+  const payload = await response.json().catch(() => null);
+  throw new Error(payload?.detail ?? `Request failed with status ${response.status}`);
+}
 
 export default function Home() {
   const [source, setSource] = useState("We decided to use Vendor B because it was assumed that Vendor B does not support external users. The service must support SAML. Revisit if Vendor B introduces external-user support.");
+  const [sourceMode, setSourceMode] = useState<"paste" | "file">("paste");
+  const [file, setFile] = useState<File | null>(null);
   const [evidence, setEvidence] = useState("Vendor B now supports external users and continues to support SAML for enterprise tenants.");
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [reviews, setReviews] = useState<Record<string, PremiseReview>>({});
+  const [draft, setDraft] = useState<DecisionDraft | null>(null);
+  const [criticality, setCriticality] = useState<Criticality>("important");
+  const [selectedPremise, setSelectedPremise] = useState<string | null>(null);
+  const [busyPhase, setBusyPhase] = useState<"extract" | "finalize" | "revisit" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const highAttention = useMemo(
-    () => extraction?.result.premises.filter((premise) => premise.attention_reason) ?? [],
-    [extraction],
-  );
+  const premises = extraction?.result.premises ?? [];
+  const counts = useMemo(() => {
+    const values = Object.values(reviews);
+    return {
+      confirm: values.filter((item) => item.action === "confirm").length,
+      unknown: values.filter((item) => item.action === "unknown").length,
+      reject: values.filter((item) => item.action === "reject").length,
+      attention: premises.filter((premise) => premise.attention_reason || attentionKinds.has(premise.kind)).length,
+    };
+  }, [premises, reviews]);
+  const activePremise = premises.find((premise) => premise.candidate_id === selectedPremise) ?? premises[0];
+  const stage = decision ? 4 : extraction ? 2 : 1;
+
+  function initializeExtraction(next: Extraction) {
+    setExtraction(next);
+    setDraft({ title: next.result.title, question: next.result.decision_question, context: next.result.context ?? "", chosenOption: next.result.chosen_option ?? "", rationale: next.result.rationale ?? "" });
+    setCriticality(next.result.suggested_criticality);
+    setReviews(Object.fromEntries(next.result.premises.map((premise) => [premise.candidate_id, { action: "confirm", statement: premise.statement, kind: premise.kind }])));
+    setSelectedPremise(next.result.premises[0]?.candidate_id ?? null);
+    setDecision(null);
+    setFindings([]);
+  }
 
   async function extract(event: FormEvent) {
     event.preventDefault();
-    setBusy(true);
+    setBusyPhase("extract");
     setError(null);
     try {
-      const artifactResponse = await fetch(`${api}/v1/artifacts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: "decision-note.txt", media_type: "text/plain", content: source }),
-      });
-      if (!artifactResponse.ok) throw new Error(await artifactResponse.text());
-      const artifact = await artifactResponse.json();
-      const response = await fetch(`${api}/v1/decisions/extractions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ artifact_id: artifact.id }),
-      });
-      if (!response.ok) throw new Error(await response.text());
-      setExtraction(await response.json());
-      setDecision(null);
-      setFindings([]);
+      let artifact;
+      if (sourceMode === "file" && file) {
+        const body = new FormData();
+        body.append("file", file);
+        artifact = await responseJson(await fetch(`${api}/v1/artifacts/upload`, { method: "POST", body }));
+      } else {
+        artifact = await responseJson(await fetch(`${api}/v1/artifacts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "decision-note.txt", media_type: "text/plain", content: source }) }));
+      }
+      const next = await responseJson(await fetch(`${api}/v1/decisions/extractions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artifact_id: artifact.id }) }));
+      initializeExtraction(next);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Extraction failed");
     } finally {
-      setBusy(false);
+      setBusyPhase(null);
     }
   }
 
-  async function confirmAndFinalize() {
-    if (!extraction) return;
-    setBusy(true);
+  function updateReview(candidateId: string, update: Partial<PremiseReview>) {
+    setReviews((current) => ({ ...current, [candidateId]: { ...current[candidateId], ...update } }));
+  }
+
+  function updateDraft(field: keyof DecisionDraft, value: string) {
+    setDraft((current) => current ? { ...current, [field]: value } : current);
+  }
+
+  async function reviewAndFinalize() {
+    if (!extraction || !draft) return;
+    setBusyPhase("finalize");
     setError(null);
     try {
-      const reviews = extraction.result.premises.map((premise) => ({ candidate_id: premise.candidate_id, action: "confirm" }));
-      const reviewedResponse = await fetch(`${api}/v1/extractions/${extraction.id}/review`, {
+      const reviewed = await responseJson(await fetch(`${api}/v1/extractions/${extraction.id}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reviews }),
-      });
-      if (!reviewedResponse.ok) throw new Error(await reviewedResponse.text());
-      const reviewed = await reviewedResponse.json();
+        body: JSON.stringify({
+          title: draft.title,
+          decision_question: draft.question,
+          context: draft.context,
+          chosen_option: draft.chosenOption,
+          rationale: draft.rationale,
+          reviews: premises.map((premise) => ({ candidate_id: premise.candidate_id, action: reviews[premise.candidate_id].action, statement: reviews[premise.candidate_id].statement, kind: reviews[premise.candidate_id].kind })),
+        }),
+      }));
       setExtraction(reviewed);
-      const response = await fetch(`${api}/v1/extractions/${extraction.id}/finalize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ criticality: extraction.result.suggested_criticality }),
-      });
-      if (!response.ok) throw new Error(await response.text());
-      setDecision(await response.json());
+      setDecision(await responseJson(await fetch(`${api}/v1/extractions/${extraction.id}/finalize`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ criticality }) })));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Finalization failed");
     } finally {
-      setBusy(false);
+      setBusyPhase(null);
     }
   }
 
   async function revisit() {
     if (!decision) return;
-    setBusy(true);
+    setBusyPhase("revisit");
     setError(null);
     try {
-      const response = await fetch(`${api}/v1/decisions/${decision.id}/revisit-checks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: "new-evidence.txt", content: evidence }),
-      });
-      if (!response.ok) throw new Error(await response.text());
-      const result = await response.json();
+      const result = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/revisit-checks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "new-evidence.txt", content: evidence }) }));
       setFindings(result.findings);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Revisit failed");
     } finally {
-      setBusy(false);
+      setBusyPhase(null);
     }
   }
 
+  function resetWorkspace() {
+    setExtraction(null); setDecision(null); setFindings([]); setReviews({}); setDraft(null); setSelectedPremise(null); setError(null);
+  }
+
   return (
-    <main>
-      <header>
-        <div className="eyebrow">Stage 1 · human-in-the-loop</div>
-        <h1>Remember why you decided.</h1>
-        <p className="lede">Preserve the evidence that made the reasoning valid. Know when a premise may no longer hold.</p>
-      </header>
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand"><span className="brand-mark">R</span><span>Rationexa</span></div>
+        <button className="new-decision" onClick={resetWorkspace}>＋ New decision review</button>
+        <nav aria-label="Workspace navigation">
+          <a className="nav-item active" href="#workspace"><span>◇</span>Decision workspace</a>
+          <span className="nav-item disabled"><span>▤</span>Decision library <small>Next</small></span>
+        </nav>
+        <div className="sidebar-note"><strong>Local-first prototype</strong><span>Qwen runs privately through Ollama on this Mac.</span></div>
+      </aside>
 
-      <section className="workflow" aria-label="Stage 1 workflow">
-        <span className="active">1 Import</span><span>2 Review premises</span><span>3 Finalize</span><span>4 Revisit</span>
-      </section>
+      <main id="workspace" className="workspace">
+        <header className="topbar">
+          <div><span className="overline">Decision intelligence</span><h1>{draft?.title || "New decision review"}</h1></div>
+          <div className="runtime"><span className="runtime-dot" />{extraction ? `${extraction.provider} · ${extraction.model}` : "Local model ready"}</div>
+        </header>
 
-      <section className="panel">
-        <div className="panel-heading"><div><div className="step">01</div><h2>Import an existing decision</h2></div><p>Paste an ADR, assessment, or architecture note.</p></div>
-        <form onSubmit={extract}>
-          <textarea value={source} onChange={(event) => setSource(event.target.value)} rows={7} aria-label="Decision source" />
-          <button disabled={busy || !source.trim()}>{busy ? "Working…" : "Extract decision"}</button>
-        </form>
-      </section>
+        <ol className="stepper" aria-label="Decision workflow">
+          {["Import", "Review", "Finalize", "Revisit"].map((label, index) => {
+            const number = index + 1;
+            return <li key={label} className={number === stage ? "active" : number < stage ? "complete" : ""}><span>{number < stage ? "✓" : number}</span>{label}</li>;
+          })}
+        </ol>
 
-      {error ? <div className="error">{error}</div> : null}
+        {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
 
-      {extraction ? (
-        <section className="panel">
-          <div className="panel-heading"><div><div className="step">02</div><h2>{extraction.result.title}</h2></div><p>{extraction.provider} · {extraction.model}</p></div>
-          <div className="question">{extraction.result.decision_question}</div>
-          <div className="criticality"><strong>Suggested: {extraction.result.suggested_criticality}</strong><span>{extraction.result.criticality_reason}</span></div>
-          <h3>{highAttention.length} high-attention premise{highAttention.length === 1 ? "" : "s"}</h3>
-          <div className="premises">
-            {extraction.result.premises.map((premise) => (
-              <article key={premise.candidate_id} className={premise.attention_reason ? "attention" : ""}>
-                <div><span className="kind">{premise.kind.replaceAll("_", " ")}</span><span className="state">{premise.quality_state}</span></div>
-                <p>{premise.statement}</p>
-                {premise.anchor ? <blockquote>{premise.anchor.exact_excerpt}</blockquote> : <div className="unanchored">No validated source anchor</div>}
-              </article>
-            ))}
-          </div>
-          {!decision ? <button onClick={confirmAndFinalize} disabled={busy}>Confirm premises and finalize</button> : <div className="success">Decision finalized as {decision.criticality}.</div>}
-        </section>
-      ) : null}
+        {!extraction ? (
+          <section className="card import-card">
+            <div className="section-heading"><div><span className="overline">Step 1</span><h2>Bring in a decision</h2><p>Start with a short decision note, ADR, assessment, or proposal excerpt.</p></div><span className="privacy-badge">Private · processed locally</span></div>
+            <div className="source-tabs" role="tablist">
+              <button type="button" className={sourceMode === "paste" ? "active" : ""} onClick={() => setSourceMode("paste")}>Paste text</button>
+              <button type="button" className={sourceMode === "file" ? "active" : ""} onClick={() => setSourceMode("file")}>Upload file</button>
+            </div>
+            <form onSubmit={extract}>
+              {sourceMode === "paste" ? <label className="field"><span>Decision source</span><textarea aria-label="Decision source" value={source} onChange={(event) => setSource(event.target.value)} rows={10} placeholder="Paste the source material here…" /></label> : <label className="upload-zone"><input aria-label="Decision file" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /><span className="upload-icon">⇧</span><strong>{file ? file.name : "Choose a PDF, Markdown, or text file"}</strong><small>Maximum file size: 10 MB</small></label>}
+              <div className="form-footer"><span>Qwen will suggest structure. You remain the reviewer.</span><button className="primary" disabled={busyPhase === "extract" || (sourceMode === "paste" ? !source.trim() : !file)}>{busyPhase === "extract" ? <><span className="spinner" />Extracting with Qwen…</> : "Extract decision →"}</button></div>
+            </form>
+          </section>
+        ) : null}
 
-      {decision ? (
-        <section className="panel">
-          <div className="panel-heading"><div><div className="step">03</div><h2>Revisit against new evidence</h2></div><p>On demand, never an automatic verdict.</p></div>
-          <textarea value={evidence} onChange={(event) => setEvidence(event.target.value)} rows={5} aria-label="New evidence" />
-          <button onClick={revisit} disabled={busy || !evidence.trim()}>Check premises</button>
-          {findings.length ? <div className="findings">{findings.map((finding) => <article key={finding.premise_id}><div className="relationship">{finding.relationship}</div><h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{finding.missing_context_question ? <p className="question">Missing context: {finding.missing_context_question}</p> : null}<div className="fallback">Original-source fallback: {finding.source_fallback_performed ? "performed" : "not required"}</div></article>)}</div> : null}
-        </section>
-      ) : null}
-    </main>
+        {extraction && draft ? (
+          <>
+            {!decision ? <>
+              <section className="review-layout">
+              <div className="review-main">
+                <section className="card decision-summary">
+                  <div className="section-heading compact"><div><span className="overline">Decision record</span><h2>Review the extracted decision</h2></div><button className="text-button" onClick={resetWorkspace}>Start over</button></div>
+                  <div className="field-grid">
+                    <label className="field full"><span>Decision title</span><input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
+                    <label className="field full"><span>Decision question</span><input value={draft.question} onChange={(event) => updateDraft("question", event.target.value)} /></label>
+                    <label className="field"><span>Chosen option</span><input value={draft.chosenOption} onChange={(event) => updateDraft("chosenOption", event.target.value)} placeholder="Not established" /></label>
+                    <label className="field"><span>Criticality</span><select value={criticality} onChange={(event) => setCriticality(event.target.value as Criticality)}><option value="routine">Routine</option><option value="important">Important</option><option value="critical">Critical</option></select></label>
+                    <label className="field full"><span>Rationale</span><textarea rows={3} value={draft.rationale} onChange={(event) => updateDraft("rationale", event.target.value)} placeholder="Why was this option selected?" /></label>
+                  </div>
+                </section>
+
+                <section className="premise-section">
+                  <div className="section-heading compact"><div><span className="overline">Premise review</span><h2>Verify what the decision depends on</h2></div><div className="review-counts"><span>{counts.confirm} confirmed</span><span>{counts.attention} need attention</span></div></div>
+                  <div className="premise-list">
+                    {premises.map((premise, index) => {
+                      const review = reviews[premise.candidate_id];
+                      const attention = Boolean(premise.attention_reason || attentionKinds.has(review.kind));
+                      return <article key={premise.candidate_id} className={`premise-card ${selectedPremise === premise.candidate_id ? "selected" : ""} action-${review.action}`} onClick={() => setSelectedPremise(premise.candidate_id)}>
+                        <div className="premise-top"><span className="premise-number">P{index + 1}</span><select aria-label={`Premise ${index + 1} type`} value={review.kind} onClick={(event) => event.stopPropagation()} onChange={(event) => updateReview(premise.candidate_id, { kind: event.target.value })}>{premiseKinds.map((kind) => <option key={kind} value={kind}>{kind.replaceAll("_", " ")}</option>)}</select>{attention ? <span className="attention-badge">Review carefully</span> : null}</div>
+                        <textarea aria-label={`Premise ${index + 1} statement`} rows={2} value={review.statement} onClick={(event) => event.stopPropagation()} onChange={(event) => updateReview(premise.candidate_id, { statement: event.target.value })} />
+                        <div className="premise-actions" onClick={(event) => event.stopPropagation()}>{(["confirm", "unknown", "reject"] as ReviewAction[]).map((action) => <button key={action} type="button" className={review.action === action ? "active" : ""} onClick={() => updateReview(premise.candidate_id, { action })}>{action === "confirm" ? "✓ Confirm" : action === "unknown" ? "? Keep unknown" : "× Reject"}</button>)}</div>
+                      </article>;
+                    })}
+                  </div>
+                </section>
+              </div>
+
+              <aside className="source-panel card">
+                <span className="overline">Source evidence</span><h3>{activePremise ? `Premise ${premises.indexOf(activePremise) + 1}` : "No premise selected"}</h3>
+                {activePremise?.anchor ? <blockquote>{activePremise.anchor.exact_excerpt}</blockquote> : <div className="no-anchor">No validated source anchor</div>}
+                {activePremise?.attention_reason ? <p className="attention-reason">{activePremise.attention_reason}</p> : null}
+                <div className="source-help"><strong>Why this matters</strong><p>Compare the extracted statement with the exact source before confirming it.</p></div>
+              </aside>
+              </section>
+              <section className="finalize-bar"><div><strong>Ready to finalize?</strong><span>{counts.confirm} premises will be preserved · {counts.unknown} unknown · {counts.reject} rejected</span></div><button className="primary" disabled={busyPhase === "finalize" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0} onClick={reviewAndFinalize}>{busyPhase === "finalize" ? <><span className="spinner" />Saving decision…</> : "Save reviewed decision →"}</button></section>
+            </> : <section className="card finalized-summary">
+              <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><button className="text-button" onClick={resetWorkspace}>New review</button></div>
+              <div className="record-meta"><div><span>Chosen option</span><strong>{draft.chosenOption || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div></div>
+              <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
+            </section>}
+          </>
+        ) : null}
+
+        {decision ? <section className="card revisit-card">
+          <div className="section-heading"><div><span className="overline">Step 4 · Revisit</span><h2>What changed?</h2><p>Compare new evidence with the premises you preserved.</p></div><span className="decision-badge">{decision.criticality}</span></div>
+          <label className="field"><span>New evidence</span><textarea aria-label="New evidence" value={evidence} onChange={(event) => setEvidence(event.target.value)} rows={5} /></label>
+          <div className="form-footer"><span>This check flags relationships; it does not overturn the decision.</span><button className="primary" onClick={revisit} disabled={busyPhase === "revisit" || !evidence.trim()}>{busyPhase === "revisit" ? <><span className="spinner" />Checking premises…</> : "Check against premises →"}</button></div>
+          {findings.length ? <div className="findings"><div className="findings-heading"><h3>Review findings</h3><span>{findings.length} relationships found</span></div>{findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.relationship}</span><small>{finding.confidence_band} confidence</small></div><h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{finding.missing_context_question ? <div className="missing-context">Question: {finding.missing_context_question}</div> : null}</article>)}</div> : null}
+        </section> : null}
+      </main>
+    </div>
   );
 }
