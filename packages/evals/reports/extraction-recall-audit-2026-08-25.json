@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-08-25",
+  "dataset": "development-v2",
+  "scope": "fresh extraction-only run after internal label audit",
+  "review_status": "curated_pending_independent_review",
+  "independent_review_complete": false,
+  "case_count": 30,
+  "models": [
+    {
+      "model": "qwen3.5:9b",
+      "concept_recall": 0.867,
+      "valid_anchor_rate": 0.995,
+      "invalid_anchor_count": 0,
+      "elapsed_seconds": 728.07,
+      "missed_cases": [
+        "postgresql-open-source",
+        "docker-content-trust-retirement",
+        "github-actions-node20-transition",
+        "github-actions-pricing-postponed",
+        "github-artifact-v3-retirement",
+        "letsencrypt-ocsp-retirement",
+        "redis-74-license-change"
+      ]
+    },
+    {
+      "model": "gemma4:e4b",
+      "concept_recall": 0.917,
+      "valid_anchor_rate": 1.0,
+      "invalid_anchor_count": 0,
+      "elapsed_seconds": 542.4,
+      "missed_cases": [
+        "postgresql-open-source",
+        "prompt-injection-no-alert",
+        "github-actions-pricing-postponed",
+        "github-artifact-v3-retirement"
+      ]
+    }
+  ],
+  "shared_missed_cases": [
+    "postgresql-open-source",
+    "github-actions-pricing-postponed",
+    "github-artifact-v3-retirement"
+  ],
+  "release_gate_note": "These are visible development-set results and cannot satisfy the independent-review or sealed-holdout gates."
+}

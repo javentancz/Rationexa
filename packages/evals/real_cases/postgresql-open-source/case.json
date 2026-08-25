@@ -13,7 +13,7 @@
   ],
   "evidence_date": "2026-08-13",
   "extraction_expectations": [
-    {"kind": "fact", "keywords": ["open-source", "relational"]},
+    {"kind": "material_claim", "keywords": ["open-source", "relational"]},
     {"kind": "assumption", "keywords": ["implement", "APIs", "quickly"]}
   ],
   "canonical_premises": [

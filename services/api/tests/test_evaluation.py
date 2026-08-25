@@ -174,6 +174,18 @@ def test_real_case_suite_meets_stage_one_smoke_coverage() -> None:
         assert case.metadata["evidence_source_urls"]
         assert case.metadata["extraction_expectations"]
         assert case.metadata["canonical_premises"]
+        normalized_decision = " ".join(case.decision.lower().split())
+        for expectation in case.metadata["extraction_expectations"]:
+            assert all(keyword.lower() in normalized_decision for keyword in expectation["keywords"]), (
+                case.case_id,
+                expectation,
+            )
+        for premise in case.metadata["canonical_premises"]:
+            if premise.get("old_excerpt"):
+                assert " ".join(premise["old_excerpt"].lower().split()) in normalized_decision, (
+                    case.case_id,
+                    premise["premise_id"],
+                )
 
 
 def test_saved_benchmark_premises_are_groundable_after_offset_repair() -> None:

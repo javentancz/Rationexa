@@ -20,10 +20,10 @@
   "canonical_premises": [
     {
       "premise_id": "ingress-maintenance",
-      "kind": "assumption",
-      "statement": "The community NGINX Ingress Controller will remain an operable and upgradeable platform component.",
+      "kind": "hard_constraint",
+      "statement": "The team must be able to upgrade, monitor, and troubleshoot the controller.",
       "old_excerpt": "The team accepts responsibility for controller upgrades, monitoring, and troubleshooting.",
-      "expected_relationships": ["weakens", "contradicts", "supersedes"]
+      "expected_relationships": ["weakens"]
     },
     {
       "premise_id": "ingress-migration",

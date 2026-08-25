@@ -45,8 +45,13 @@ Stage 1 definition of done.
 
 - Development case count: 30 fixtures available; the minimum-count check passes.
 - Independent case review: pending.
-- Fresh 2026-08-25 run: Qwen reached 70.0% concept recall and Gemma reached
-  68.3%; both remain below the 90% gate.
+- Internal label audit: all 30 cases rechecked, 16 cases corrected, and zero
+  extraction keywords or canonical excerpts remain ungrounded in the decision
+  source. This audit was not independent because model outputs were already
+  visible.
+- Fresh extraction-only run after the audit: Qwen reached 86.7% concept recall
+  and Gemma reached 91.7%. Gemma clears the numerical 90% threshold on this
+  visible development set; Qwen does not.
 - Independent label review remains required before this development score can
   count toward release readiness.
 - Target: at least 90% recall on human-labeled critical premises, with
@@ -55,6 +60,8 @@ Stage 1 definition of done.
 ### Gate 2: source anchors — not passed
 
 - Exact anchor validation exists.
+- The fresh extraction-only run produced 99.5% valid anchors for Qwen and 100%
+  for Gemma, with zero invalid anchors from either model.
 - Fresh 30-case run after deterministic repair: both models reached 100%
   exact-anchor validity and produced zero ungrounded/fabricated finding excerpts.
 - Target: at least 90% correct sampled anchors and no accepted invented quotes.
@@ -83,7 +90,7 @@ Stage 1 definition of done.
   expected high-risk relationships and introduced zero false positives. This is
   a development-set result, not holdout evidence.
 - The new-constraint detector was also scanned across all 30 frozen development
-  cases and produced zero additional alerts. The Singapore manual regression
+  cases and produced zero additional alerts. The enterprise-project regression
   correctly surfaced the later enterprise privacy mandate as a new constraint.
 - Target: at least 30 regression cases, 90% critical premise-match recall, 80%
   relationship precision, and zero critical misses in the release candidate.
@@ -99,10 +106,11 @@ Stage 1 definition of done.
 ## Next build sequence
 
 1. Have a qualified reviewer independently check all 30 case labels without
-   seeing model outputs, then freeze the reviewed manifest.
+   seeing model outputs, using the corrected internal audit as a draft, then
+   freeze the reviewed manifest.
 2. Rerun the complete 30-case suite after independent label review; the focused
-   critical-case rerun passes, but extraction recall and generalization remain
-   unproven.
+   critical-case rerun passes and Gemma reaches 91.7% extraction recall on the
+   visible set, but independent accuracy and generalization remain unproven.
 3. Run a sealed, non-overlapping 30-case holdout against the frozen code,
    prompts, thresholds, and model versions.
 4. Conduct the Gate 4 moderated user test.

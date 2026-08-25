@@ -208,9 +208,9 @@ def test_extraction_trust_boundary_removes_list_markers_and_semantic_duplicates(
     assert normalized.premises[0].candidate_id == "p1"
 
 
-def test_singapore_case_recovers_postman_strategy_when_model_omits_it() -> None:
+def test_enterprise_case_recovers_postman_strategy_when_model_omits_it() -> None:
     source = (
-        "Project: Singapore Enterprise Document & Integration Service Platform\n"
+        "Project: Enterprise Document & Integration Service Platform\n"
         "- Technical Strategy: Preparing automated Postman test suites to validate API contracts "
         "independently before writing any heavy backend code.\n"
         "- Client stakeholders will review and approve interface specifications within a standard "
@@ -219,7 +219,7 @@ def test_singapore_case_recovers_postman_strategy_when_model_omits_it() -> None:
     )
     result = ExtractionResult.model_validate(
         {
-            "title": "Singapore integration platform",
+            "title": "Enterprise integration platform",
             "decision_question": "What does delivery depend on?",
             "premises": [
                 {
@@ -251,7 +251,7 @@ def test_singapore_case_recovers_postman_strategy_when_model_omits_it() -> None:
     assert postman[0].anchor.exact_excerpt in source
 
 
-def test_singapore_revisit_surfaces_new_security_constraint() -> None:
+def test_enterprise_revisit_surfaces_new_security_constraint() -> None:
     premises = [
         RevisitPremiseInput(
             premise_id="approval-window",

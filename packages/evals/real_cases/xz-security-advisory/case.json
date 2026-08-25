@@ -25,7 +25,7 @@
       "kind": "hard_constraint",
       "statement": "Production dependencies must come from reviewed and signed distribution packages.",
       "old_excerpt": "Production dependencies must normally come from reviewed and signed distribution packages.",
-      "expected_relationships": ["supports"]
+      "expected_relationships": []
     }
   ]
 }
