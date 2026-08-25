@@ -16,6 +16,7 @@ Rationexa assists review; it does not autonomously declare decisions wrong, reve
 
 ```bash
 cp .env.example .env
+ollama pull qwen3.5:9b
 docker compose up -d db
 python3 -m venv .venv
 . .venv/bin/activate
@@ -30,7 +31,9 @@ pnpm install
 pnpm dev:web
 ```
 
-Open `http://localhost:3000`. Without an API key, the API uses a deterministic development provider. Set `AI_PROVIDER=openai`, `OPENAI_API_KEY`, and `OPENAI_MODEL` to use the optional live adapter.
+Open `http://localhost:3000`. The default provider is local Ollama running Qwen3.5 9B, so no external API key is required. The first model download is approximately 6.6 GB.
+
+For fast tests without starting Ollama, set `AI_PROVIDER=deterministic`. To use the optional hosted adapter, set `AI_PROVIDER=openai`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
 
 ## Quality checks
 

@@ -112,7 +112,10 @@ def create_extraction(payload: ExtractionRequest, db: Db) -> ExtractionRead:
     if artifact is None:
         raise HTTPException(status_code=404, detail="Artifact not found")
     provider = get_provider(settings)
-    result = provider.extract(artifact.extracted_text, artifact.filename)
+    try:
+        result = provider.extract(artifact.extracted_text, artifact.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     validated = []
     for premise in result.premises:
         premise.anchor = validate_anchor(premise.anchor, artifact.extracted_text)

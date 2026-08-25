@@ -2,6 +2,7 @@ import re
 from abc import ABC, abstractmethod
 from uuid import uuid4
 
+import httpx
 from openai import OpenAI
 
 from .config import Settings
@@ -151,7 +152,60 @@ class OpenAIResponsesProvider(ExtractionProvider):
         return response.output_parsed
 
 
+class OllamaProvider(ExtractionProvider):
+    name = "ollama"
+
+    def __init__(self, settings: Settings, client: httpx.Client | None = None):
+        self.model = settings.ollama_model
+        self.client = client or httpx.Client(
+            base_url=settings.ollama_base_url.rstrip("/"),
+            timeout=settings.ollama_timeout_seconds,
+        )
+
+    def extract(self, source_text: str, filename: str) -> ExtractionResult:
+        schema = ExtractionResult.model_json_schema()
+        try:
+            response = self.client.post(
+                "/api/chat",
+                json={
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": EXTRACTION_INSTRUCTIONS},
+                        {
+                            "role": "user",
+                            "content": f"Filename: {filename}\n\nSOURCE TEXT\n{source_text}",
+                        },
+                    ],
+                    "format": schema,
+                    "stream": False,
+                    "think": False,
+                    "options": {"temperature": 0},
+                },
+            )
+            response.raise_for_status()
+        except httpx.ConnectError as exc:
+            raise ValueError(
+                "Cannot connect to Ollama. Start it with `ollama serve` and pull "
+                f"the model with `ollama pull {self.model}`."
+            ) from exc
+        except httpx.TimeoutException as exc:
+            raise ValueError(
+                f"Ollama did not finish within the configured timeout while running {self.model}."
+            ) from exc
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:500]
+            raise ValueError(f"Ollama request failed: {detail}") from exc
+
+        payload = response.json()
+        content = payload.get("message", {}).get("content")
+        if not content:
+            raise ValueError("Ollama returned no structured extraction content")
+        return ExtractionResult.model_validate_json(content)
+
+
 def get_provider(settings: Settings) -> ExtractionProvider:
+    if settings.ai_provider.lower() == "ollama":
+        return OllamaProvider(settings)
     if settings.ai_provider.lower() == "openai":
         return OpenAIResponsesProvider(settings)
     return DeterministicProvider()

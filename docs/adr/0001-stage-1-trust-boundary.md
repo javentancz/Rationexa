@@ -18,9 +18,10 @@ Stage 1 will:
 - preserve unverified material claims as visibly unverified;
 - retrieve original source evidence for Important and Critical revisit findings;
 - present premise relationships and missing context, not a verdict that the decision is wrong;
-- retain a deterministic provider so tests and local development do not require an external model.
+- use Ollama with Qwen3.5 9B as the default local AI provider;
+- retain a deterministic provider so tests do not require a model process.
 
-The optional live provider uses the OpenAI Responses API with a typed structured output and `store=False`. User-supplied source text is treated as untrusted data inside the extraction prompt.
+The local provider sends a Pydantic JSON schema to Ollama's structured-output API and validates the returned content. The optional OpenAI provider uses the Responses API with a typed structured output and `store=False`. User-supplied source text is treated as untrusted data inside both extraction paths.
 
 ## Consequences
 
