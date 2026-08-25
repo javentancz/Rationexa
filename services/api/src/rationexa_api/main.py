@@ -19,6 +19,7 @@ from .db import (
     SourceAnchorRow,
     get_db,
     init_db,
+    now_utc,
 )
 from .jobs import job_manager
 from .prompts import EXTRACTION_PROMPT_VERSION, REVISIT_PROMPT_VERSION
@@ -37,6 +38,7 @@ from .schemas import (
     JobRead,
     ModelCatalogRead,
     PremiseKind,
+    RevisitFindingJudgmentRequest,
     RevisitPremiseInput,
     RevisitRead,
     RevisitRequest,
@@ -360,6 +362,7 @@ def perform_revisit(
     row = RevisitRow(
         decision_id=decision.id,
         evidence_artifact_id=evidence.id,
+        status="needs_review" if findings else "completed",
         findings=[finding.model_dump(mode="json") for finding in findings],
         provider=provider.name,
         model=provider.model,
@@ -373,6 +376,35 @@ def perform_revisit(
     db.commit()
     db.refresh(row)
     return revisit_read(row)
+
+
+@app.post(
+    "/v1/revisit-checks/{revisit_id}/findings/{premise_id}/judgment",
+    response_model=RevisitRead,
+)
+def record_revisit_judgment(
+    revisit_id: str,
+    premise_id: str,
+    payload: RevisitFindingJudgmentRequest,
+    db: Db,
+) -> RevisitRead:
+    revisit = db.get(RevisitRow, revisit_id)
+    if revisit is None:
+        raise HTTPException(status_code=404, detail="Revisit check not found")
+
+    findings = [dict(finding) for finding in revisit.findings]
+    target = next((finding for finding in findings if finding.get("premise_id") == premise_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Revisit finding not found")
+
+    target["human_judgment"] = payload.judgment
+    target["human_notes"] = payload.notes.strip() if payload.notes and payload.notes.strip() else None
+    target["judged_at"] = now_utc().isoformat()
+    revisit.findings = findings
+    revisit.status = "completed" if all(finding.get("human_judgment") for finding in findings) else "needs_review"
+    db.commit()
+    db.refresh(revisit)
+    return revisit_read(revisit)
 
 
 @app.post("/v1/decisions/extractions/jobs", response_model=JobRead, status_code=status.HTTP_202_ACCEPTED)

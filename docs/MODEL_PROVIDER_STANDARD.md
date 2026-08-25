@@ -15,6 +15,11 @@ All providers must use the same versioned prompts and structured schemas. A
 provider must not bypass source-anchor validation, quote grounding, critical
 decision gates, or human premise review.
 
+Validated model findings may be supplemented by narrowly scoped deterministic
+safety checks for explicit lifecycle triggers and affected security or
+verification obligations. These candidates must retain their detection source,
+use low confidence, cite an exact evidence excerpt, and require human review.
+
 Model IDs use `provider/model`, for example `ollama/qwen3.5:9b`. The browser may
 only submit IDs returned by `GET /v1/models`; arbitrary provider names or model
 strings are rejected. API keys remain server-side.

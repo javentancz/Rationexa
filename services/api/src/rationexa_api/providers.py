@@ -152,8 +152,10 @@ class DeterministicProvider(ExtractionProvider):
         if value.startswith(("#", "date:", "status:", "source:")):
             return None
         if (
-            "revisit if" in value
+            value.startswith("revisit ")
+            or "revisit if" in value
             or "revisit when" in value
+            or bool(re.search(r"\b(?:upgrade|migrate|move|transition)\b.*\b(?:if|when|after|once)\b", value))
             or re.search(r"\b(later|eventually|future)\b.*\bmigrat", value)
             or re.search(r"\bmigrat\w*\b.*\b(possible|later|eventually|future)", value)
             or re.search(r"\bmoving\b.*\bnewer\b.*\b(version|runtime|platform)\b", value)
@@ -530,7 +532,99 @@ def _validated_findings(
                 ),
             )
         )
+    return _apply_deterministic_safety_net(findings, premises, new_evidence, criticality)
+
+
+def _apply_deterministic_safety_net(
+    findings: list[RevisitFinding],
+    premises: list[RevisitPremiseInput],
+    new_evidence: str,
+    criticality: str,
+) -> list[RevisitFinding]:
+    """Recover explicit high-risk changes without pretending the rule is model reasoning."""
+    by_id = {finding.premise_id: finding for finding in findings}
+    for premise in premises:
+        candidate = _safety_net_finding(premise, new_evidence, criticality)
+        if candidate is None:
+            continue
+        existing = by_id.get(premise.premise_id)
+        if existing is None:
+            findings.append(candidate)
+            by_id[premise.premise_id] = candidate
+        elif premise.kind == PremiseKind.REVISIT_CONDITION and existing.relationship != Relationship.SUPPORTS:
+            index = findings.index(existing)
+            findings[index] = candidate
+            by_id[premise.premise_id] = candidate
     return findings
+
+
+def _safety_net_finding(
+    premise: RevisitPremiseInput,
+    new_evidence: str,
+    criticality: str,
+) -> RevisitFinding | None:
+    from .services import meaningful_terms
+
+    premise_text = f"{premise.statement} {premise.old_excerpt or ''}"
+    premise_terms = meaningful_terms(premise_text)
+    sentences = _source_sentences(new_evidence)
+    ranked = sorted(
+        (
+            (len(premise_terms & meaningful_terms(sentence)), premise_terms & meaningful_terms(sentence), sentence)
+            for sentence in sentences
+            if _has_material_change_cue(sentence)
+        ),
+        reverse=True,
+    )
+    if not ranked or ranked[0][0] < 1:
+        return None
+    overlap, shared_terms, excerpt = ranked[0]
+    statement = premise.statement.lower()
+    is_explicit_trigger = premise.kind == PremiseKind.REVISIT_CONDITION and bool(
+        re.search(r"\b(revisit|if|when|after|once|migrat\w*|upgrad\w*)\b", statement)
+    )
+    is_affected_obligation = (
+        premise.kind in {PremiseKind.REQUIREMENT, PremiseKind.HARD_CONSTRAINT}
+        and bool(re.search(r"\b(must|need|require|verification|revocation|security|support)\w*\b", statement))
+        and (overlap >= 2 or bool(shared_terms & {"authentication", "revocation", "signing", "verification"}))
+    )
+    if not is_explicit_trigger and not is_affected_obligation:
+        return None
+
+    relationship = Relationship.SUPPORTS if is_explicit_trigger else Relationship.WEAKENS
+    return RevisitFinding(
+        premise_id=premise.premise_id,
+        premise_statement=premise.statement,
+        relationship=relationship,
+        confidence_band="low",
+        explanation=(
+            "A deterministic safety check found an explicit change matching this review trigger; "
+            "human confirmation is required."
+            if is_explicit_trigger
+            else "A deterministic safety check found a capability change connected to this obligation; "
+            "human review is required to determine materiality."
+        ),
+        missing_context_question=(
+            None
+            if is_explicit_trigger
+            else "Does the replacement path still satisfy this requirement in the deployed environment?"
+        ),
+        old_excerpt=premise.old_excerpt,
+        new_excerpt=excerpt,
+        source_fallback_performed=criticality in {"important", "critical"} and premise.old_excerpt is not None,
+        detection_source="deterministic_safety_net",
+    )
+
+
+def _has_material_change_cue(value: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(retir\w*|deprecat\w*|end(?:ed|ing)? of (?:life|support)|eol|no longer|"
+            r"turned off|revok\w*|replac\w*|transition\w*|must change|migrat\w*|"
+            r"support (?:ends|ended)|reduc\w*|postpon\w*)\b",
+            value.lower(),
+        )
+    )
 
 
 def _direct_requirement_support(statement: str, excerpt: str) -> bool:

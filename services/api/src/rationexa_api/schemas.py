@@ -184,6 +184,15 @@ class RevisitFinding(BaseModel):
     old_excerpt: str | None = None
     new_excerpt: str
     source_fallback_performed: bool
+    detection_source: Literal["model", "deterministic_rules", "deterministic_safety_net"] = "model"
+    human_judgment: Literal["worth_reviewing", "not_material", "needs_context", "false_positive"] | None = None
+    human_notes: str | None = None
+    judged_at: datetime | None = None
+
+
+class RevisitFindingJudgmentRequest(BaseModel):
+    judgment: Literal["worth_reviewing", "not_material", "needs_context", "false_positive"]
+    notes: str | None = Field(default=None, max_length=4000)
 
 
 class RevisitPremiseInput(BaseModel):

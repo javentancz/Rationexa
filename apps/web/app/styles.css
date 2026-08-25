@@ -152,7 +152,14 @@ button { cursor:pointer; }
 .finding h3 { margin:9px 0 6px; font-size:13px; }
 .finding p { margin:0 0 11px; color:var(--muted); font-size:11px; line-height:1.5; }
 .finding-provenance { margin-top:9px; color:var(--accent); font-size:10px; font-weight:700; }
+.safety-net-badge { width:fit-content; margin-top:10px; border-radius:999px; padding:5px 8px; background:var(--amber-soft); color:var(--amber); font-size:9px; font-weight:800; text-transform:uppercase; }
 .missing-context { margin-top:10px; color:var(--amber); font-size:11px; }
+.judgment-panel { display:grid; gap:8px; margin-top:14px; border-top:1px solid var(--line); padding-top:12px; }
+.judgment-panel>span { color:var(--muted); font-size:10px; font-weight:700; }
+.judgment-panel>div { display:flex; flex-wrap:wrap; gap:6px; }
+.judgment-panel button { border:1px solid var(--line); border-radius:7px; padding:6px 9px; background:#fafbfa; color:var(--muted); font-size:9px; font-weight:750; }
+.judgment-panel button.active { border-color:#a5c1af; background:var(--accent-soft); color:var(--accent-dark); }
+.judgment-panel button:disabled { cursor:wait; opacity:.55; }
 .empty-findings { display:flex; flex-direction:column; gap:4px; margin-top:22px; border:1px solid var(--line); border-radius:10px; padding:16px; background:#f8faf8; color:var(--ink); font-size:11px; }
 .empty-findings span { color:var(--muted); }
 .error { display:flex; gap:8px; margin-bottom:18px; border:1px solid #e1b0b0; border-radius:10px; padding:12px 14px; background:var(--red-soft); color:var(--red); font-size:11px; }

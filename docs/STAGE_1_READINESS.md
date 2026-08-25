@@ -30,6 +30,10 @@ Stage 1 definition of done.
   recall, precision, false-positive, critical-miss, and fabricated-quote thresholds.
 - Side-by-side Compare mode with disagreement, latency, token, prompt, model, and
   cost provenance.
+- Deterministic lifecycle safety net with explicit origin labels, low-confidence
+  handling, exact evidence grounding, and human confirmation requirements.
+- Persisted human judgments for every revisit finding: worth reviewing, not
+  material, needs context, or false positive.
 
 ## Acceptance-gate status
 
@@ -67,13 +71,21 @@ Stage 1 definition of done.
   wrong relationship to the maintenance premise, so that critical case remains
   failed.
 - Both models produced zero fabricated evidence excerpts.
+- A focused post-fix run on the three previously failing critical scenarios
+  produced 100% relationship recall and accuracy for both Qwen and Gemma, with
+  no false positives. The safety net recovered omitted ingress migration,
+  Docker verification, and OCSP revocation relationships when needed.
+- The safety net alone was scanned across all 30 visible cases: it recovered 14
+  expected high-risk relationships and introduced zero false positives. This is
+  a development-set result, not holdout evidence.
 - Target: at least 30 regression cases, 90% critical premise-match recall, 80%
   relationship precision, and zero critical misses in the release candidate.
 - Generalization status: the visible 30-case set is restricted to
   development/debugging. No holdout score exists yet.
 
-### Gate 4: real-user trust — not started
+### Gate 4: real-user trust — instrumentation ready, sessions not started
 
+- Finding-level judgments and timestamps are now persisted in the product.
 - Required: 5–8 relevant users testing historical decisions with captured
   correction effort, relevance, trust, and repeat-use intent.
 
@@ -81,9 +93,9 @@ Stage 1 definition of done.
 
 1. Have a qualified reviewer independently check all 30 case labels without
    seeing model outputs, then freeze the reviewed manifest.
-2. Address the four critical-case failures and low extraction recall with
-   general extraction/revisit improvements, preserving the zero-fabrication
-   and zero-false-positive results.
+2. Rerun the complete 30-case suite after independent label review; the focused
+   critical-case rerun passes, but extraction recall and generalization remain
+   unproven.
 3. Run a sealed, non-overlapping 30-case holdout against the frozen code,
    prompts, thresholds, and model versions.
 4. Conduct the Gate 4 moderated user test.

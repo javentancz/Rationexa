@@ -125,6 +125,7 @@ def compare_premise(
         old_excerpt=old_excerpt,
         new_excerpt=best,
         source_fallback_performed=criticality in {"important", "critical"} and old_excerpt is not None,
+        detection_source="deterministic_rules",
     )
 
 

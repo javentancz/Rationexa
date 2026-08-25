@@ -88,6 +88,16 @@ def test_stage_one_vertical_slice() -> None:
         assert revisit_body["estimated_cost_usd"] == 0.0
         assert any(finding["relationship"] == "contradicts" for finding in revisit_body["findings"])
         assert any(finding["source_fallback_performed"] for finding in revisit_body["findings"])
+        for finding in revisit_body["findings"]:
+            judged = client.post(
+                f"/v1/revisit-checks/{revisit_body['id']}/findings/{finding['premise_id']}/judgment",
+                json={"judgment": "worth_reviewing", "notes": "Confirmed during Stage 1 review."},
+            )
+            assert judged.status_code == 200
+        judged_body = judged.json()
+        assert judged_body["status"] == "completed"
+        assert all(finding["human_judgment"] == "worth_reviewing" for finding in judged_body["findings"])
+        assert all(finding["judged_at"] for finding in judged_body["findings"])
 
 
 def test_revisit_provenance_columns_exist() -> None:

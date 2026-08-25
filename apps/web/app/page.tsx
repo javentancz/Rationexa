@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Criticality = "routine" | "important" | "critical";
 type ReviewAction = "confirm" | "unknown" | "reject";
+type FindingJudgment = "worth_reviewing" | "not_material" | "needs_context" | "false_positive";
 
 type Premise = {
   candidate_id: string;
@@ -48,6 +49,10 @@ type Finding = {
   missing_context_question?: string;
   new_excerpt: string;
   source_fallback_performed: boolean;
+  detection_source?: "model" | "deterministic_rules" | "deterministic_safety_net";
+  human_judgment?: FindingJudgment;
+  human_notes?: string;
+  judged_at?: string;
 };
 
 type PremiseReview = { action: ReviewAction; statement: string; kind: string };
@@ -55,7 +60,7 @@ type DecisionDraft = { title: string; question: string; context: string; chosenO
 type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string };
 type ModelCatalog = { default_model_id: string; models: ModelOption[] };
 type Job = { id: string; kind: "extraction" | "revisit"; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; phase: string; progress: number; result?: unknown; error?: string };
-type RevisitResult = { findings: Finding[]; provider?: string; model?: string; prompt_version?: string; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number };
+type RevisitResult = { id: string; status: string; findings: Finding[]; provider?: string; model?: string; prompt_version?: string; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number };
 type ComparisonRun = { modelId: string; label: string; result: RevisitResult };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -97,6 +102,8 @@ export default function Home() {
   const [comparisonModelId, setComparisonModelId] = useState("");
   const [comparisonRuns, setComparisonRuns] = useState<ComparisonRun[]>([]);
   const [activeJobs, setActiveJobs] = useState<Job[]>([]);
+  const [activeRevisitId, setActiveRevisitId] = useState<string | null>(null);
+  const [judgmentBusy, setJudgmentBusy] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +162,7 @@ export default function Home() {
     setDecision(null);
     setFindings([]);
     setComparisonRuns([]);
+    setActiveRevisitId(null);
     setRevisitCompleted(false);
   }
 
@@ -260,6 +268,7 @@ export default function Home() {
         const result = runs[0].result;
         setComparisonRuns([]);
         setFindings(result.findings);
+        setActiveRevisitId(result.id);
         setLastRevisitModel(runs[0].label);
         setLastRevisitProvenance(provenanceLabel(result));
       }
@@ -271,8 +280,26 @@ export default function Home() {
     }
   }
 
+  async function recordFindingJudgment(premiseId: string, judgment: FindingJudgment) {
+    if (!activeRevisitId) return;
+    setJudgmentBusy(premiseId);
+    setError(null);
+    try {
+      const updated = await responseJson(await fetch(`${api}/v1/revisit-checks/${activeRevisitId}/findings/${premiseId}/judgment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ judgment }),
+      })) as RevisitResult;
+      setFindings(updated.findings);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save finding judgment");
+    } finally {
+      setJudgmentBusy(null);
+    }
+  }
+
   function resetWorkspace() {
-    setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setError(null);
+    setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setError(null);
   }
 
   return (
@@ -376,10 +403,29 @@ export default function Home() {
           <div className="section-heading"><div><span className="overline">Step 4 · Revisit</span><h2>What changed?</h2><p>Check one model or compare two models against the same preserved premises and evidence.</p></div><span className="decision-badge">{decision.criticality}</span></div>
           <div className="mode-toggle" aria-label="Revisit mode"><button type="button" className={!compareMode ? "active" : ""} aria-pressed={!compareMode} onClick={() => { setCompareMode(false); setComparisonRuns([]); }}>Single model</button><button type="button" className={compareMode ? "active" : ""} aria-pressed={compareMode} disabled={models.length < 2} onClick={() => { setCompareMode(true); setFindings([]); }}>Compare models</button></div>
           {compareMode ? <div className="compare-models"><label className="field"><span>Model A</span><select aria-label="Comparison model A" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)} disabled={busyPhase !== null}>{models.map((model) => <option key={model.id} value={model.id} disabled={model.id === comparisonModelId}>{model.label} · {model.location}</option>)}</select></label><div className="versus">VS</div><label className="field"><span>Model B</span><select aria-label="Comparison model B" value={comparisonModelId} onChange={(event) => setComparisonModelId(event.target.value)} disabled={busyPhase !== null}>{models.map((model) => <option key={model.id} value={model.id} disabled={model.id === selectedModelId}>{model.label} · {model.location}</option>)}</select></label></div> : null}
-          <label className="field"><span>New evidence</span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); setFindings([]); setComparisonRuns([]); }} rows={5} /></label>
+          <label className="field"><span>New evidence</span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); setFindings([]); setComparisonRuns([]); setActiveRevisitId(null); }} rows={5} /></label>
           <div className="form-footer"><span>{compareMode ? "Both models receive identical premises and evidence." : "This check flags relationships; it does not overturn the decision."}</span><button className="primary" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || (compareMode && !comparisonModelId) || !evidence.trim()}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing models…" : `Checking with ${selectedModel?.label ?? "model"}…`}</> : compareMode ? "Compare model reasoning →" : "Check against premises →"}</button></div>
           {comparisonRuns.length === 2 ? <div className="comparison-results"><section className={`disagreement-summary ${disagreements.length ? "has-disagreements" : ""}`}><div><span className="overline">Agreement check</span><h3>{disagreements.length ? `${disagreements.length} disagreement${disagreements.length === 1 ? "" : "s"} need review` : "Models agree on all material relationships"}</h3></div>{disagreements.length ? <div className="disagreement-list">{disagreements.map(({ premise, firstRelationship, secondRelationship }) => <div key={premise.id}><strong>{premise.statement}</strong><span>{comparisonRuns[0].label}: {firstRelationship} · {comparisonRuns[1].label}: {secondRelationship}</span></div>)}</div> : null}</section><div className="comparison-grid">{comparisonRuns.map((run) => <section className="comparison-column" key={run.modelId}><header><div><span className="overline">Model result</span><h3>{run.label}</h3></div><strong>{run.result.findings.length} finding{run.result.findings.length === 1 ? "" : "s"}</strong></header><div className="run-provenance">{provenanceLabel(run.result)}</div>{run.result.findings.length ? run.result.findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.relationship}</span><small>{finding.confidence_band} confidence</small></div><h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote></article>) : <div className="empty-findings"><strong>No material relationship found</strong><span>This model found no effect on the preserved premises.</span></div>}</section>)}</div></div> : null}
-          {!comparisonRuns.length && findings.length ? <div className="findings"><div className="findings-heading"><h3>Review findings</h3><span>{findings.length} material relationship{findings.length === 1 ? "" : "s"} found · {lastRevisitModel}</span></div>{lastRevisitProvenance ? <div className="finding-provenance">Run provenance: {lastRevisitProvenance}</div> : null}{findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.relationship}</span><small>{finding.confidence_band} confidence</small></div><h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{finding.source_fallback_performed ? <div className="finding-provenance">Original source anchor verified</div> : null}{finding.missing_context_question ? <div className="missing-context">Question: {finding.missing_context_question}</div> : null}</article>)}</div> : !comparisonRuns.length && revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>{lastRevisitModel} found no material effect on the consequential premises preserved in this decision.</span>{lastRevisitProvenance ? <span>Run provenance: {lastRevisitProvenance}</span> : null}</div> : null}
+          {!comparisonRuns.length && findings.length ? <div className="findings">
+            <div className="findings-heading"><h3>Review findings</h3><span>{findings.length} material relationship{findings.length === 1 ? "" : "s"} found · {lastRevisitModel}</span></div>
+            {lastRevisitProvenance ? <div className="finding-provenance">Run provenance: {lastRevisitProvenance}</div> : null}
+            {findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}>
+              <div className="finding-status"><span>{finding.relationship}</span><small>{finding.confidence_band} confidence</small></div>
+              {finding.detection_source === "deterministic_safety_net" ? <div className="safety-net-badge">Safety-net candidate · human confirmation required</div> : null}
+              <h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>
+              {finding.source_fallback_performed ? <div className="finding-provenance">Original source anchor verified</div> : null}
+              {finding.missing_context_question ? <div className="missing-context">Question: {finding.missing_context_question}</div> : null}
+              <div className="judgment-panel" aria-label="Record your judgment">
+                <span>{finding.human_judgment ? "Judgment saved" : "Does this finding deserve action?"}</span>
+                <div>{([
+                  ["worth_reviewing", "Worth reviewing"],
+                  ["not_material", "Not material"],
+                  ["needs_context", "Needs context"],
+                  ["false_positive", "False positive"],
+                ] as [FindingJudgment, string][]).map(([value, label]) => <button type="button" key={value} className={finding.human_judgment === value ? "active" : ""} disabled={judgmentBusy === finding.premise_id} onClick={() => recordFindingJudgment(finding.premise_id, value)}>{label}</button>)}</div>
+              </div>
+            </article>)}
+          </div> : !comparisonRuns.length && revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>{lastRevisitModel} found no material effect on the consequential premises preserved in this decision.</span>{lastRevisitProvenance ? <span>Run provenance: {lastRevisitProvenance}</span> : null}</div> : null}
         </section> : null}
       </main>
     </div>

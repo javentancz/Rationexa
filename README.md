@@ -45,6 +45,11 @@ cancel without keeping a browser request open. Ollama generation already in
 progress may finish after cancellation, but its late result is discarded and
 is not stored as an extraction or revisit finding.
 
+Revisit results identify whether each candidate came from the selected model,
+deterministic rules, or the low-confidence lifecycle safety net. Reviewers can
+record `worth_reviewing`, `not_material`, `needs_context`, or `false_positive`;
+the judgment and timestamp are persisted with the revisit check.
+
 For fast tests without starting Ollama, set `AI_PROVIDER=deterministic`. To use the optional hosted adapter, set `AI_PROVIDER=openai`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
 
 ## Compare local models on real cases
