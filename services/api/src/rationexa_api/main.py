@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -105,7 +106,14 @@ def save_artifact(db: Session, filename: str, media_type: str, content: bytes, s
         parser_version=parser_version,
     )
     db.add(row)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.scalar(select(ArtifactRow).where(ArtifactRow.sha256 == digest))
+        if existing:
+            return existing
+        raise
     db.refresh(row)
     return row
 

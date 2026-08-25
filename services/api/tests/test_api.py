@@ -1,9 +1,9 @@
 import time
 
 from fastapi.testclient import TestClient
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select
 
-from rationexa_api.db import ExtractionRow, SessionLocal, engine
+from rationexa_api.db import ExtractionRow, RevisitRow, SessionLocal, engine
 from rationexa_api.main import app
 
 
@@ -142,6 +142,54 @@ def test_extraction_background_job_completes() -> None:
 
         assert job["status"] == "succeeded"
         assert job["result"]["result"]["premises"]
+
+
+def test_parallel_revisit_jobs_persist_independent_runs() -> None:
+    source = "We assumed Vendor B would not support external users."
+    with TestClient(app) as client:
+        artifact = client.post(
+            "/v1/artifacts",
+            json={"filename": "parallel.txt", "content": source},
+        ).json()
+        extraction = client.post(
+            "/v1/decisions/extractions",
+            json={"artifact_id": artifact["id"]},
+        ).json()
+        premise = extraction["result"]["premises"][0]
+        client.post(
+            f"/v1/extractions/{extraction['id']}/review",
+            json={
+                "reviews": [
+                    {
+                        "candidate_id": premise["candidate_id"],
+                        "action": "confirm",
+                        "statement": premise["statement"],
+                        "kind": premise["kind"],
+                    }
+                ]
+            },
+        )
+        decision = client.post(
+            f"/v1/extractions/{extraction['id']}/finalize",
+            json={"criticality": "important"},
+        ).json()
+        payload = {
+            "filename": "same-evidence.txt",
+            "content": "Vendor B now supports external users.",
+        }
+        jobs = [client.post(f"/v1/decisions/{decision['id']}/revisit-jobs", json=payload).json() for _ in range(2)]
+
+        for _ in range(100):
+            jobs = [client.get(f"/v1/jobs/{job['id']}").json() for job in jobs]
+            if all(job["status"] in {"succeeded", "failed", "cancelled"} for job in jobs):
+                break
+            time.sleep(0.01)
+
+        assert all(job["status"] == "succeeded" for job in jobs)
+        assert all(job["result"]["provider"] == "deterministic" for job in jobs)
+        with SessionLocal() as db:
+            rows = db.scalars(select(RevisitRow).where(RevisitRow.decision_id == decision["id"])).all()
+        assert len(rows) == 2
 
 
 def test_critical_decision_rejects_unanchored_consequential_premise() -> None:
