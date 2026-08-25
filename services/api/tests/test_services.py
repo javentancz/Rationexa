@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from rationexa_api.schemas import Relationship, SourceAnchor
-from rationexa_api.services import compare_premise, validate_anchor
+from rationexa_api.services import compare_premise, meaningful_terms, validate_anchor
 
 REAL_CASE = (
     Path(__file__).parents[3] / "packages" / "evals" / "real_cases" / "ingress-nginx-retirement" / "new-evidence.md"
@@ -41,6 +41,10 @@ def test_revisit_detects_negation_change() -> None:
     assert result is not None
     assert result.relationship == Relationship.CONTRADICTS
     assert result.source_fallback_performed is True
+
+
+def test_meaningful_terms_keeps_short_version_identifiers() -> None:
+    assert {"move", "v4"} <= meaningful_terms("Workflows must move to v4.")
 
 
 def test_ingress_retirement_filters_noise_and_detects_upgrade_conflict() -> None:

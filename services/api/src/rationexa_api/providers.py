@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 from abc import ABC, abstractmethod
@@ -144,7 +145,7 @@ class DeterministicProvider(ExtractionProvider):
             )
             if finding:
                 findings.append(finding)
-        return findings
+        return _apply_deterministic_safety_net(findings, premises, new_evidence, criticality)
 
     @staticmethod
     def _classify(sentence: str) -> PremiseKind | None:
@@ -191,6 +192,11 @@ class DeterministicProvider(ExtractionProvider):
         if re.search(material_claim_pattern, value):
             return PremiseKind.MATERIAL_CLAIM
         if any(word in value for word in ("need to", "needs ", "should support", "should use", "requirement")):
+            return PremiseKind.REQUIREMENT
+        if re.search(r"\b(?:technical strategy|core responsibilities|delivery scope)\s*:", value) or (
+            re.search(r"\b(?:plan(?:ned)?|prepar(?:e|ing)|strategy)\b", value)
+            and re.search(r"\b(?:analy[sz]|draft|review|test|validat|deliver|implement)", value)
+        ):
             return PremiseKind.REQUIREMENT
         if any(word in value for word in ("prefer", "ideally", "nice to have")):
             return PremiseKind.SOFT_CONSTRAINT
@@ -550,6 +556,7 @@ def _validated_findings(
             or premise is None
             or assessment.premise_id in seen
             or not excerpt
+            or assessment.relationship == Relationship.INTRODUCES
             or (
                 premise.kind in {PremiseKind.REQUIREMENT, PremiseKind.HARD_CONSTRAINT}
                 and assessment.relationship == Relationship.SUPPORTS
@@ -596,7 +603,83 @@ def _apply_deterministic_safety_net(
             index = findings.index(existing)
             findings[index] = candidate
             by_id[premise.premise_id] = candidate
+    findings.extend(_new_constraint_findings(premises, new_evidence, findings))
     return findings
+
+
+def _new_constraint_findings(
+    premises: list[RevisitPremiseInput],
+    new_evidence: str,
+    findings: list[RevisitFinding],
+) -> list[RevisitFinding]:
+    """Surface explicit new obligations that cannot map to an old premise."""
+    from .services import meaningful_terms
+
+    represented_excerpts = {_normalized_text(finding.new_excerpt) for finding in findings}
+    premise_terms = [meaningful_terms(premise.statement) for premise in premises]
+    all_premise_terms = set().union(*premise_terms) if premise_terms else set()
+    detected: list[RevisitFinding] = []
+    for sentence in _source_sentences(new_evidence):
+        normalized = _normalized_text(sentence)
+        if (
+            normalized in represented_excerpts
+            or _looks_instructional(sentence)
+            or not _is_explicit_constraint(sentence)
+        ):
+            continue
+        terms = meaningful_terms(sentence)
+        if (
+            not terms
+            or _materially_overlaps(terms, all_premise_terms)
+            or any(_materially_overlaps(terms, existing) for existing in premise_terms)
+        ):
+            continue
+        digest = hashlib.sha256(normalized.encode()).hexdigest()[:12]
+        detected.append(
+            RevisitFinding(
+                premise_id=f"new-constraint-{digest}",
+                premise_statement="New constraint not present in the original decision",
+                relationship=Relationship.INTRODUCES,
+                confidence_band="high",
+                explanation=(
+                    "The new evidence introduces an explicit mandatory constraint that was not "
+                    "represented by any preserved premise. Human review is required before changing the decision."
+                ),
+                missing_context_question="Does this new constraint change the feasible solution or delivery plan?",
+                new_excerpt=sentence,
+                source_fallback_performed=False,
+                finding_type="new_constraint",
+                detection_source="deterministic_safety_net",
+            )
+        )
+        represented_excerpts.add(normalized)
+    return detected
+
+
+def _is_explicit_constraint(value: str) -> bool:
+    normalized = _normalized_text(value)
+    return bool(
+        re.search(r"\b(?:must|must not|cannot|required|prohibited|mandates?|mandatory)\b", normalized)
+        or re.search(r"\b(?:security|legal|regulatory|compliance)\b.*\b(?:requires?|mandates?)\b", normalized)
+    )
+
+
+def _materially_overlaps(first: set[str], second: set[str]) -> bool:
+    if not first or not second:
+        return False
+    shared = first & second
+    return len(shared) >= 2 and len(shared) / min(len(first), len(second)) >= 0.25
+
+
+def _looks_instructional(value: str) -> bool:
+    normalized = _normalized_text(value)
+    return bool(
+        re.search(
+            r"\b(?:ignore (?:all|any|every|previous|earlier)|mark (?:all|the)|return a finding|"
+            r"claim that|system prompt|confidence 1\.0)\b",
+            normalized,
+        )
+    )
 
 
 def _safety_net_finding(

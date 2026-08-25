@@ -1,5 +1,5 @@
-EXTRACTION_PROMPT_VERSION = "extract-v2"
-REVISIT_PROMPT_VERSION = "revisit-v3"
+EXTRACTION_PROMPT_VERSION = "extract-v3"
+REVISIT_PROMPT_VERSION = "revisit-v4"
 
 EXTRACTION_INSTRUCTIONS = """
 You extract a technical Decision from user-supplied source text.
@@ -20,6 +20,9 @@ Rules:
   residency, regional availability, and deprecation/end-of-life.
 - A requirement states what the solution needs to achieve. Example: "The service needs
   fast preview URLs."
+- Preserve explicit scope, responsibility, validation, and technical-strategy statements
+  as requirements when they describe planned work, even if they are written as headings
+  or noun phrases rather than sentences using "must" or "should".
 - A hard constraint is non-negotiable and usually uses must, cannot, prohibited, or an
   externally imposed limit.
 - An assumption is believed or forecast rather than established. Familiarity, expected
@@ -69,6 +72,8 @@ Rules:
 - Explain the relationship specifically. Do not describe word overlap or token counts.
 - Ask one narrow missing-context question only when it could change the human judgment.
 - Return one finding at most per premise and only data matching the supplied schema.
+- The introduces relationship is reserved for the application's deterministic new-constraint
+  detector. Do not use it when assessing a preserved premise.
 
 Calibration examples:
 - Premise: "Runtime X remains supported." Evidence: "Runtime X is end-of-life and no

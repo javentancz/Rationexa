@@ -34,6 +34,10 @@ Stage 1 definition of done.
   handling, exact evidence grounding, and human confirmation requirements.
 - Persisted human judgments for every revisit finding: worth reviewing, not
   material, needs context, or false positive.
+- Deterministic recovery of explicit scope, responsibility, validation, and
+  technical-strategy statements omitted by a model.
+- Separate new-constraint findings for mandatory obligations introduced only
+  in later evidence, with exact quotes and mandatory human review.
 
 ## Acceptance-gate status
 
@@ -78,6 +82,9 @@ Stage 1 definition of done.
 - The safety net alone was scanned across all 30 visible cases: it recovered 14
   expected high-risk relationships and introduced zero false positives. This is
   a development-set result, not holdout evidence.
+- The new-constraint detector was also scanned across all 30 frozen development
+  cases and produced zero additional alerts. The Singapore manual regression
+  correctly surfaced the later enterprise privacy mandate as a new constraint.
 - Target: at least 30 regression cases, 90% critical premise-match recall, 80%
   relationship precision, and zero critical misses in the release candidate.
 - Generalization status: the visible 30-case set is restricted to

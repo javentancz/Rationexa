@@ -171,4 +171,6 @@ def meaningful_terms(value: str) -> set[str]:
         "releases": "maintenance",
     }
     terms = re.findall(r"[a-z0-9][a-z0-9_-]+", value.lower())
-    return {aliases.get(term, term) for term in terms if term not in stop and len(term) > 2}
+    return {
+        aliases.get(term, term) for term in terms if term not in stop and (len(term) > 2 or re.fullmatch(r"v\d+", term))
+    }
