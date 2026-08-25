@@ -167,7 +167,7 @@ class DeterministicProvider(ExtractionProvider):
         if any(
             word in value
             for word in ("must not", "cannot", "prohibited", "must ", "required", "accepts responsibility")
-        ):
+        ) or re.search(r"\b(?:hard|non-negotiable)\b.*\brequirement\b", value):
             return PremiseKind.HARD_CONSTRAINT
         if any(
             word in value
@@ -180,14 +180,16 @@ class DeterministicProvider(ExtractionProvider):
                 "quickly enough",
                 "simpler than",
                 "has enough",
+                "considered trustworthy",
             )
-        ):
+        ) or re.search(r"\b(?:we\s+)?expect(?:ed|s|ing)?\b|\bwill\s+(?:continue|remain)\b", value):
             return PremiseKind.ASSUMPTION
         if re.search(r"\b(can|could|will)\b.*\bquickly\b", value):
             return PremiseKind.ASSUMPTION
         material_claim_pattern = (
             r"\b(\d+(?:\.\d+)?%?|pricing|price|rate limit|supports? "
-            r"(?:saml|oauth|api)|certified|region|deprecated|end.of.life)\b"
+            r"(?:saml|oauth|api)|certified|region|deprecated|end.of.life|"
+            r"open[- ]source|licen[cs](?:e|ed|ing))\b"
         )
         if re.search(material_claim_pattern, value):
             return PremiseKind.MATERIAL_CLAIM
@@ -350,12 +352,31 @@ def _normalize_extraction(result: ExtractionResult, source_text: str | None = No
             continue
 
         kind = premise.kind
+        source_kind = None
+        if source_text:
+            source_candidate = premise.anchor.exact_excerpt if premise.anchor is not None else statement
+            grounded_source_candidate = _ground_excerpt(source_candidate, source_text)
+            if grounded_source_candidate is not None:
+                source_kind = DeterministicProvider._classify(grounded_source_candidate)
         future_migration = (
             "revisit" in value
             or bool(re.search(r"\b(later|eventually|future)\b.*\bmigrat", value))
             or bool(re.search(r"\bmigrat\w*\b.*\b(possible|later|eventually|future)", value))
         )
-        if future_migration:
+        if source_kind in {
+            PremiseKind.HARD_CONSTRAINT,
+            PremiseKind.ASSUMPTION,
+            PremiseKind.UNKNOWN,
+            PremiseKind.REVISIT_CONDITION,
+        }:
+            kind = source_kind
+        elif source_kind == PremiseKind.MATERIAL_CLAIM and kind in {
+            PremiseKind.FACT,
+            PremiseKind.REQUIREMENT,
+            PremiseKind.SOFT_CONSTRAINT,
+        }:
+            kind = source_kind
+        elif future_migration:
             kind = PremiseKind.REVISIT_CONDITION
         elif (
             kind == PremiseKind.HARD_CONSTRAINT
@@ -753,6 +774,9 @@ def _has_material_change_cue(value: str) -> bool:
 
 def _direct_requirement_support(statement: str, excerpt: str) -> bool:
     """Reject generic 'supports' labels based only on a shared product name."""
+    normalized_excerpt = _normalized_text(excerpt)
+    if re.search(r"\b(?:supports?|favors?|favoring|reinforces?)\b.*\b(?:constraint|requirement)\b", normalized_excerpt):
+        return False
     stopwords = {
         "and",
         "for",
@@ -797,6 +821,10 @@ def available_models(settings: Settings) -> list[ModelOption]:
         descriptions = {
             "qwen3.5:9b": ("Qwen 3.5 9B", "Careful premise extraction; lower false-positive rate in the current eval"),
             "gemma4:e4b": ("Gemma 4 E4B", "Faster evidence revisits; stronger relationship recall in the current eval"),
+            "ornith-1.5:9b": (
+                "Ornith 1.5 9B",
+                "Strong revisit reasoning; source-grounded local challenger",
+            ),
         }
         return [
             ModelOption(

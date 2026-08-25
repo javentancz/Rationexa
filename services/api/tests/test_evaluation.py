@@ -6,6 +6,7 @@ import pytest
 
 from rationexa_api.evaluation import (
     RealCase,
+    _report_path,
     _write_json_atomic,
     case_content_hash,
     evaluate_model,
@@ -18,6 +19,12 @@ from rationexa_api.evaluation import (
 )
 from rationexa_api.providers import DeterministicProvider
 from rationexa_api.schemas import ExtractionResult, RevisitFinding
+
+
+def test_report_path_preserves_dotted_model_version(tmp_path: Path) -> None:
+    base = tmp_path / "ornith-1.5-9b-comparison"
+
+    assert _report_path(base, ".checkpoint.json").name == "ornith-1.5-9b-comparison.checkpoint.json"
 
 
 def test_load_cases_requires_case_metadata(tmp_path: Path) -> None:

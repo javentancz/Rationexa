@@ -85,13 +85,18 @@ def test_model_catalog_and_selector_use_allowlisted_ollama_model() -> None:
     settings = Settings(
         ai_provider="ollama",
         ollama_model="qwen3.5:9b",
-        ollama_models="qwen3.5:9b,gemma4:e4b",
+        ollama_models="qwen3.5:9b,gemma4:e4b,ornith-1.5:9b",
     )
 
     options = available_models(settings)
     provider = get_provider(settings, "ollama/gemma4:e4b")
 
-    assert [option.id for option in options] == ["ollama/qwen3.5:9b", "ollama/gemma4:e4b"]
+    assert [option.id for option in options] == [
+        "ollama/qwen3.5:9b",
+        "ollama/gemma4:e4b",
+        "ollama/ornith-1.5:9b",
+    ]
+    assert options[2].label == "Ornith 1.5 9B"
     assert provider.model == "gemma4:e4b"
     provider.client.close()
 
@@ -167,6 +172,36 @@ def test_extraction_trust_boundary_repairs_obvious_fact_collapse() -> None:
         "revisit_condition",
     ]
     assert all(premise.importance == "high" for premise in normalized.premises[1:])
+
+
+def test_extraction_trust_boundary_uses_grounded_language_to_correct_kinds() -> None:
+    source = (
+        "We expect Docker Content Trust to remain available.\n"
+        "Production images must have publisher verification.\n"
+        "An OSI-approved open-source license is a hard procurement requirement.\n"
+        "A recent upstream release is considered trustworthy after checksum verification."
+    )
+    result = ExtractionResult.model_validate(
+        {
+            "title": "Supply-chain decision",
+            "decision_question": "What does the decision depend on?",
+            "premises": [
+                {"candidate_id": "p1", "kind": "revisit_condition", "statement": source.splitlines()[0]},
+                {"candidate_id": "p2", "kind": "requirement", "statement": source.splitlines()[1]},
+                {"candidate_id": "p3", "kind": "requirement", "statement": source.splitlines()[2]},
+                {"candidate_id": "p4", "kind": "requirement", "statement": source.splitlines()[3]},
+            ],
+        }
+    )
+
+    normalized = _normalize_extraction(result, source)
+
+    assert [premise.kind.value for premise in normalized.premises] == [
+        "assumption",
+        "hard_constraint",
+        "hard_constraint",
+        "assumption",
+    ]
 
 
 def test_extraction_trust_boundary_removes_list_markers_and_semantic_duplicates() -> None:
@@ -305,6 +340,15 @@ def test_new_constraint_detector_ignores_prompt_injection_obligation() -> None:
     assert not any(finding.finding_type == "new_constraint" for finding in findings)
 
 
+def test_requirement_support_requires_evidence_of_fulfillment() -> None:
+    statement = "Production dependencies must come from reviewed and signed distribution packages."
+
+    assert not _direct_requirement_support(
+        statement,
+        "This evidence supports the constraint favoring reviewed distribution packages.",
+    )
+
+
 def test_extraction_trust_boundary_recovers_omitted_source_backed_obligation() -> None:
     obligation = "The team accepts responsibility for controller upgrades, monitoring, and troubleshooting."
     source = f"Date: 2026-02-10\n{obligation}"
@@ -386,11 +430,11 @@ def test_extraction_recovery_keeps_soft_wrapped_markdown_sentence_together() -> 
 
     normalized = _normalize_extraction(result, source)
 
-    assert len(normalized.premises) == 1
-    assert "implement the APIs quickly" in normalized.premises[0].statement.replace("\n", " ")
-    assert normalized.premises[0].kind.value == "assumption"
-    assert normalized.premises[0].anchor is not None
-    anchor = normalized.premises[0].anchor
+    assert [premise.kind.value for premise in normalized.premises] == ["material_claim", "assumption"]
+    assumption = normalized.premises[1]
+    assert "implement the APIs quickly" in assumption.statement.replace("\n", " ")
+    assert assumption.anchor is not None
+    anchor = assumption.anchor
     assert source[anchor.start_offset : anchor.end_offset] == anchor.exact_excerpt
 
 

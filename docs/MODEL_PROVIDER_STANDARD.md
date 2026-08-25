@@ -38,7 +38,7 @@ are introduced; the current UI displays it for the active result.
 
 ## Current adapters
 
-- Ollama: Qwen 3.5 9B and Gemma 4 E4B are configured locally.
+- Ollama: Qwen 3.5 9B, Gemma 4 E4B, and Ornith 1.5 9B are configured locally.
 - OpenAI: an optional hosted structured-output adapter exists when configured.
 - Claude, Grok, and hosted DeepSeek are not wired yet. Add each as a separate
   adapter without changing domain schemas or UI request shapes.

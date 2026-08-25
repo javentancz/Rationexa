@@ -1,4 +1,4 @@
-EXTRACTION_PROMPT_VERSION = "extract-v3"
+EXTRACTION_PROMPT_VERSION = "extract-v4"
 REVISIT_PROMPT_VERSION = "revisit-v4"
 
 EXTRACTION_INSTRUCTIONS = """
@@ -24,12 +24,16 @@ Rules:
   as requirements when they describe planned work, even if they are written as headings
   or noun phrases rather than sentences using "must" or "should".
 - A hard constraint is non-negotiable and usually uses must, cannot, prohibited, or an
-  externally imposed limit.
+  externally imposed limit. A source that explicitly calls something a hard or
+  non-negotiable requirement is also a hard constraint even when it omits "must".
 - An assumption is believed or forecast rather than established. Familiarity, expected
   speed, simplicity, future support, and predicted outcomes are assumptions unless the
   source supplies measurements.
 - A revisit condition describes a future event that should trigger review, including a
   likely migration, deprecation, end-of-life, or loss of support.
+- Keep forecasts such as "we expect X to remain available" as assumptions. Do not turn
+  them into revisit conditions unless the source explicitly states a review, migration,
+  or other trigger.
 - Do not emit the selected option itself, implementation steps, or consequences as
   premises when they merely duplicate chosen_option or rationale.
 - For an anchor, copy a short contiguous excerpt exactly as it appears in SOURCE TEXT.

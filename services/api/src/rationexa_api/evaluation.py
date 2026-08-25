@@ -540,12 +540,21 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
+def _report_path(base: Path, suffix: str) -> Path:
+    """Append an artifact suffix without truncating dotted model versions."""
+    return Path(f"{base}{suffix}")
+
+
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[4]
     development_manifest_path = repo_root / "packages/evals/datasets/development.manifest.json"
     trust_gate_path = repo_root / "packages/evals/datasets/stage1-trust-gate.json"
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--models", nargs="+", default=["qwen3.5:9b", "gemma4:e4b"])
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        default=["qwen3.5:9b", "gemma4:e4b", "ornith-1.5:9b"],
+    )
     parser.add_argument(
         "--dataset-manifest",
         type=Path,
@@ -576,14 +585,14 @@ def main() -> None:
         args.models,
         cases,
         args.timeout_seconds,
-        checkpoint_path=args.output.with_suffix(".checkpoint.json"),
+        checkpoint_path=_report_path(args.output, ".checkpoint.json"),
         dataset_id=str(manifest["id"]),
         dataset_manifest_hash=manifest_hash,
         trust_gate_thresholds=trust_gate_thresholds,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n")
-    args.output.with_suffix(".md").write_text(markdown_report(report))
+    _report_path(args.output, ".json").write_text(json.dumps(report, indent=2) + "\n")
+    _report_path(args.output, ".md").write_text(markdown_report(report))
     print(markdown_report(report))
 
 

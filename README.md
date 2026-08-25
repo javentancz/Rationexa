@@ -60,13 +60,14 @@ pricing, licensing, positive support, irrelevant evidence, and prompt injection.
 The cases are suitable for development regression testing and remain marked
 pending independent review. They are frozen as the visible `development-v2` dataset;
 its manifest hashes prevent silently editing a case and reporting the result as
-the same benchmark. To compare Qwen 3.5 with Gemma 4 locally:
+the same benchmark. To compare the configured local models:
 
 ```bash
 ollama pull qwen3.5:9b
 ollama pull gemma4:e4b
+ollama pull ornith-1.5:9b
 .venv/bin/python -m rationexa_api.evaluation \
-  --models qwen3.5:9b gemma4:e4b
+  --models qwen3.5:9b gemma4:e4b ornith-1.5:9b
 ```
 
 The command writes a detailed JSON result and a readable Markdown summary to

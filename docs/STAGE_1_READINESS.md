@@ -20,7 +20,7 @@ wrong.
 - Typed premise extraction with exact-anchor validation.
 - Human confirm, edit, reject, and finalize workflow.
 - New-evidence revisit workflow with evidence displayed beside findings.
-- Local Qwen and Gemma model selection.
+- Local Qwen, Gemma, and Ornith model selection.
 - Optional OpenAI-compatible hosted adapter.
 - Repeatable evaluation harness and 30 curated source-backed cases.
 - Frozen `development-v2` manifest with content-integrity and holdout-leakage
@@ -84,6 +84,7 @@ wrong.
   wrong relationship to the maintenance premise, so that critical case remains
   failed.
 - Both models produced zero fabricated evidence excerpts.
+
 - A focused post-fix run on the three previously failing critical scenarios
   produced 100% relationship recall and accuracy for both Qwen and Gemma, with
   no false positives. The safety net recovered omitted ingress migration,
@@ -98,6 +99,20 @@ wrong.
   relationship precision, and zero critical misses in the release candidate.
 - Generalization status: the visible 30-case set is restricted to
   development/debugging. No holdout score exists yet.
+
+### Ornith 1.5 9B challenger run
+
+- Ornith completed all 30 development cases with no runtime, schema, or fabricated-quote failures.
+- Its initial run reached 98.3% revisit recall, 98.0% relationship precision, zero critical misses,
+  and one false positive. The false positive described a constraint as desirable rather than proving
+  that it was fulfilled; the requirement-support guard now rejects that pattern, and the focused
+  rerun retained the real security finding with zero false positives.
+- Initial extraction scoring was 78.3%, primarily because grounded expectation and mandatory
+  statements were assigned the wrong premise kind. Source-grounded kind normalization raises the
+  same output set to 96.7%; a fresh five-case rerun covering those patterns reached 100% concept
+  recall and 100% valid anchors.
+- These are development results, not independent release evidence. Gemma remains the established
+  extraction baseline until the frozen 30-case set is rerun under the updated extraction pipeline.
 
 ### Gate 4: real-user trust — instrumentation ready, sessions not started
 
