@@ -36,9 +36,31 @@ type Decision = {
   id: string;
   title: string;
   question: string;
+  context: string;
+  chosen_option?: string;
+  rationale: string;
   criticality: Criticality;
+  preservation_policy: string;
+  status: string;
+  created_at: string;
   premises: Array<{ id: string; kind: string; statement: string; anchor?: { exact_excerpt: string } }>;
 };
+
+type DecisionListItem = {
+  id: string;
+  title: string;
+  question: string;
+  chosen_option?: string;
+  criticality: Criticality;
+  status: string;
+  premise_count: number;
+  revisit_count: number;
+  pending_revisit_count: number;
+  last_revisited_at?: string;
+  created_at: string;
+};
+
+type DecisionLibrary = { items: DecisionListItem[]; total: number };
 
 type Finding = {
   premise_id: string;
@@ -61,7 +83,7 @@ type DecisionDraft = { title: string; question: string; context: string; chosenO
 type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string };
 type ModelCatalog = { default_model_id: string; models: ModelOption[] };
 type Job = { id: string; kind: "extraction" | "revisit"; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; phase: string; progress: number; result?: unknown; error?: string };
-type RevisitResult = { id: string; status: string; findings: Finding[]; provider?: string; model?: string; prompt_version?: string; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number };
+type RevisitResult = { id: string; decision_id: string; status: string; findings: Finding[]; provider?: string; model?: string; prompt_version?: string; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number; evidence_filename?: string; created_at: string };
 type ComparisonRun = { modelId: string; label: string; result: RevisitResult };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -80,7 +102,13 @@ function provenanceLabel(result: RevisitResult) {
   return `${result.provider ?? "unknown"}/${result.model ?? "unknown"} · ${result.prompt_version ?? "unknown prompt"} · ${result.latency_ms ?? 0} ms · ${tokens} tokens · ${cost}`;
 }
 
+function formatDate(value?: string) {
+  if (!value) return "Not revisited";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
+}
+
 export default function Home() {
+  const [view, setView] = useState<"workspace" | "library">("workspace");
   const [source, setSource] = useState("We decided to use Vendor B because it was assumed that Vendor B does not support external users. The service must support SAML. Revisit if Vendor B introduces external-user support.");
   const [sourceMode, setSourceMode] = useState<"paste" | "file">("paste");
   const [file, setFile] = useState<File | null>(null);
@@ -105,6 +133,11 @@ export default function Home() {
   const [activeJobs, setActiveJobs] = useState<Job[]>([]);
   const [activeRevisitId, setActiveRevisitId] = useState<string | null>(null);
   const [judgmentBusy, setJudgmentBusy] = useState<string | null>(null);
+  const [library, setLibrary] = useState<DecisionLibrary>({ items: [], total: 0 });
+  const [libraryQuery, setLibraryQuery] = useState("");
+  const [libraryCriticality, setLibraryCriticality] = useState<"all" | Criticality>("all");
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [revisitHistory, setRevisitHistory] = useState<RevisitResult[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +154,14 @@ export default function Home() {
       });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (view !== "library") return;
+    const timer = window.setTimeout(() => {
+      void loadLibrary();
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [view, libraryQuery, libraryCriticality]);
 
   const premises = extraction?.result.premises ?? [];
   const counts = useMemo(() => {
@@ -243,7 +284,10 @@ export default function Home() {
         }),
       }));
       setExtraction(reviewed);
-      setDecision(await responseJson(await fetch(`${api}/v1/extractions/${extraction.id}/finalize`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ criticality }) })));
+      const saved = await responseJson(await fetch(`${api}/v1/extractions/${extraction.id}/finalize`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ criticality }) })) as Decision;
+      setDecision(saved);
+      setRevisitHistory([]);
+      void loadLibrary();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Finalization failed");
     } finally {
@@ -273,6 +317,8 @@ export default function Home() {
         setLastRevisitModel(runs[0].label);
         setLastRevisitProvenance(provenanceLabel(result));
       }
+      await loadRevisitHistory(decision.id);
+      void loadLibrary();
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Revisit failed";
       if (message !== "Operation cancelled") setError(message);
@@ -292,6 +338,7 @@ export default function Home() {
         body: JSON.stringify({ judgment }),
       })) as RevisitResult;
       setFindings(updated.findings);
+      setRevisitHistory((current) => current.map((item) => item.id === updated.id ? updated : item));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save finding judgment");
     } finally {
@@ -299,8 +346,53 @@ export default function Home() {
     }
   }
 
+  async function loadLibrary() {
+    setLibraryLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (libraryQuery.trim()) params.set("q", libraryQuery.trim());
+      if (libraryCriticality !== "all") params.set("criticality", libraryCriticality);
+      const query = params.size ? `?${params.toString()}` : "";
+      setLibrary(await responseJson(await fetch(`${api}/v1/decisions${query}`)) as DecisionLibrary);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not load the decision library");
+    } finally {
+      setLibraryLoading(false);
+    }
+  }
+
+  async function loadRevisitHistory(decisionId: string) {
+    const history = await responseJson(await fetch(`${api}/v1/decisions/${decisionId}/revisit-checks`)) as RevisitResult[];
+    setRevisitHistory(history);
+  }
+
+  async function openDecision(decisionId: string) {
+    setError(null);
+    try {
+      const [record, history] = await Promise.all([
+        fetch(`${api}/v1/decisions/${decisionId}`).then(responseJson),
+        fetch(`${api}/v1/decisions/${decisionId}/revisit-checks`).then(responseJson),
+      ]) as [Decision, RevisitResult[]];
+      setDecision(record);
+      setDraft({ title: record.title, question: record.question, context: record.context, chosenOption: record.chosen_option ?? "", rationale: record.rationale });
+      setRevisitHistory(history);
+      setExtraction(null);
+      setFindings([]);
+      setComparisonRuns([]);
+      setRevisitCompleted(false);
+      setActiveRevisitId(null);
+      setEvidence("");
+      setLibraryQuery("");
+      setView("workspace");
+      window.location.hash = "workspace";
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not open the decision");
+    }
+  }
+
   function resetWorkspace() {
-    setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setError(null);
+    setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setError(null);
   }
 
   return (
@@ -309,36 +401,49 @@ export default function Home() {
         <div className="brand"><span className="brand-mark">R</span><span>Rationexa</span></div>
         <button className="new-decision" onClick={resetWorkspace}>＋ New decision review</button>
         <nav aria-label="Workspace navigation">
-          <a className="nav-item active" href="#workspace"><span>◇</span>Decision workspace</a>
-          <span className="nav-item disabled"><span>▤</span>Decision library <small>Next</small></span>
+          <button className={`nav-item ${view === "workspace" ? "active" : ""}`} onClick={() => setView("workspace")}><span>◇</span>Decision workspace</button>
+          <button className={`nav-item ${view === "library" ? "active" : ""}`} onClick={() => setView("library")}><span>▤</span>Decision library</button>
         </nav>
-        <div className="sidebar-note"><strong>Local-first prototype</strong><span>Choose an installed Ollama model for each AI-assisted step.</span></div>
+        <div className="sidebar-note"><strong>Stage 2 workspace</strong><span>Your finalized decisions and revisit history stay available between sessions.</span></div>
       </aside>
 
       <main id="workspace" className="workspace">
         <header className="topbar">
-          <div><span className="overline">Decision intelligence</span><h1>{draft?.title || "New decision review"}</h1></div>
-          <div className="model-control">
+          <div><span className="overline">{view === "library" ? "Persistent decision memory" : "Decision intelligence"}</span><h1>{view === "library" ? "Decision library" : draft?.title || "New decision review"}</h1></div>
+          {view === "workspace" ? <div className="model-control">
             <label htmlFor="model-select">Model for next AI step</label>
             <select id="model-select" aria-label="AI model" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)} disabled={busyPhase !== null || models.length === 0}>
               {models.length ? models.map((model) => <option key={model.id} value={model.id}>{model.label} · {model.location}</option>) : <option>Loading models…</option>}
             </select>
             <small>{selectedModel?.best_for ?? "Loading configured model options…"}</small>
-          </div>
+          </div> : <button className="primary" onClick={resetWorkspace}>＋ New decision</button>}
         </header>
 
-        <ol className="stepper" aria-label="Decision workflow">
+        {view === "workspace" ? <ol className="stepper" aria-label="Decision workflow">
           {["Import", "Review", "Finalize", "Revisit"].map((label, index) => {
             const number = index + 1;
             return <li key={label} className={number === stage ? "active" : number < stage ? "complete" : ""}><span>{number < stage ? "✓" : number}</span>{label}</li>;
           })}
-        </ol>
+        </ol> : null}
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
 
-        {runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
+        {view === "library" ? <section className="library-view">
+          <div className="library-toolbar">
+            <label className="library-search"><span>⌕</span><input aria-label="Search decisions" value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search title, question, context, or chosen option" /></label>
+            <label className="field library-filter"><span>Criticality</span><select value={libraryCriticality} onChange={(event) => setLibraryCriticality(event.target.value as "all" | Criticality)}><option value="all">All decisions</option><option value="critical">Critical</option><option value="important">Important</option><option value="routine">Routine</option></select></label>
+          </div>
+          <div className="library-summary"><div><strong>{library.total}</strong><span>saved decisions</span></div><p>Reopen a record to review its premises, add new evidence, or inspect previous revisit checks.</p></div>
+          {libraryLoading ? <div className="library-empty"><span className="spinner dark" /><strong>Loading decision memory…</strong></div> : library.items.length ? <div className="decision-list">{library.items.map((item) => <button type="button" className="decision-row" key={item.id} onClick={() => openDecision(item.id)}>
+            <div className="decision-row-main"><div><span className={`criticality-dot ${item.criticality}`} /> <span>{item.criticality}</span></div><h2>{item.title}</h2><p>{item.question}</p></div>
+            <div className="decision-row-stats"><div><strong>{item.premise_count}</strong><span>premises</span></div><div><strong>{item.revisit_count}</strong><span>revisits</span></div>{item.pending_revisit_count ? <div className="pending-stat"><strong>{item.pending_revisit_count}</strong><span>need review</span></div> : null}</div>
+            <div className="decision-row-date"><span>Last checked</span><strong>{formatDate(item.last_revisited_at)}</strong><small>Saved {formatDate(item.created_at)}</small></div><span className="row-arrow">→</span>
+          </button>)}</div> : <div className="library-empty"><span className="library-empty-icon">▤</span><strong>{libraryQuery || libraryCriticality !== "all" ? "No matching decisions" : "Your decision memory starts here"}</strong><p>{libraryQuery || libraryCriticality !== "all" ? "Try a broader search or remove the criticality filter." : "Finalize your first decision review and it will appear here automatically."}</p><button className="primary" onClick={resetWorkspace}>Create a decision →</button></div>}
+        </section> : null}
 
-        {!extraction ? (
+        {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
+
+        {view === "workspace" && !extraction && !decision ? (
           <section className="card import-card">
             <div className="section-heading"><div><span className="overline">Step 1</span><h2>Bring in a decision</h2><p>Start with a short decision note, ADR, assessment, or proposal excerpt.</p></div><span className="privacy-badge">Private · processed locally</span></div>
             <div className="source-tabs" role="tablist">
@@ -352,7 +457,7 @@ export default function Home() {
           </section>
         ) : null}
 
-        {extraction && draft ? (
+        {view === "workspace" && extraction && draft ? (
           <>
             {!decision ? <>
               <section className="review-layout">
@@ -400,8 +505,15 @@ export default function Home() {
           </>
         ) : null}
 
-        {decision ? <section className="card revisit-card">
+        {view === "workspace" && decision && !extraction ? <section className="card finalized-summary">
+          <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><button className="text-button" onClick={() => setView("library")}>Back to library</button></div>
+          <div className="record-meta"><div><span>Chosen option</span><strong>{decision.chosen_option || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Saved</span><strong>{formatDate(decision.created_at)}</strong></div></div>
+          <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
+        </section> : null}
+
+        {view === "workspace" && decision ? <section className="card revisit-card">
           <div className="section-heading"><div><span className="overline">Step 4 · Revisit</span><h2>What changed?</h2><p>Check one model or compare two models against the same preserved premises and evidence.</p></div><span className="decision-badge">{decision.criticality}</span></div>
+          {revisitHistory.length ? <section className="history-strip"><div className="history-heading"><div><span className="overline">Revisit history</span><h3>{revisitHistory.length} previous check{revisitHistory.length === 1 ? "" : "s"}</h3></div><span>Newest first</span></div><div className="history-list">{revisitHistory.map((run) => <article key={run.id} className="history-item"><div><strong>{run.evidence_filename || "New evidence"}</strong><span>{run.provider || "unknown"}/{run.model || "unknown"} · {formatDate(run.created_at)}</span></div><div><strong>{run.findings.length}</strong><span>findings</span></div><span className={`history-status ${run.status}`}>{run.status.replaceAll("_", " ")}</span></article>)}</div></section> : null}
           <div className="mode-toggle" aria-label="Revisit mode"><button type="button" className={!compareMode ? "active" : ""} aria-pressed={!compareMode} onClick={() => { setCompareMode(false); setComparisonRuns([]); }}>Single model</button><button type="button" className={compareMode ? "active" : ""} aria-pressed={compareMode} disabled={models.length < 2} onClick={() => { setCompareMode(true); setFindings([]); }}>Compare models</button></div>
           {compareMode ? <div className="compare-models"><label className="field"><span>Model A</span><select aria-label="Comparison model A" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)} disabled={busyPhase !== null}>{models.map((model) => <option key={model.id} value={model.id} disabled={model.id === comparisonModelId}>{model.label} · {model.location}</option>)}</select></label><div className="versus">VS</div><label className="field"><span>Model B</span><select aria-label="Comparison model B" value={comparisonModelId} onChange={(event) => setComparisonModelId(event.target.value)} disabled={busyPhase !== null}>{models.map((model) => <option key={model.id} value={model.id} disabled={model.id === selectedModelId}>{model.label} · {model.location}</option>)}</select></label></div> : null}
           <label className="field"><span>New evidence</span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); setFindings([]); setComparisonRuns([]); setActiveRevisitId(null); }} rows={5} /></label>

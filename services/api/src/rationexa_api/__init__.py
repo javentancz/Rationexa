@@ -1,3 +1,3 @@
-"""Rationexa Stage 1 API."""
+"""Rationexa decision memory and review API."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -4,13 +4,15 @@ Updated: 2026-08-25
 
 ## Current verdict
 
-The Stage 1 product workflow is implemented as a working prototype. Stage 1 is
-not release-complete because the reliability and real-user gates have not yet
-passed.
+The Stage 1 prototype is complete and the project has moved into Stage 2 repeat-
+use development. This is a product-scope decision, not a claim that model
+accuracy has been independently validated.
 
-The 30-case development regression set is implemented and frozen. Independent
-label review, a sealed holdout run, and moderated user tests remain part of the
-Stage 1 definition of done.
+The 30-case development regression set remains frozen and executable.
+Independent label review, a sealed holdout run, and moderated user tests are
+deferred trust-validation work. Rationexa therefore remains human-in-the-loop:
+it surfaces evidence for review and never decides that the original decision is
+wrong.
 
 ## Implemented
 
@@ -103,19 +105,12 @@ Stage 1 definition of done.
 - Required: 5–8 relevant users testing historical decisions with captured
   correction effort, relevance, trust, and repeat-use intent.
 
-## Next build sequence
+## Transition decision
 
-1. Have a qualified reviewer independently check all 30 case labels without
-   seeing model outputs, using the corrected internal audit as a draft, then
-   freeze the reviewed manifest.
-2. Rerun the complete 30-case suite after independent label review; the focused
-   critical-case rerun passes and Gemma reaches 91.7% extraction recall on the
-   visible set, but independent accuracy and generalization remain unproven.
-3. Run a sealed, non-overlapping 30-case holdout against the frozen code,
-   prompts, thresholds, and model versions.
-4. Conduct the Gate 4 moderated user test.
-5. Add a hosted provider only after the trust gate is stable; do not select a
-   default by reputation alone.
+Stage 2 starts with persistent decision memory, search, reopening, and revisit
+history. Independent review and a sealed holdout remain required before any
+future claim of validated accuracy or autonomous operation. They do not block a
+supervised product pilot where a human reviews every premise and finding.
 
 ## Release language
 

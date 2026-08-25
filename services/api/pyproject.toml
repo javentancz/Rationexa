@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rationexa-api"
-version = "0.1.0"
-description = "Rationexa Stage 1 decision review API"
+version = "0.2.0"
+description = "Rationexa human-in-the-loop decision memory and review API"
 requires-python = ">=3.14,<3.15"
 dependencies = [
   "fastapi>=0.141.1,<1",

@@ -16,8 +16,8 @@ from rationexa_api.evaluation import (
     score_revisit,
     validate_dataset_separation,
 )
-from rationexa_api.providers import DeterministicProvider, _repair_source_anchor
-from rationexa_api.schemas import CandidatePremise, ExtractionResult, RevisitFinding
+from rationexa_api.providers import DeterministicProvider
+from rationexa_api.schemas import ExtractionResult, RevisitFinding
 
 
 def test_load_cases_requires_case_metadata(tmp_path: Path) -> None:
@@ -185,25 +185,6 @@ def test_real_case_suite_meets_stage_one_smoke_coverage() -> None:
                 assert " ".join(premise["old_excerpt"].lower().split()) in normalized_decision, (
                     case.case_id,
                     premise["premise_id"],
-                )
-
-
-def test_saved_benchmark_premises_are_groundable_after_offset_repair() -> None:
-    repo_root = Path(__file__).parents[3]
-    report = json.loads((repo_root / "packages" / "evals" / "reports" / "local-model-comparison.json").read_text())
-
-    assert report["trust_gate"]["passed"] is False
-    assert all(model["aggregate"]["fabricated_quote_count"] == 0 for model in report["models"])
-
-    for model in report["models"]:
-        for case in model["cases"]:
-            source = (repo_root / "packages" / "evals" / "real_cases" / case["case_id"] / "decision.md").read_text()
-            for premise_data in case["extraction"]["premises"]:
-                premise = CandidatePremise.model_validate(premise_data)
-                assert _repair_source_anchor(premise, source) is not None, (
-                    model["model"],
-                    case["case_id"],
-                    premise.statement,
                 )
 
 

@@ -166,6 +166,26 @@ class DecisionRead(BaseModel):
     preservation_policy: str
     status: str
     premises: list[DecisionPremiseRead]
+    created_at: datetime
+
+
+class DecisionListItem(BaseModel):
+    id: str
+    title: str
+    question: str
+    chosen_option: str | None
+    criticality: Criticality
+    status: str
+    premise_count: int
+    revisit_count: int
+    pending_revisit_count: int
+    last_revisited_at: datetime | None
+    created_at: datetime
+
+
+class DecisionListRead(BaseModel):
+    items: list[DecisionListItem]
+    total: int
 
 
 class RevisitRequest(BaseModel):
@@ -230,6 +250,7 @@ class RevisitRead(BaseModel):
     input_tokens: int | None = None
     output_tokens: int | None = None
     estimated_cost_usd: float | None = None
+    evidence_filename: str | None = None
     created_at: datetime
 
 

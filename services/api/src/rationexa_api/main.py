@@ -2,9 +2,9 @@ from contextlib import asynccontextmanager
 from time import perf_counter
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Response, UploadFile, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -27,7 +27,10 @@ from .providers import available_models, default_model_id, get_provider
 from .schemas import (
     ArtifactCreate,
     ArtifactRead,
+    Criticality,
     DecisionFinalizeRequest,
+    DecisionListItem,
+    DecisionListRead,
     DecisionPremiseRead,
     DecisionRead,
     ExtractionRead,
@@ -64,7 +67,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -320,6 +323,85 @@ def get_decision(decision_id: str, db: Db) -> DecisionRead:
     return decision_read(decision)
 
 
+@app.get("/v1/decisions", response_model=DecisionListRead)
+def list_decisions(
+    db: Db,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    criticality: Annotated[Criticality | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> DecisionListRead:
+    filters = []
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        filters.append(
+            or_(
+                DecisionRow.title.ilike(pattern),
+                DecisionRow.question.ilike(pattern),
+                DecisionRow.context.ilike(pattern),
+                DecisionRow.chosen_option.ilike(pattern),
+            )
+        )
+    if criticality:
+        filters.append(DecisionRow.criticality == criticality.value)
+
+    premise_count = func.count(func.distinct(PremiseRow.id)).label("premise_count")
+    revisit_count = func.count(func.distinct(RevisitRow.id)).label("revisit_count")
+    pending_revisit_count = (
+        func.count(func.distinct(RevisitRow.id))
+        .filter(RevisitRow.status == "needs_review")
+        .label("pending_revisit_count")
+    )
+    last_revisited_at = func.max(RevisitRow.created_at).label("last_revisited_at")
+    statement = (
+        select(
+            DecisionRow,
+            premise_count,
+            revisit_count,
+            pending_revisit_count,
+            last_revisited_at,
+        )
+        .outerjoin(PremiseRow, PremiseRow.decision_id == DecisionRow.id)
+        .outerjoin(RevisitRow, RevisitRow.decision_id == DecisionRow.id)
+        .where(*filters)
+        .group_by(DecisionRow.id)
+        .order_by(DecisionRow.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = db.execute(statement).all()
+    total = db.scalar(select(func.count()).select_from(DecisionRow).where(*filters)) or 0
+    return DecisionListRead(
+        items=[
+            DecisionListItem(
+                id=decision.id,
+                title=decision.title,
+                question=decision.question,
+                chosen_option=decision.chosen_option,
+                criticality=decision.criticality,
+                status=decision.status,
+                premise_count=premises,
+                revisit_count=revisits,
+                pending_revisit_count=pending,
+                last_revisited_at=last_revisited,
+                created_at=decision.created_at,
+            )
+            for decision, premises, revisits, pending, last_revisited in rows
+        ],
+        total=total,
+    )
+
+
+@app.get("/v1/decisions/{decision_id}/revisit-checks", response_model=list[RevisitRead])
+def list_revisit_checks(decision_id: str, db: Db) -> list[RevisitRead]:
+    if db.get(DecisionRow, decision_id) is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    rows = db.scalars(
+        select(RevisitRow).where(RevisitRow.decision_id == decision_id).order_by(RevisitRow.created_at.desc())
+    ).all()
+    return [revisit_read(row) for row in rows]
+
+
 @app.post(
     "/v1/decisions/{decision_id}/revisit-checks",
     response_model=RevisitRead,
@@ -368,6 +450,7 @@ def perform_revisit(
     row = RevisitRow(
         decision_id=decision.id,
         evidence_artifact_id=evidence.id,
+        evidence_filename=payload.filename,
         status="needs_review" if findings else "completed",
         findings=[finding.model_dump(mode="json") for finding in findings],
         provider=provider.name,
@@ -516,6 +599,7 @@ def decision_read(row: DecisionRow) -> DecisionRead:
         preservation_policy=row.preservation_policy,
         status=row.status,
         premises=premises,
+        created_at=row.created_at,
     )
 
 
@@ -532,5 +616,6 @@ def revisit_read(row: RevisitRow) -> RevisitRead:
         input_tokens=row.input_tokens,
         output_tokens=row.output_tokens,
         estimated_cost_usd=row.estimated_cost_usd,
+        evidence_filename=row.evidence_filename,
         created_at=row.created_at,
     )

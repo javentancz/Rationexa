@@ -559,7 +559,7 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=repo_root / "packages/evals/reports/local-model-comparison",
+        default=repo_root / "packages/evals/reports/development-model-comparison",
     )
     parser.add_argument("--timeout-seconds", type=float, default=300)
     parser.add_argument("--trust-gate", type=Path, default=trust_gate_path)

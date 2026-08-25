@@ -7,6 +7,42 @@ from rationexa_api.db import ExtractionRow, RevisitRow, SessionLocal, engine
 from rationexa_api.main import app
 
 
+def create_finalized_decision(
+    client: TestClient,
+    *,
+    source: str,
+    title: str,
+    criticality: str = "important",
+) -> dict:
+    artifact = client.post(
+        "/v1/artifacts",
+        json={"filename": f"{title}.txt", "media_type": "text/plain", "content": source},
+    ).json()
+    extraction = client.post("/v1/decisions/extractions", json={"artifact_id": artifact["id"]}).json()
+    reviewed = client.post(
+        f"/v1/extractions/{extraction['id']}/review",
+        json={
+            "title": title,
+            "reviews": [
+                {
+                    "candidate_id": premise["candidate_id"],
+                    "action": "confirm",
+                    "statement": premise["statement"],
+                    "kind": premise["kind"],
+                }
+                for premise in extraction["result"]["premises"]
+            ],
+        },
+    )
+    assert reviewed.status_code == 200
+    finalized = client.post(
+        f"/v1/extractions/{extraction['id']}/finalize",
+        json={"criticality": criticality},
+    )
+    assert finalized.status_code == 201
+    return finalized.json()
+
+
 def test_stage_one_vertical_slice() -> None:
     source = (
         "We decided to use Vendor B because we assumed Vendor B does not support external users. "
@@ -105,6 +141,7 @@ def test_revisit_provenance_columns_exist() -> None:
         columns = {column["name"] for column in inspect(engine).get_columns("revisit_checks")}
 
     assert {
+        "evidence_filename",
         "provider",
         "model",
         "prompt_version",
@@ -288,3 +325,56 @@ def test_keep_unknown_preserves_premise_in_final_decision() -> None:
         assert finalized.status_code == 201
         assert len(finalized.json()["premises"]) == 1
         assert finalized.json()["premises"][0]["kind"] == "unknown"
+
+
+def test_stage_two_decision_library_search_and_revisit_history() -> None:
+    with TestClient(app) as client:
+        vendor = create_finalized_decision(
+            client,
+            source=(
+                "We decided to use Vendor B because we assumed Vendor B does not support external users. "
+                "Revisit if Vendor B introduces external-user support."
+            ),
+            title="Library Atlas vendor decision",
+            criticality="important",
+        )
+        create_finalized_decision(
+            client,
+            source="We decided to use SQLite because the application must remain portable.",
+            title="Portable database decision",
+            criticality="routine",
+        )
+
+        library = client.get("/v1/decisions")
+        assert library.status_code == 200
+        assert library.json()["total"] >= 2
+        assert {
+            "Library Atlas vendor decision",
+            "Portable database decision",
+        } <= {item["title"] for item in library.json()["items"]}
+
+        search = client.get("/v1/decisions", params={"q": "Library Atlas", "criticality": "important"})
+        assert search.status_code == 200
+        assert search.json()["total"] == 1
+        assert search.json()["items"][0]["id"] == vendor["id"]
+        assert search.json()["items"][0]["premise_count"] == len(vendor["premises"])
+
+        revisit = client.post(
+            f"/v1/decisions/{vendor['id']}/revisit-checks",
+            json={
+                "filename": "vendor-release-note.txt",
+                "content": "Vendor B now supports external users.",
+            },
+        )
+        assert revisit.status_code == 201
+
+        history = client.get(f"/v1/decisions/{vendor['id']}/revisit-checks")
+        assert history.status_code == 200
+        assert len(history.json()) == 1
+        assert history.json()[0]["id"] == revisit.json()["id"]
+        assert history.json()[0]["evidence_filename"] == "vendor-release-note.txt"
+
+        refreshed = client.get("/v1/decisions", params={"q": "Library Atlas"}).json()["items"][0]
+        assert refreshed["revisit_count"] == 1
+        assert refreshed["pending_revisit_count"] == 1
+        assert refreshed["last_revisited_at"] is not None

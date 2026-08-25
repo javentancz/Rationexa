@@ -105,6 +105,7 @@ class RevisitRow(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     decision_id: Mapped[str] = mapped_column(ForeignKey("decisions.id"))
     evidence_artifact_id: Mapped[str] = mapped_column(ForeignKey("artifacts.id"))
+    evidence_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="needs_review")
     findings: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
     provider: Mapped[str | None] = mapped_column(String(80), nullable=True)
@@ -132,6 +133,7 @@ def _add_missing_revisit_provenance_columns() -> None:
     """Keep existing Stage 1 databases readable until formal migrations are introduced."""
     existing = {column["name"] for column in inspect(engine).get_columns("revisit_checks")}
     column_definitions = {
+        "evidence_filename": "VARCHAR(255)",
         "provider": "VARCHAR(80)",
         "model": "VARCHAR(120)",
         "prompt_version": "VARCHAR(40)",

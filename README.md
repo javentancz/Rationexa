@@ -1,14 +1,14 @@
 # Rationexa
 
-Rationexa is a human-in-the-loop technical decision review project. Its Stage 1 goal is to preserve the premises and source evidence behind technical decisions, then identify when new evidence may weaken or contradict a premise worth reviewing.
+Rationexa is a human-in-the-loop technical decision memory and review project. It preserves the premises and source evidence behind technical decisions, then helps people inspect when new evidence may weaken or contradict a premise worth reviewing.
 
 ## Current status
 
-Stage 1 implementation is underway. The first vertical slice imports source text, extracts typed decision premises, validates exact source anchors, records human review, finalizes a decision record, and compares it with new evidence.
+The Stage 1 prototype is complete with production accuracy validation explicitly deferred. Stage 2 is underway. The current slice adds a persistent Decision Library, search, reopening, and revisit history so the product can support repeat use rather than one disposable review session.
 
-See [the Stage 1 execution plan](docs/STAGE_1_EXECUTION_PLAN.md) for the proposed architecture, data contracts, APIs, evaluation strategy, acceptance gates, and first 10 working days. The current gate-by-gate status is tracked in [Stage 1 readiness](docs/STAGE_1_READINESS.md).
+See [Stage 1 readiness](docs/STAGE_1_READINESS.md) for the deferred validation boundaries and [the Stage 2 execution plan](docs/STAGE_2_EXECUTION_PLAN.md) for the active product milestones.
 
-## Stage 1 boundary
+## Product boundary
 
 Rationexa assists review; it does not autonomously declare decisions wrong, reverse recommendations, assign authoritative business materiality, or monitor sources continuously.
 
@@ -54,7 +54,7 @@ For fast tests without starting Ollama, set `AI_PROVIDER=deterministic`. To use 
 
 ## Compare local models on real cases
 
-The real-case suite contains 30 curated decisions paired with later
+The development regression suite contains 30 curated decisions paired with later
 authoritative evidence. It covers lifecycle and retirement events, security,
 pricing, licensing, positive support, irrelevant evidence, and prompt injection.
 The cases are suitable for development regression testing and remain marked
@@ -73,7 +73,7 @@ The command writes a detailed JSON result and a readable Markdown summary to
 `packages/evals/reports/`. Extraction and revisit are scored separately; each
 model receives the same curated premises for revisit so the comparison is fair.
 It prints one progress line per completed case and atomically updates a
-`local-model-comparison.checkpoint.json` file, so a long local run no longer
+`development-model-comparison.checkpoint.json` file, so a long local run no longer
 looks frozen and partial results survive interruption.
 
 The report also applies `packages/evals/datasets/stage1-trust-gate.json`. A
