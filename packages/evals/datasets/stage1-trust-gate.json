@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "name": "Stage 1 trust and evaluation gate",
+  "minimum_case_count": 30,
+  "require_independent_review": true,
+  "minimum_concept_recall": 0.9,
+  "minimum_anchor_rate": 0.9,
+  "minimum_revisit_detection_recall": 0.9,
+  "minimum_relationship_precision": 0.8,
+  "maximum_false_positives": 0,
+  "maximum_critical_misses": 0,
+  "maximum_fabricated_quotes": 0
+}

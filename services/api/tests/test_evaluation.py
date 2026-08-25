@@ -5,9 +5,11 @@ from pathlib import Path
 import pytest
 
 from rationexa_api.evaluation import (
+    RealCase,
     _write_json_atomic,
     case_content_hash,
     evaluate_model,
+    evaluate_trust_gate,
     load_cases,
     load_dataset,
     score_extraction,
@@ -59,6 +61,8 @@ def test_score_extraction_checks_kind_keywords_and_anchors() -> None:
 
     assert score["concept_recall"] == 0.5
     assert score["anchor_rate"] == 0.5
+    assert score["invalid_anchor_count"] == 0
+    assert score["unanchored_premise_count"] == 1
 
 
 def test_score_revisit_separates_relationship_errors_and_false_positives() -> None:
@@ -87,11 +91,66 @@ def test_score_revisit_separates_relationship_errors_and_false_positives() -> No
         ),
     ]
 
-    score = score_revisit(findings, canonical)
+    score = score_revisit(findings, canonical, "It is now end-of-life. Node.js")
 
     assert score["detection_recall"] == 1.0
     assert score["relationship_accuracy"] == 0.0
+    assert score["relationship_precision"] == 0.0
     assert score["false_positive_ids"] == ["unrelated"]
+    assert score["missed_relevant_count"] == 0
+    assert score["ungrounded_finding_count"] == 0
+
+
+def test_trust_gate_requires_reviewed_cases_and_zero_critical_misses(tmp_path: Path) -> None:
+    cases = [
+        RealCase(
+            directory=tmp_path,
+            metadata={"review_status": "independently_reviewed"},
+            decision="decision",
+            evidence="evidence",
+        )
+    ]
+    aggregate = {
+        "cases_passed": 1,
+        "cases_total": 1,
+        "concept_recall": 1.0,
+        "anchor_rate": 1.0,
+        "revisit_detection_recall": 1.0,
+        "relationship_precision": 1.0,
+        "false_positive_count": 0,
+        "critical_miss_count": 0,
+        "fabricated_quote_count": 0,
+    }
+    thresholds = {
+        "name": "Test trust gate",
+        "minimum_case_count": 1,
+        "require_independent_review": True,
+        "minimum_concept_recall": 0.9,
+        "minimum_anchor_rate": 0.9,
+        "minimum_revisit_detection_recall": 0.9,
+        "minimum_relationship_precision": 0.8,
+        "maximum_false_positives": 0,
+        "maximum_critical_misses": 0,
+        "maximum_fabricated_quotes": 0,
+    }
+
+    passed = evaluate_trust_gate(
+        {"models": [{"model": "test", "aggregate": aggregate}]},
+        cases,
+        thresholds,
+    )
+    failed = evaluate_trust_gate(
+        {"models": [{"model": "test", "aggregate": {**aggregate, "critical_miss_count": 1}}]},
+        cases,
+        thresholds,
+    )
+
+    assert passed["passed"] is True
+    assert failed["passed"] is False
+    assert (
+        next(check for check in failed["models"][0]["checks"] if check["metric"] == "critical_miss_count")["passed"]
+        is False
+    )
 
 
 def test_real_case_suite_meets_stage_one_smoke_coverage() -> None:
@@ -119,15 +178,14 @@ def test_real_case_suite_meets_stage_one_smoke_coverage() -> None:
 
 def test_saved_benchmark_premises_are_groundable_after_offset_repair() -> None:
     repo_root = Path(__file__).parents[3]
-    report = json.loads(
-        (repo_root / "packages" / "evals" / "reports" / "local-model-comparison.json").read_text()
-    )
+    report = json.loads((repo_root / "packages" / "evals" / "reports" / "local-model-comparison.json").read_text())
+
+    assert report["trust_gate"]["passed"] is False
+    assert all(model["aggregate"]["fabricated_quote_count"] == 0 for model in report["models"])
 
     for model in report["models"]:
         for case in model["cases"]:
-            source = (
-                repo_root / "packages" / "evals" / "real_cases" / case["case_id"] / "decision.md"
-            ).read_text()
+            source = (repo_root / "packages" / "evals" / "real_cases" / case["case_id"] / "decision.md").read_text()
             for premise_data in case["extraction"]["premises"]:
                 premise = CandidatePremise.model_validate(premise_data)
                 assert _repair_source_anchor(premise, source) is not None, (

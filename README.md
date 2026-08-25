@@ -71,6 +71,13 @@ It prints one progress line per completed case and atomically updates a
 `local-model-comparison.checkpoint.json` file, so a long local run no longer
 looks frozen and partial results survive interruption.
 
+The report also applies `packages/evals/datasets/stage1-trust-gate.json`. A
+model is blocked if it misses a critical relationship, invents an evidence
+excerpt, exceeds the false-positive allowance, or falls below the configured
+recall/precision thresholds. The overall Stage 1 gate additionally requires 30
+independently reviewed cases; the visible 12-case development set cannot by
+itself produce a release-ready verdict.
+
 Production model selection must use a separately maintained, independently
 reviewed holdout of at least 30 cases. Keep its content and labels outside this
 repository, verify that its IDs and content hashes do not overlap the

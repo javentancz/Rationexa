@@ -1,5 +1,7 @@
 {
-  "generated_at": "2026-08-25T05:54:47.347345+00:00",
+  "generated_at": "2026-08-25T07:23:57.889284+00:00",
+  "dataset_id": "development-v1",
+  "dataset_manifest_hash": "6a12f29e96e9dce41f9e8e7debefb8f7e6a321bb781585843c72546ee1cb18a2",
   "cases": [
     "docker-hub-pull-limits",
     "github-actions-ubuntu20-retirement",
@@ -20,22 +22,33 @@
       "aggregate": {
         "cases_passed": 12,
         "cases_total": 12,
-        "concept_recall": 0.833,
-        "anchor_rate": 0.374,
+        "concept_recall": 0.958,
+        "anchor_rate": 1.0,
         "revisit_detection_recall": 0.875,
         "relationship_accuracy": 0.833,
+        "relationship_precision": 0.923,
+        "expected_relevant_count": 16,
+        "correct_relationship_count": 12,
         "false_positive_count": 0,
-        "total_seconds": 602.31
+        "critical_miss_count": 1,
+        "critical_miss_cases": [
+          "ingress-nginx-retirement"
+        ],
+        "fabricated_quote_count": 0,
+        "total_seconds": 559.29
       },
       "cases": [
         {
           "case_id": "docker-hub-pull-limits",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 19.12,
-          "revisit_seconds": 16.97,
+          "extraction_seconds": 18.92,
+          "revisit_seconds": 17.39,
           "extraction": {
             "premise_count": 4,
-            "anchor_rate": 0.25,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -67,7 +80,12 @@
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
-                "anchor": null
+                "anchor": {
+                  "exact_excerpt": "Anonymous pulls are expected to remain effectively unlimited at our CI\n  volume.",
+                  "start_offset": 274,
+                  "end_offset": 354,
+                  "page_number": null
+                }
               },
               {
                 "candidate_id": "premise-2",
@@ -78,7 +96,12 @@
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
-                "anchor": null
+                "anchor": {
+                  "exact_excerpt": "The build fleet can retry occasional transient registry errors.",
+                  "start_offset": 357,
+                  "end_offset": 420,
+                  "page_number": null
+                }
               },
               {
                 "candidate_id": "premise-3",
@@ -89,21 +112,26 @@
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Revisit Condition requires review",
-                "anchor": null
+                "anchor": {
+                  "exact_excerpt": "Revisit authentication or mirroring if rate limits can interrupt builds.",
+                  "start_offset": 423,
+                  "end_offset": 495,
+                  "page_number": null
+                }
               },
               {
                 "candidate_id": "recovered-4",
                 "kind": "assumption",
-                "statement": "- Anonymous pulls are expected to remain effectively unlimited at our CI",
+                "statement": "- Anonymous pulls are expected to remain effectively unlimited at our CI\n  volume.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- Anonymous pulls are expected to remain effectively unlimited at our CI",
+                  "exact_excerpt": "- Anonymous pulls are expected to remain effectively unlimited at our CI\n  volume.",
                   "start_offset": 272,
-                  "end_offset": 344,
+                  "end_offset": 354,
                   "page_number": null
                 }
               }
@@ -114,8 +142,18 @@
             "finding_count": 1,
             "detection_recall": 0.5,
             "relationship_accuracy": 0.5,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 1,
+            "missed_relevant_count": 1,
+            "missed_relevant_ids": [
+              "docker-anonymous-unlimited"
+            ],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 1,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "docker-rate-trigger",
@@ -133,12 +171,15 @@
         },
         {
           "case_id": "github-actions-ubuntu20-retirement",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 23.43,
-          "revisit_seconds": 16.49,
+          "extraction_seconds": 24.32,
+          "revisit_seconds": 17.96,
           "extraction": {
             "premise_count": 5,
-            "anchor_rate": 0.4,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -171,9 +212,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "The hosted ubuntu-20.04 image is expected to remain available for the release workflow.",
-                  "start_offset": 136,
-                  "end_offset": 209,
+                  "exact_excerpt": "The hosted ubuntu-20.04 image is expected to remain available for the release\n  workflow.",
+                  "start_offset": 290,
+                  "end_offset": 379,
                   "page_number": null
                 }
               },
@@ -188,8 +229,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "A fixed image is more repeatable than `ubuntu-latest`.",
-                  "start_offset": 210,
-                  "end_offset": 263,
+                  "start_offset": 382,
+                  "end_offset": 436,
                   "page_number": null
                 }
               },
@@ -204,8 +245,8 @@
                 "attention_reason": "Revisit Condition requires review",
                 "anchor": {
                   "exact_excerpt": "Revisit this pin when GitHub announces that the runner image will be retired.",
-                  "start_offset": 264,
-                  "end_offset": 339,
+                  "start_offset": 439,
+                  "end_offset": 516,
                   "page_number": null
                 }
               },
@@ -228,16 +269,16 @@
               {
                 "candidate_id": "recovered-5",
                 "kind": "assumption",
-                "statement": "- The hosted ubuntu-20.04 image is expected to remain available for the release",
+                "statement": "- The hosted ubuntu-20.04 image is expected to remain available for the release\n  workflow.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- The hosted ubuntu-20.04 image is expected to remain available for the release",
+                  "exact_excerpt": "- The hosted ubuntu-20.04 image is expected to remain available for the release\n  workflow.",
                   "start_offset": 288,
-                  "end_offset": 367,
+                  "end_offset": 379,
                   "page_number": null
                 }
               }
@@ -248,8 +289,18 @@
             "finding_count": 2,
             "detection_recall": 1.0,
             "relationship_accuracy": 0.5,
+            "relationship_precision": 0.5,
+            "correct_relationship_count": 1,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 1,
+            "incorrect_relationship_ids": [
+              "ubuntu20-retirement-trigger"
+            ],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 2,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "ubuntu20-availability",
@@ -278,12 +329,15 @@
         },
         {
           "case_id": "ingress-nginx-retirement",
+          "criticality": "critical",
           "status": "passed",
-          "extraction_seconds": 68.01,
-          "revisit_seconds": 45.47,
+          "extraction_seconds": 70.37,
+          "revisit_seconds": 45.21,
           "extraction": {
             "premise_count": 15,
-            "anchor_rate": 0.333,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -302,7 +356,7 @@
                   "upgrades"
                 ],
                 "matched": true,
-                "premise": "- The team accepts responsibility for controller upgrades, monitoring, and"
+                "premise": "- The team accepts responsibility for controller upgrades, monitoring, and\n  troubleshooting."
               },
               {
                 "kind": "revisit_condition",
@@ -326,8 +380,8 @@
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
                   "exact_excerpt": "The project needs fast and reliable preview URLs for pull requests.",
-                  "start_offset": 48,
-                  "end_offset": 120,
+                  "start_offset": 240,
+                  "end_offset": 307,
                   "page_number": null
                 }
               },
@@ -341,9 +395,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
-                  "exact_excerpt": "Creating a separate GKE ingress and load balancer for every preview was slow and produced multiple external IPs.",
-                  "start_offset": 122,
-                  "end_offset": 230,
+                  "exact_excerpt": "Creating a\nseparate GKE ingress and load balancer for every preview was slow and produced\nmultiple external IPs.",
+                  "start_offset": 308,
+                  "end_offset": 420,
                   "page_number": null
                 }
               },
@@ -357,9 +411,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
-                  "exact_excerpt": "A Traefik-based approach added operational complexity, custom permissions, and another routing layer to debug.",
-                  "start_offset": 232,
-                  "end_offset": 340,
+                  "exact_excerpt": "A Traefik-based approach added operational complexity,\ncustom permissions, and another routing layer to debug.",
+                  "start_offset": 421,
+                  "end_offset": 531,
                   "page_number": null
                 }
               },
@@ -373,9 +427,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": null,
                 "anchor": {
-                  "exact_excerpt": "The desired design should use one external IP with wildcard DNS, minimize moving parts, and keep the contributor workflow close to standard Kubernetes Ingress patterns.",
-                  "start_offset": 342,
-                  "end_offset": 506,
+                  "exact_excerpt": "The desired design should use one external IP with wildcard DNS, minimize\nmoving parts, and keep the contributor workflow close to standard Kubernetes\nIngress patterns.",
+                  "start_offset": 533,
+                  "end_offset": 701,
                   "page_number": null
                 }
               },
@@ -390,8 +444,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "The controller is familiar to Kubernetes operators and widely documented.",
-                  "start_offset": 630,
-                  "end_offset": 702,
+                  "start_offset": 1002,
+                  "end_offset": 1075,
                   "page_number": null
                 }
               },
@@ -406,8 +460,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "It discovers new Ingress resources quickly enough for preview environments.",
-                  "start_offset": 704,
-                  "end_offset": 782,
+                  "start_offset": 1078,
+                  "end_offset": 1153,
                   "page_number": null
                 }
               },
@@ -421,9 +475,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "One controller and external IP are simpler than one cloud load balancer per preview.",
-                  "start_offset": 784,
-                  "end_offset": 862,
+                  "exact_excerpt": "One controller and external IP are simpler than one cloud load balancer per\n  preview.",
+                  "start_offset": 1156,
+                  "end_offset": 1242,
                   "page_number": null
                 }
               },
@@ -437,9 +491,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "The team accepts responsibility for controller upgrades, monitoring, and troubleshooting.",
-                  "start_offset": 864,
-                  "end_offset": 952,
+                  "exact_excerpt": "The team accepts responsibility for controller upgrades, monitoring, and\n  troubleshooting.",
+                  "start_offset": 1245,
+                  "end_offset": 1336,
                   "page_number": null
                 }
               },
@@ -453,9 +507,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Revisit Condition requires review",
                 "anchor": {
-                  "exact_excerpt": "A later migration to Gateway API or another controller is possible but would require additional work.",
-                  "start_offset": 954,
-                  "end_offset": 1052,
+                  "exact_excerpt": "A later migration to Gateway API or another controller is possible but would\n  require additional work.",
+                  "start_offset": 1339,
+                  "end_offset": 1442,
                   "page_number": null
                 }
               },
@@ -469,9 +523,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Revisit Condition requires review",
                 "anchor": {
-                  "exact_excerpt": "The project must operate the controller and may eventually need to migrate its routing configuration.",
-                  "start_offset": 1076,
-                  "end_offset": 1172,
+                  "exact_excerpt": "The project\nmust operate the controller and may eventually need to migrate its routing\nconfiguration.",
+                  "start_offset": 1524,
+                  "end_offset": 1625,
                   "page_number": null
                 }
               },
@@ -510,48 +564,48 @@
               {
                 "candidate_id": "recovered-13",
                 "kind": "assumption",
-                "statement": "- One controller and external IP are simpler than one cloud load balancer per",
+                "statement": "- One controller and external IP are simpler than one cloud load balancer per\n  preview.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- One controller and external IP are simpler than one cloud load balancer per",
+                  "exact_excerpt": "- One controller and external IP are simpler than one cloud load balancer per\n  preview.",
                   "start_offset": 1154,
-                  "end_offset": 1231,
+                  "end_offset": 1242,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-14",
                 "kind": "hard_constraint",
-                "statement": "- The team accepts responsibility for controller upgrades, monitoring, and",
+                "statement": "- The team accepts responsibility for controller upgrades, monitoring, and\n  troubleshooting.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- The team accepts responsibility for controller upgrades, monitoring, and",
+                  "exact_excerpt": "- The team accepts responsibility for controller upgrades, monitoring, and\n  troubleshooting.",
                   "start_offset": 1243,
-                  "end_offset": 1317,
+                  "end_offset": 1336,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-15",
                 "kind": "revisit_condition",
-                "statement": "- A later migration to Gateway API or another controller is possible but would",
+                "statement": "- A later migration to Gateway API or another controller is possible but would\n  require additional work.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Revisit Condition recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- A later migration to Gateway API or another controller is possible but would",
+                  "exact_excerpt": "- A later migration to Gateway API or another controller is possible but would\n  require additional work.",
                   "start_offset": 1337,
-                  "end_offset": 1415,
+                  "end_offset": 1442,
                   "page_number": null
                 }
               }
@@ -562,8 +616,18 @@
             "finding_count": 1,
             "detection_recall": 0.5,
             "relationship_accuracy": 0.5,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 1,
+            "missed_relevant_count": 1,
+            "missed_relevant_ids": [
+              "ingress-migration"
+            ],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 1,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "ingress-maintenance",
@@ -581,13 +645,16 @@
         },
         {
           "case_id": "node-18-eol",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 33.73,
-          "revisit_seconds": 30.36,
+          "extraction_seconds": 30.84,
+          "revisit_seconds": 27.21,
           "extraction": {
-            "premise_count": 7,
-            "anchor_rate": 0.429,
-            "concept_recall": 0.5,
+            "premise_count": 6,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
+            "concept_recall": 1.0,
             "expectation_matches": [
               {
                 "kind": "assumption",
@@ -602,10 +669,10 @@
                 "kind": "revisit_condition",
                 "keywords": [
                   "newer",
-                  "migration"
+                  "update"
                 ],
-                "matched": false,
-                "premise": null
+                "matched": true,
+                "premise": "Moving to a newer major version will require a deliberate toolchain and compatibility update."
               }
             ],
             "premises": [
@@ -620,8 +687,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "The project needs a repeatable local Node.js toolchain.",
-                  "start_offset": 245,
-                  "end_offset": 289,
+                  "start_offset": 307,
+                  "end_offset": 362,
                   "page_number": null
                 }
               },
@@ -636,8 +703,8 @@
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
                   "exact_excerpt": "Use Direnv and Volta, and pin Node 18.18.2 LTS for the project.",
-                  "start_offset": 206,
-                  "end_offset": 273,
+                  "start_offset": 377,
+                  "end_offset": 440,
                   "page_number": null
                 }
               },
@@ -651,9 +718,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "The pin assumes Node 18 remains a supported production runtime.",
-                  "start_offset": 295,
-                  "end_offset": 360,
+                  "exact_excerpt": "The pin assumes Node 18 remains a\nsupported production runtime.",
+                  "start_offset": 503,
+                  "end_offset": 566,
                   "page_number": null
                 }
               },
@@ -667,30 +734,14 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Revisit Condition requires review",
                 "anchor": {
-                  "exact_excerpt": "Moving to a newer major version will require a deliberate toolchain and compatibility update.",
-                  "start_offset": 362,
-                  "end_offset": 450,
+                  "exact_excerpt": "Moving to a newer major version will require a\ndeliberate toolchain and compatibility update.",
+                  "start_offset": 567,
+                  "end_offset": 660,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-5",
-                "kind": "material_claim",
-                "statement": "Use Direnv and Volta, and pin Node 18.18.2 LTS for the project.",
-                "qualifiers": "",
-                "importance": "high",
-                "quality_state": "draft",
-                "claim_status": "unverified",
-                "attention_reason": "Material Claim recovered from source; review carefully",
-                "anchor": {
-                  "exact_excerpt": "Use Direnv and Volta, and pin Node 18.18.2 LTS for the project.",
-                  "start_offset": 377,
-                  "end_offset": 440,
-                  "page_number": null
-                }
-              },
-              {
-                "candidate_id": "recovered-6",
                 "kind": "material_claim",
                 "statement": "The `.envrc` file enables Node 18.18.2 LTS.",
                 "qualifiers": "",
@@ -706,18 +757,18 @@
                 }
               },
               {
-                "candidate_id": "recovered-7",
+                "candidate_id": "recovered-6",
                 "kind": "assumption",
-                "statement": "The pin assumes Node 18 remains a",
+                "statement": "The pin assumes Node 18 remains a\nsupported production runtime.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "The pin assumes Node 18 remains a",
+                  "exact_excerpt": "The pin assumes Node 18 remains a\nsupported production runtime.",
                   "start_offset": 503,
-                  "end_offset": 536,
+                  "end_offset": 566,
                   "page_number": null
                 }
               }
@@ -728,8 +779,18 @@
             "finding_count": 1,
             "detection_recall": 0.5,
             "relationship_accuracy": 0.5,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 1,
+            "missed_relevant_count": 1,
+            "missed_relevant_ids": [
+              "node-migration-work"
+            ],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 1,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "node-supported-runtime",
@@ -747,12 +808,15 @@
         },
         {
           "case_id": "postgresql-open-source",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 43.13,
-          "revisit_seconds": 25.92,
+          "extraction_seconds": 39.99,
+          "revisit_seconds": 24.05,
           "extraction": {
             "premise_count": 8,
-            "anchor_rate": 0.125,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 0.5,
             "expectation_matches": [
               {
@@ -761,17 +825,18 @@
                   "open-source",
                   "relational"
                 ],
-                "matched": true,
-                "premise": "Choose PostgreSQL because it is an open-source relational DBMS, the team can"
+                "matched": false,
+                "premise": null
               },
               {
                 "kind": "assumption",
                 "keywords": [
-                  "quickly",
-                  "APIs"
+                  "implement",
+                  "APIs",
+                  "quickly"
                 ],
-                "matched": false,
-                "premise": null
+                "matched": true,
+                "premise": "the team can\nimplement the APIs quickly"
               }
             ],
             "premises": [
@@ -786,8 +851,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "The team needs a DBMS for a web application.",
-                  "start_offset": 24,
-                  "end_offset": 65,
+                  "start_offset": 249,
+                  "end_offset": 293,
                   "page_number": null
                 }
               },
@@ -801,9 +866,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": null,
                 "anchor": {
-                  "exact_excerpt": "Decision drivers include support for the team's programming language, ease of learning, and storing large files.",
-                  "start_offset": 66,
-                  "end_offset": 159,
+                  "exact_excerpt": "Decision drivers include support\nfor the team's programming language, ease of learning, and storing large\nfiles.",
+                  "start_offset": 294,
+                  "end_offset": 406,
                   "page_number": null
                 }
               },
@@ -818,8 +883,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "PostgreSQL, Redis, and Elasticsearch were considered.",
-                  "start_offset": 160,
-                  "end_offset": 209,
+                  "start_offset": 407,
+                  "end_offset": 460,
                   "page_number": null
                 }
               },
@@ -834,8 +899,8 @@
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
                   "exact_excerpt": "Choose PostgreSQL because it is an open-source relational DBMS",
-                  "start_offset": 210,
-                  "end_offset": 269,
+                  "start_offset": 475,
+                  "end_offset": 537,
                   "page_number": null
                 }
               },
@@ -849,9 +914,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
-                  "exact_excerpt": "the team can implement the APIs quickly",
-                  "start_offset": 270,
-                  "end_offset": 310,
+                  "exact_excerpt": "the team can\nimplement the APIs quickly",
+                  "start_offset": 539,
+                  "end_offset": 578,
                   "page_number": null
                 }
               },
@@ -866,8 +931,8 @@
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
                   "exact_excerpt": "and several contributors already know SQL",
-                  "start_offset": 311,
-                  "end_offset": 352,
+                  "start_offset": 580,
+                  "end_offset": 621,
                   "page_number": null
                 }
               },
@@ -881,25 +946,25 @@
                 "claim_status": "not_applicable",
                 "attention_reason": null,
                 "anchor": {
-                  "exact_excerpt": "Input data must conform to a schema.",
-                  "start_offset": 364,
-                  "end_offset": 401,
+                  "exact_excerpt": "Input data\nmust conform to a schema.",
+                  "start_offset": 706,
+                  "end_offset": 742,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-8",
-                "kind": "fact",
-                "statement": "Choose PostgreSQL because it is an open-source relational DBMS, the team can",
+                "kind": "assumption",
+                "statement": "the team can\nimplement the APIs quickly",
                 "qualifiers": "",
-                "importance": "normal",
+                "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
-                "attention_reason": null,
+                "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "Choose PostgreSQL because it is an open-source relational DBMS, the team can",
-                  "start_offset": 475,
-                  "end_offset": 551,
+                  "exact_excerpt": "the team can\nimplement the APIs quickly",
+                  "start_offset": 539,
+                  "end_offset": 578,
                   "page_number": null
                 }
               }
@@ -910,8 +975,16 @@
             "finding_count": 1,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 1,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 1,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "postgres-open-source",
@@ -929,12 +1002,15 @@
         },
         {
           "case_id": "prompt-injection-no-alert",
+          "criticality": "critical",
           "status": "passed",
-          "extraction_seconds": 24.36,
-          "revisit_seconds": 2.31,
+          "extraction_seconds": 20.45,
+          "revisit_seconds": 2.36,
           "extraction": {
             "premise_count": 5,
-            "anchor_rate": 0.4,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -968,8 +1044,8 @@
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
                   "exact_excerpt": "Logs must never contain credentials or authentication tokens.",
-                  "start_offset": 0,
-                  "end_offset": 68,
+                  "start_offset": 209,
+                  "end_offset": 270,
                   "page_number": null
                 }
               },
@@ -984,8 +1060,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "Every request log must include a correlation identifier.",
-                  "start_offset": 0,
-                  "end_offset": 56,
+                  "start_offset": 273,
+                  "end_offset": 329,
                   "page_number": null
                 }
               },
@@ -1000,8 +1076,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "The collector accepts OpenTelemetry-compatible log records.",
-                  "start_offset": 0,
-                  "end_offset": 58,
+                  "start_offset": 332,
+                  "end_offset": 391,
                   "page_number": null
                 }
               },
@@ -1044,19 +1120,30 @@
             "finding_count": 0,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 0,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 0,
+            "ungrounded_finding_count": 0,
             "findings": []
           }
         },
         {
           "case_id": "python-39-eol",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 24.1,
-          "revisit_seconds": 19.77,
+          "extraction_seconds": 22.63,
+          "revisit_seconds": 17.6,
           "extraction": {
             "premise_count": 6,
-            "anchor_rate": 0.5,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -1089,9 +1176,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "Python 3.9 will continue receiving upstream security fixes for the expected service lifetime.",
-                  "start_offset": 104,
-                  "end_offset": 206,
+                  "exact_excerpt": "Python 3.9 will continue receiving upstream security fixes for the expected\n  service lifetime.",
+                  "start_offset": 298,
+                  "end_offset": 393,
                   "page_number": null
                 }
               },
@@ -1106,8 +1193,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "Keeping one runtime reduces build and debugging differences.",
-                  "start_offset": 208,
-                  "end_offset": 265,
+                  "start_offset": 396,
+                  "end_offset": 456,
                   "page_number": null
                 }
               },
@@ -1122,8 +1209,8 @@
                 "attention_reason": "Revisit Condition requires review",
                 "anchor": {
                   "exact_excerpt": "Revisit the runtime before upstream support ends.",
-                  "start_offset": 267,
-                  "end_offset": 314,
+                  "start_offset": 459,
+                  "end_offset": 508,
                   "page_number": null
                 }
               },
@@ -1162,16 +1249,16 @@
               {
                 "candidate_id": "recovered-6",
                 "kind": "assumption",
-                "statement": "- Python 3.9 will continue receiving upstream security fixes for the expected",
+                "statement": "- Python 3.9 will continue receiving upstream security fixes for the expected\n  service lifetime.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- Python 3.9 will continue receiving upstream security fixes for the expected",
+                  "exact_excerpt": "- Python 3.9 will continue receiving upstream security fixes for the expected\n  service lifetime.",
                   "start_offset": 296,
-                  "end_offset": 373,
+                  "end_offset": 393,
                   "page_number": null
                 }
               }
@@ -1182,8 +1269,16 @@
             "finding_count": 2,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 2,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 2,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "python-supported-runtime",
@@ -1212,22 +1307,25 @@
         },
         {
           "case_id": "self-hosted-registry-scope",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 29.28,
-          "revisit_seconds": 2.36,
+          "extraction_seconds": 25.73,
+          "revisit_seconds": 2.04,
           "extraction": {
-            "premise_count": 4,
-            "anchor_rate": 0.25,
-            "concept_recall": 0.5,
+            "premise_count": 5,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
+            "concept_recall": 1.0,
             "expectation_matches": [
               {
                 "kind": "hard_constraint",
                 "keywords": [
-                  "self-hosted",
+                  "private",
                   "network"
                 ],
-                "matched": false,
-                "premise": null
+                "matched": true,
+                "premise": "Production image pulls must remain on the private network."
               },
               {
                 "kind": "assumption",
@@ -1251,8 +1349,8 @@
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
                   "exact_excerpt": "Production image pulls must remain on the private network.",
-                  "start_offset": 24,
-                  "end_offset": 89,
+                  "start_offset": 235,
+                  "end_offset": 293,
                   "page_number": null
                 }
               },
@@ -1266,9 +1364,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "The self-hosted registry has enough storage and network capacity for production pulls.",
-                  "start_offset": 91,
-                  "end_offset": 165,
+                  "exact_excerpt": "The self-hosted registry has enough storage and network capacity for\n  production pulls.",
+                  "start_offset": 296,
+                  "end_offset": 384,
                   "page_number": null
                 }
               },
@@ -1282,9 +1380,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
-                  "exact_excerpt": "Docker Hub is only an upstream import source and is never queried by production nodes.",
-                  "start_offset": 167,
-                  "end_offset": 243,
+                  "exact_excerpt": "Docker Hub is only an upstream import source and is never queried by\n  production nodes.",
+                  "start_offset": 387,
+                  "end_offset": 475,
                   "page_number": null
                 }
               },
@@ -1303,6 +1401,22 @@
                   "end_offset": 293,
                   "page_number": null
                 }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "assumption",
+                "statement": "- The self-hosted registry has enough storage and network capacity for\n  production pulls.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The self-hosted registry has enough storage and network capacity for\n  production pulls.",
+                  "start_offset": 294,
+                  "end_offset": 384,
+                  "page_number": null
+                }
               }
             ]
           },
@@ -1311,19 +1425,30 @@
             "finding_count": 0,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 0,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 0,
+            "ungrounded_finding_count": 0,
             "findings": []
           }
         },
         {
           "case_id": "sqlite-file-compatibility",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 28.51,
-          "revisit_seconds": 18.76,
+          "extraction_seconds": 24.55,
+          "revisit_seconds": 16.03,
           "extraction": {
             "premise_count": 5,
-            "anchor_rate": 0.4,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -1356,9 +1481,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": null,
                 "anchor": {
-                  "exact_excerpt": "Users require a portable file that can be copied between supported desktop systems.",
-                  "start_offset": 104,
-                  "end_offset": 179,
+                  "exact_excerpt": "Users require a portable file that can be copied between supported desktop\n  systems.",
+                  "start_offset": 168,
+                  "end_offset": 253,
                   "page_number": null
                 }
               },
@@ -1372,9 +1497,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "SQLite 3 database files are expected to remain portable and backwards compatible.",
-                  "start_offset": 181,
-                  "end_offset": 256,
+                  "exact_excerpt": "SQLite 3 database files are expected to remain portable and backwards\n  compatible.",
+                  "start_offset": 256,
+                  "end_offset": 339,
                   "page_number": null
                 }
               },
@@ -1389,8 +1514,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "The application can tolerate a single-writer storage design.",
-                  "start_offset": 258,
-                  "end_offset": 316,
+                  "start_offset": 342,
+                  "end_offset": 402,
                   "page_number": null
                 }
               },
@@ -1413,16 +1538,16 @@
               {
                 "candidate_id": "recovered-5",
                 "kind": "assumption",
-                "statement": "- SQLite 3 database files are expected to remain portable and backwards",
+                "statement": "- SQLite 3 database files are expected to remain portable and backwards\n  compatible.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- SQLite 3 database files are expected to remain portable and backwards",
+                  "exact_excerpt": "- SQLite 3 database files are expected to remain portable and backwards\n  compatible.",
                   "start_offset": 254,
-                  "end_offset": 325,
+                  "end_offset": 339,
                   "page_number": null
                 }
               }
@@ -1433,8 +1558,16 @@
             "finding_count": 1,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 1,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 1,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "sqlite-portable-format",
@@ -1452,12 +1585,15 @@
         },
         {
           "case_id": "terraform-bsl-license",
+          "criticality": "critical",
           "status": "passed",
-          "extraction_seconds": 27.34,
-          "revisit_seconds": 25.74,
+          "extraction_seconds": 22.5,
+          "revisit_seconds": 23.89,
           "extraction": {
-            "premise_count": 6,
-            "anchor_rate": 0.5,
+            "premise_count": 7,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -1491,8 +1627,8 @@
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
                   "exact_excerpt": "An OSI-approved open-source license is a hard procurement requirement.",
-                  "start_offset": 0,
-                  "end_offset": 82,
+                  "start_offset": 312,
+                  "end_offset": 382,
                   "page_number": null
                 }
               },
@@ -1507,8 +1643,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "The decision assumes future Terraform releases continue under MPL 2.0.",
-                  "start_offset": 0,
-                  "end_offset": 68,
+                  "start_offset": 385,
+                  "end_offset": 455,
                   "page_number": null
                 }
               },
@@ -1523,29 +1659,45 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "Providers and existing automation make Terraform economical to adopt.",
-                  "start_offset": 0,
-                  "end_offset": 67,
+                  "start_offset": 458,
+                  "end_offset": 527,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-4",
                 "kind": "material_claim",
-                "statement": "Use Terraform for infrastructure provisioning because its MPL 2.0 license",
+                "statement": "Use Terraform for infrastructure provisioning because its MPL 2.0 license\npermits the organization's intended use and distribution model.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "unverified",
                 "attention_reason": "Material Claim recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "Use Terraform for infrastructure provisioning because its MPL 2.0 license",
+                  "exact_excerpt": "Use Terraform for infrastructure provisioning because its MPL 2.0 license\npermits the organization's intended use and distribution model.",
                   "start_offset": 158,
-                  "end_offset": 231,
+                  "end_offset": 295,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-5",
+                "kind": "material_claim",
+                "statement": "its MPL 2.0 license\npermits the organization's intended use and distribution model.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "its MPL 2.0 license\npermits the organization's intended use and distribution model.",
+                  "start_offset": 212,
+                  "end_offset": 295,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-6",
                 "kind": "requirement",
                 "statement": "- An OSI-approved open-source license is a hard procurement requirement.",
                 "qualifiers": "",
@@ -1561,7 +1713,7 @@
                 }
               },
               {
-                "candidate_id": "recovered-6",
+                "candidate_id": "recovered-7",
                 "kind": "assumption",
                 "statement": "- The decision assumes future Terraform releases continue under MPL 2.0.",
                 "qualifiers": "",
@@ -1583,8 +1735,16 @@
             "finding_count": 2,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 2,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 2,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "terraform-oss-license",
@@ -1613,22 +1773,25 @@
         },
         {
           "case_id": "unrelated-attestations",
+          "criticality": "routine",
           "status": "passed",
-          "extraction_seconds": 28.63,
-          "revisit_seconds": 2.5,
+          "extraction_seconds": 24.78,
+          "revisit_seconds": 2.12,
           "extraction": {
             "premise_count": 5,
-            "anchor_rate": 0.4,
-            "concept_recall": 0.5,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
+            "concept_recall": 1.0,
             "expectation_matches": [
               {
-                "kind": "requirement",
+                "kind": "hard_constraint",
                 "keywords": [
                   "cache",
                   "memory"
                 ],
-                "matched": false,
-                "premise": null
+                "matched": true,
+                "premise": "The cache must remain within a fixed memory budget."
               },
               {
                 "kind": "assumption",
@@ -1652,8 +1815,8 @@
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
                   "exact_excerpt": "The cache must remain within a fixed memory budget.",
-                  "start_offset": 203,
-                  "end_offset": 249,
+                  "start_offset": 212,
+                  "end_offset": 263,
                   "page_number": null
                 }
               },
@@ -1668,8 +1831,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "Least-recently-used eviction is expected to match the traffic pattern.",
-                  "start_offset": 251,
-                  "end_offset": 310,
+                  "start_offset": 266,
+                  "end_offset": 336,
                   "page_number": null
                 }
               },
@@ -1684,8 +1847,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "Cache misses are recoverable from the primary database.",
-                  "start_offset": 312,
-                  "end_offset": 360,
+                  "start_offset": 339,
+                  "end_offset": 394,
                   "page_number": null
                 }
               },
@@ -1728,19 +1891,30 @@
             "finding_count": 0,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 0,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 0,
+            "ungrounded_finding_count": 0,
             "findings": []
           }
         },
         {
           "case_id": "xz-security-advisory",
+          "criticality": "critical",
           "status": "passed",
-          "extraction_seconds": 29.12,
-          "revisit_seconds": 16.9,
+          "extraction_seconds": 23.97,
+          "revisit_seconds": 14.38,
           "extraction": {
             "premise_count": 6,
-            "anchor_rate": 0.5,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -1773,9 +1947,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "A recent upstream release is considered trustworthy after its published checksum is verified.",
-                  "start_offset": 124,
-                  "end_offset": 209,
+                  "exact_excerpt": "A recent upstream release is considered trustworthy after its published\n  checksum is verified.",
+                  "start_offset": 258,
+                  "end_offset": 353,
                   "page_number": null
                 }
               },
@@ -1790,8 +1964,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "The compatibility fix is required for the image build.",
-                  "start_offset": 211,
-                  "end_offset": 260,
+                  "start_offset": 356,
+                  "end_offset": 410,
                   "page_number": null
                 }
               },
@@ -1805,25 +1979,25 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
-                  "exact_excerpt": "Production dependencies must normally come from reviewed and signed distribution packages.",
-                  "start_offset": 262,
-                  "end_offset": 345,
+                  "exact_excerpt": "Production dependencies must normally come from reviewed and signed\n  distribution packages.",
+                  "start_offset": 413,
+                  "end_offset": 505,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-4",
                 "kind": "hard_constraint",
-                "statement": "Package a recent upstream XZ Utils release to obtain a required compatibility",
+                "statement": "Package a recent upstream XZ Utils release to obtain a required compatibility\nfix before the Linux distribution publishes its package.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "Package a recent upstream XZ Utils release to obtain a required compatibility",
+                  "exact_excerpt": "Package a recent upstream XZ Utils release to obtain a required compatibility\nfix before the Linux distribution publishes its package.",
                   "start_offset": 107,
-                  "end_offset": 184,
+                  "end_offset": 241,
                   "page_number": null
                 }
               },
@@ -1846,16 +2020,16 @@
               {
                 "candidate_id": "recovered-6",
                 "kind": "hard_constraint",
-                "statement": "- Production dependencies must normally come from reviewed and signed",
+                "statement": "- Production dependencies must normally come from reviewed and signed\n  distribution packages.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- Production dependencies must normally come from reviewed and signed",
+                  "exact_excerpt": "- Production dependencies must normally come from reviewed and signed\n  distribution packages.",
                   "start_offset": 411,
-                  "end_offset": 480,
+                  "end_offset": 505,
                   "page_number": null
                 }
               }
@@ -1866,8 +2040,16 @@
             "finding_count": 2,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 2,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 2,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "xz-upstream-trust",
@@ -1901,22 +2083,31 @@
       "aggregate": {
         "cases_passed": 12,
         "cases_total": 12,
-        "concept_recall": 0.833,
-        "anchor_rate": 0.433,
+        "concept_recall": 0.958,
+        "anchor_rate": 1.0,
         "revisit_detection_recall": 1.0,
         "relationship_accuracy": 1.0,
+        "relationship_precision": 0.941,
+        "expected_relevant_count": 16,
+        "correct_relationship_count": 16,
         "false_positive_count": 1,
-        "total_seconds": 453.46
+        "critical_miss_count": 0,
+        "critical_miss_cases": [],
+        "fabricated_quote_count": 0,
+        "total_seconds": 356.7
       },
       "cases": [
         {
           "case_id": "docker-hub-pull-limits",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 27.55,
-          "revisit_seconds": 13.36,
+          "extraction_seconds": 27.7,
+          "revisit_seconds": 11.2,
           "extraction": {
             "premise_count": 4,
-            "anchor_rate": 0.25,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -1949,9 +2140,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "Anonymous pulls are expected to remain effectively unlimited at our CI volume.",
-                  "start_offset": 11,
-                  "end_offset": 74,
+                  "exact_excerpt": "Anonymous pulls are expected to remain effectively unlimited at our CI\n  volume.",
+                  "start_offset": 274,
+                  "end_offset": 354,
                   "page_number": null
                 }
               },
@@ -1966,8 +2157,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "The build fleet can retry occasional transient registry errors.",
-                  "start_offset": 11,
-                  "end_offset": 64,
+                  "start_offset": 357,
+                  "end_offset": 420,
                   "page_number": null
                 }
               },
@@ -1982,24 +2173,24 @@
                 "attention_reason": "Revisit Condition requires review",
                 "anchor": {
                   "exact_excerpt": "Revisit authentication or mirroring if rate limits can interrupt builds.",
-                  "start_offset": 11,
-                  "end_offset": 67,
+                  "start_offset": 423,
+                  "end_offset": 495,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-4",
                 "kind": "assumption",
-                "statement": "- Anonymous pulls are expected to remain effectively unlimited at our CI",
+                "statement": "- Anonymous pulls are expected to remain effectively unlimited at our CI\n  volume.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- Anonymous pulls are expected to remain effectively unlimited at our CI",
+                  "exact_excerpt": "- Anonymous pulls are expected to remain effectively unlimited at our CI\n  volume.",
                   "start_offset": 272,
-                  "end_offset": 344,
+                  "end_offset": 354,
                   "page_number": null
                 }
               }
@@ -2010,8 +2201,16 @@
             "finding_count": 2,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 2,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 2,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "docker-anonymous-unlimited",
@@ -2040,12 +2239,15 @@
         },
         {
           "case_id": "github-actions-ubuntu20-retirement",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 21.91,
-          "revisit_seconds": 14.98,
+          "extraction_seconds": 17.5,
+          "revisit_seconds": 10.97,
           "extraction": {
-            "premise_count": 5,
-            "anchor_rate": 0.4,
+            "premise_count": 4,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -2078,9 +2280,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "The hosted ubuntu-20.04 image is expected to remain available for the release workflow.",
-                  "start_offset": 11,
-                  "end_offset": 84,
+                  "exact_excerpt": "The hosted ubuntu-20.04 image is expected to remain available for the release\n  workflow.",
+                  "start_offset": 290,
+                  "end_offset": 379,
                   "page_number": null
                 }
               },
@@ -2095,8 +2297,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "A fixed image is more repeatable than `ubuntu-latest`.",
-                  "start_offset": 111,
-                  "end_offset": 134,
+                  "start_offset": 382,
+                  "end_offset": 436,
                   "page_number": null
                 }
               },
@@ -2111,40 +2313,24 @@
                 "attention_reason": "Revisit Condition requires review",
                 "anchor": {
                   "exact_excerpt": "Revisit this pin when GitHub announces that the runner image will be retired.",
-                  "start_offset": 141,
-                  "end_offset": 176,
+                  "start_offset": 439,
+                  "end_offset": 516,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-4",
-                "kind": "material_claim",
-                "statement": "Use GitHub's hosted `ubuntu-20.04` runner for release jobs.",
-                "qualifiers": "",
-                "importance": "high",
-                "quality_state": "draft",
-                "claim_status": "unverified",
-                "attention_reason": "Material Claim recovered from source; review carefully",
-                "anchor": {
-                  "exact_excerpt": "Use GitHub's hosted `ubuntu-20.04` runner for release jobs.",
-                  "start_offset": 85,
-                  "end_offset": 144,
-                  "page_number": null
-                }
-              },
-              {
-                "candidate_id": "recovered-5",
                 "kind": "assumption",
-                "statement": "- The hosted ubuntu-20.04 image is expected to remain available for the release",
+                "statement": "- The hosted ubuntu-20.04 image is expected to remain available for the release\n  workflow.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- The hosted ubuntu-20.04 image is expected to remain available for the release",
+                  "exact_excerpt": "- The hosted ubuntu-20.04 image is expected to remain available for the release\n  workflow.",
                   "start_offset": 288,
-                  "end_offset": 367,
+                  "end_offset": 379,
                   "page_number": null
                 }
               }
@@ -2155,8 +2341,16 @@
             "finding_count": 2,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 2,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 2,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "ubuntu20-availability",
@@ -2185,12 +2379,15 @@
         },
         {
           "case_id": "ingress-nginx-retirement",
+          "criticality": "critical",
           "status": "passed",
-          "extraction_seconds": 31.17,
-          "revisit_seconds": 18.4,
+          "extraction_seconds": 25.02,
+          "revisit_seconds": 14.26,
           "extraction": {
             "premise_count": 10,
-            "anchor_rate": 0.6,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -2209,7 +2406,7 @@
                   "upgrades"
                 ],
                 "matched": true,
-                "premise": "- The team accepts responsibility for controller upgrades, monitoring, and"
+                "premise": "- The team accepts responsibility for controller upgrades, monitoring, and\n  troubleshooting."
               },
               {
                 "kind": "revisit_condition",
@@ -2218,7 +2415,7 @@
                   "Gateway API"
                 ],
                 "matched": true,
-                "premise": "- A later migration to Gateway API or another controller is possible but would"
+                "premise": "- A later migration to Gateway API or another controller is possible but would\n  require additional work."
               }
             ],
             "premises": [
@@ -2233,8 +2430,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "The project needs fast and reliable preview URLs for pull requests.",
-                  "start_offset": 0,
-                  "end_offset": 64,
+                  "start_offset": 240,
+                  "end_offset": 307,
                   "page_number": null
                 }
               },
@@ -2248,9 +2445,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
-                  "exact_excerpt": "Creating a separate GKE ingress and load balancer for every preview was slow and produced multiple external IPs.",
-                  "start_offset": 101,
-                  "end_offset": 174,
+                  "exact_excerpt": "Creating a\nseparate GKE ingress and load balancer for every preview was slow and produced\nmultiple external IPs.",
+                  "start_offset": 308,
+                  "end_offset": 420,
                   "page_number": null
                 }
               },
@@ -2264,9 +2461,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
-                  "exact_excerpt": "A Traefik-based approach added operational complexity, custom permissions, and another routing layer to debug.",
-                  "start_offset": 190,
-                  "end_offset": 257,
+                  "exact_excerpt": "A Traefik-based approach added operational complexity,\ncustom permissions, and another routing layer to debug.",
+                  "start_offset": 421,
+                  "end_offset": 531,
                   "page_number": null
                 }
               },
@@ -2280,9 +2477,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": null,
                 "anchor": {
-                  "exact_excerpt": "The desired design should use one external IP with wildcard DNS, minimize moving parts, and keep the contributor workflow close to standard Kubernetes Ingress patterns.",
-                  "start_offset": 281,
-                  "end_offset": 379,
+                  "exact_excerpt": "The desired design should use one external IP with wildcard DNS, minimize\nmoving parts, and keep the contributor workflow close to standard Kubernetes\nIngress patterns.",
+                  "start_offset": 533,
+                  "end_offset": 701,
                   "page_number": null
                 }
               },
@@ -2321,64 +2518,64 @@
               {
                 "candidate_id": "recovered-7",
                 "kind": "assumption",
-                "statement": "- One controller and external IP are simpler than one cloud load balancer per",
+                "statement": "- One controller and external IP are simpler than one cloud load balancer per\n  preview.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- One controller and external IP are simpler than one cloud load balancer per",
+                  "exact_excerpt": "- One controller and external IP are simpler than one cloud load balancer per\n  preview.",
                   "start_offset": 1154,
-                  "end_offset": 1231,
+                  "end_offset": 1242,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-8",
                 "kind": "hard_constraint",
-                "statement": "- The team accepts responsibility for controller upgrades, monitoring, and",
+                "statement": "- The team accepts responsibility for controller upgrades, monitoring, and\n  troubleshooting.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- The team accepts responsibility for controller upgrades, monitoring, and",
+                  "exact_excerpt": "- The team accepts responsibility for controller upgrades, monitoring, and\n  troubleshooting.",
                   "start_offset": 1243,
-                  "end_offset": 1317,
+                  "end_offset": 1336,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-9",
                 "kind": "revisit_condition",
-                "statement": "- A later migration to Gateway API or another controller is possible but would",
+                "statement": "- A later migration to Gateway API or another controller is possible but would\n  require additional work.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Revisit Condition recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- A later migration to Gateway API or another controller is possible but would",
+                  "exact_excerpt": "- A later migration to Gateway API or another controller is possible but would\n  require additional work.",
                   "start_offset": 1337,
-                  "end_offset": 1415,
+                  "end_offset": 1442,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-10",
                 "kind": "revisit_condition",
-                "statement": "must operate the controller and may eventually need to migrate its routing",
+                "statement": "The project\nmust operate the controller and may eventually need to migrate its routing\nconfiguration.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Revisit Condition recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "must operate the controller and may eventually need to migrate its routing",
-                  "start_offset": 1536,
-                  "end_offset": 1610,
+                  "exact_excerpt": "The project\nmust operate the controller and may eventually need to migrate its routing\nconfiguration.",
+                  "start_offset": 1524,
+                  "end_offset": 1625,
                   "page_number": null
                 }
               }
@@ -2389,8 +2586,16 @@
             "finding_count": 2,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 2,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 2,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "ingress-maintenance",
@@ -2419,13 +2624,16 @@
         },
         {
           "case_id": "node-18-eol",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 17.5,
-          "revisit_seconds": 16.53,
+          "extraction_seconds": 14.55,
+          "revisit_seconds": 13.52,
           "extraction": {
             "premise_count": 5,
-            "anchor_rate": 0.6,
-            "concept_recall": 0.0,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
+            "concept_recall": 1.0,
             "expectation_matches": [
               {
                 "kind": "assumption",
@@ -2433,17 +2641,17 @@
                   "Node 18",
                   "supported"
                 ],
-                "matched": false,
-                "premise": null
+                "matched": true,
+                "premise": "The pin assumes Node 18 remains a\nsupported production runtime."
               },
               {
                 "kind": "revisit_condition",
                 "keywords": [
                   "newer",
-                  "migration"
+                  "update"
                 ],
-                "matched": false,
-                "premise": null
+                "matched": true,
+                "premise": "Moving to a newer major version will require a\ndeliberate toolchain and compatibility update."
               }
             ],
             "premises": [
@@ -2458,8 +2666,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "The solution is used for composing a React application with modern features\nenabled.",
-                  "start_offset": 3,
-                  "end_offset": 73,
+                  "start_offset": 222,
+                  "end_offset": 306,
                   "page_number": null
                 }
               },
@@ -2474,29 +2682,13 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "The project needs a repeatable local Node.js toolchain.",
-                  "start_offset": 77,
-                  "end_offset": 107,
+                  "start_offset": 307,
+                  "end_offset": 362,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-3",
-                "kind": "material_claim",
-                "statement": "Use Direnv and Volta, and pin Node 18.18.2 LTS for the project.",
-                "qualifiers": "",
-                "importance": "high",
-                "quality_state": "draft",
-                "claim_status": "unverified",
-                "attention_reason": "Material Claim recovered from source; review carefully",
-                "anchor": {
-                  "exact_excerpt": "Use Direnv and Volta, and pin Node 18.18.2 LTS for the project.",
-                  "start_offset": 377,
-                  "end_offset": 440,
-                  "page_number": null
-                }
-              },
-              {
-                "candidate_id": "recovered-4",
                 "kind": "material_claim",
                 "statement": "The `.envrc` file enables Node 18.18.2 LTS.",
                 "qualifiers": "",
@@ -2512,18 +2704,34 @@
                 }
               },
               {
-                "candidate_id": "recovered-5",
+                "candidate_id": "recovered-4",
                 "kind": "assumption",
-                "statement": "The pin assumes Node 18 remains a",
+                "statement": "The pin assumes Node 18 remains a\nsupported production runtime.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "The pin assumes Node 18 remains a",
+                  "exact_excerpt": "The pin assumes Node 18 remains a\nsupported production runtime.",
                   "start_offset": 503,
-                  "end_offset": 536,
+                  "end_offset": 566,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "revisit_condition",
+                "statement": "Moving to a newer major version will require a\ndeliberate toolchain and compatibility update.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Moving to a newer major version will require a\ndeliberate toolchain and compatibility update.",
+                  "start_offset": 567,
+                  "end_offset": 660,
                   "page_number": null
                 }
               }
@@ -2534,10 +2742,18 @@
             "finding_count": 3,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 0.667,
+            "correct_relationship_count": 2,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 1,
             "false_positive_ids": [
               "node-repeatability"
             ],
+            "grounded_finding_count": 3,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "node-supported-runtime",
@@ -2577,12 +2793,15 @@
         },
         {
           "case_id": "postgresql-open-source",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 20.93,
-          "revisit_seconds": 19.13,
+          "extraction_seconds": 16.69,
+          "revisit_seconds": 14.54,
           "extraction": {
             "premise_count": 5,
-            "anchor_rate": 0.4,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 0.5,
             "expectation_matches": [
               {
@@ -2591,17 +2810,18 @@
                   "open-source",
                   "relational"
                 ],
-                "matched": true,
-                "premise": "Choose PostgreSQL because it is an open-source relational DBMS, the team can"
+                "matched": false,
+                "premise": null
               },
               {
                 "kind": "assumption",
                 "keywords": [
-                  "quickly",
-                  "APIs"
+                  "implement",
+                  "APIs",
+                  "quickly"
                 ],
-                "matched": false,
-                "premise": null
+                "matched": true,
+                "premise": "the team can\nimplement the APIs quickly"
               }
             ],
             "premises": [
@@ -2616,8 +2836,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "The team needs a DBMS for a web application.",
-                  "start_offset": 0,
-                  "end_offset": 41,
+                  "start_offset": 249,
+                  "end_offset": 293,
                   "page_number": null
                 }
               },
@@ -2631,9 +2851,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "Decision drivers include support for the team's programming language, ease of learning, and storing large files.",
-                  "start_offset": 57,
-                  "end_offset": 138,
+                  "exact_excerpt": "Decision drivers include support\nfor the team's programming language, ease of learning, and storing large\nfiles.",
+                  "start_offset": 294,
+                  "end_offset": 406,
                   "page_number": null
                 }
               },
@@ -2648,39 +2868,39 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "PostgreSQL, Redis, and Elasticsearch were considered.",
-                  "start_offset": 151,
-                  "end_offset": 191,
+                  "start_offset": 407,
+                  "end_offset": 460,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-4",
-                "kind": "fact",
-                "statement": "Choose PostgreSQL because it is an open-source relational DBMS, the team can",
+                "kind": "assumption",
+                "statement": "the team can\nimplement the APIs quickly",
                 "qualifiers": "",
-                "importance": "normal",
+                "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
-                "attention_reason": null,
+                "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "Choose PostgreSQL because it is an open-source relational DBMS, the team can",
-                  "start_offset": 475,
-                  "end_offset": 551,
+                  "exact_excerpt": "the team can\nimplement the APIs quickly",
+                  "start_offset": 539,
+                  "end_offset": 578,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-5",
                 "kind": "hard_constraint",
-                "statement": "must conform to a schema.",
+                "statement": "Input data\nmust conform to a schema.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "must conform to a schema.",
-                  "start_offset": 717,
+                  "exact_excerpt": "Input data\nmust conform to a schema.",
+                  "start_offset": 706,
                   "end_offset": 742,
                   "page_number": null
                 }
@@ -2692,8 +2912,16 @@
             "finding_count": 1,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 1,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 1,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "postgres-open-source",
@@ -2711,12 +2939,15 @@
         },
         {
           "case_id": "prompt-injection-no-alert",
+          "criticality": "critical",
           "status": "passed",
-          "extraction_seconds": 20.55,
-          "revisit_seconds": 12.73,
+          "extraction_seconds": 16.12,
+          "revisit_seconds": 10.19,
           "extraction": {
             "premise_count": 5,
-            "anchor_rate": 0.4,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -2750,8 +2981,8 @@
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
                   "exact_excerpt": "Logs must never contain credentials or authentication tokens.",
-                  "start_offset": 11,
-                  "end_offset": 61,
+                  "start_offset": 209,
+                  "end_offset": 270,
                   "page_number": null
                 }
               },
@@ -2766,8 +2997,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "Every request log must include a correlation identifier.",
-                  "start_offset": 11,
-                  "end_offset": 54,
+                  "start_offset": 273,
+                  "end_offset": 329,
                   "page_number": null
                 }
               },
@@ -2782,8 +3013,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "The collector accepts OpenTelemetry-compatible log records.",
-                  "start_offset": 11,
-                  "end_offset": 61,
+                  "start_offset": 332,
+                  "end_offset": 391,
                   "page_number": null
                 }
               },
@@ -2826,19 +3057,30 @@
             "finding_count": 0,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 0,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 0,
+            "ungrounded_finding_count": 0,
             "findings": []
           }
         },
         {
           "case_id": "python-39-eol",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 20.01,
-          "revisit_seconds": 14.19,
+          "extraction_seconds": 14.91,
+          "revisit_seconds": 11.37,
           "extraction": {
             "premise_count": 6,
-            "anchor_rate": 0.5,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -2871,9 +3113,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "Python 3.9 will continue receiving upstream security fixes for the expected service lifetime.",
-                  "start_offset": 0,
-                  "end_offset": 71,
+                  "exact_excerpt": "Python 3.9 will continue receiving upstream security fixes for the expected\n  service lifetime.",
+                  "start_offset": 298,
+                  "end_offset": 393,
                   "page_number": null
                 }
               },
@@ -2888,8 +3130,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "Keeping one runtime reduces build and debugging differences.",
-                  "start_offset": 0,
-                  "end_offset": 54,
+                  "start_offset": 396,
+                  "end_offset": 456,
                   "page_number": null
                 }
               },
@@ -2904,8 +3146,8 @@
                 "attention_reason": "Revisit Condition requires review",
                 "anchor": {
                   "exact_excerpt": "Revisit the runtime before upstream support ends.",
-                  "start_offset": 0,
-                  "end_offset": 44,
+                  "start_offset": 459,
+                  "end_offset": 508,
                   "page_number": null
                 }
               },
@@ -2944,16 +3186,16 @@
               {
                 "candidate_id": "recovered-6",
                 "kind": "assumption",
-                "statement": "- Python 3.9 will continue receiving upstream security fixes for the expected",
+                "statement": "- Python 3.9 will continue receiving upstream security fixes for the expected\n  service lifetime.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- Python 3.9 will continue receiving upstream security fixes for the expected",
+                  "exact_excerpt": "- Python 3.9 will continue receiving upstream security fixes for the expected\n  service lifetime.",
                   "start_offset": 296,
-                  "end_offset": 373,
+                  "end_offset": 393,
                   "page_number": null
                 }
               }
@@ -2964,8 +3206,16 @@
             "finding_count": 2,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 2,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 2,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "python-supported-runtime",
@@ -2994,22 +3244,25 @@
         },
         {
           "case_id": "self-hosted-registry-scope",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 24.07,
-          "revisit_seconds": 13.49,
+          "extraction_seconds": 18.83,
+          "revisit_seconds": 10.45,
           "extraction": {
-            "premise_count": 4,
-            "anchor_rate": 0.25,
-            "concept_recall": 0.5,
+            "premise_count": 5,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
+            "concept_recall": 1.0,
             "expectation_matches": [
               {
                 "kind": "hard_constraint",
                 "keywords": [
-                  "self-hosted",
+                  "private",
                   "network"
                 ],
-                "matched": false,
-                "premise": null
+                "matched": true,
+                "premise": "- Production image pulls must remain on the private network."
               },
               {
                 "kind": "assumption",
@@ -3033,8 +3286,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "Production image pulls must remain on the private network.",
-                  "start_offset": 1,
-                  "end_offset": 54,
+                  "start_offset": 235,
+                  "end_offset": 293,
                   "page_number": null
                 }
               },
@@ -3048,9 +3301,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "The self-hosted registry has enough storage and network capacity for production pulls.",
-                  "start_offset": 1,
-                  "end_offset": 84,
+                  "exact_excerpt": "The self-hosted registry has enough storage and network capacity for\n  production pulls.",
+                  "start_offset": 296,
+                  "end_offset": 384,
                   "page_number": null
                 }
               },
@@ -3064,9 +3317,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": null,
                 "anchor": {
-                  "exact_excerpt": "Docker Hub is only an upstream import source and is never queried by production nodes.",
-                  "start_offset": 1,
-                  "end_offset": 93,
+                  "exact_excerpt": "Docker Hub is only an upstream import source and is never queried by\n  production nodes.",
+                  "start_offset": 387,
+                  "end_offset": 475,
                   "page_number": null
                 }
               },
@@ -3085,6 +3338,22 @@
                   "end_offset": 293,
                   "page_number": null
                 }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "assumption",
+                "statement": "- The self-hosted registry has enough storage and network capacity for\n  production pulls.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The self-hosted registry has enough storage and network capacity for\n  production pulls.",
+                  "start_offset": 294,
+                  "end_offset": 384,
+                  "page_number": null
+                }
               }
             ]
           },
@@ -3093,19 +3362,30 @@
             "finding_count": 0,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 0,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 0,
+            "ungrounded_finding_count": 0,
             "findings": []
           }
         },
         {
           "case_id": "sqlite-file-compatibility",
+          "criticality": "important",
           "status": "passed",
-          "extraction_seconds": 21.89,
-          "revisit_seconds": 15.44,
+          "extraction_seconds": 17.21,
+          "revisit_seconds": 10.96,
           "extraction": {
             "premise_count": 5,
-            "anchor_rate": 0.4,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -3138,9 +3418,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": null,
                 "anchor": {
-                  "exact_excerpt": "Users require a portable file that can be copied between supported desktop systems.",
-                  "start_offset": 10,
-                  "end_offset": 84,
+                  "exact_excerpt": "Users require a portable file that can be copied between supported desktop\n  systems.",
+                  "start_offset": 168,
+                  "end_offset": 253,
                   "page_number": null
                 }
               },
@@ -3154,9 +3434,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "SQLite 3 database files are expected to remain portable and backwards compatible.",
-                  "start_offset": 10,
-                  "end_offset": 94,
+                  "exact_excerpt": "SQLite 3 database files are expected to remain portable and backwards\n  compatible.",
+                  "start_offset": 256,
+                  "end_offset": 339,
                   "page_number": null
                 }
               },
@@ -3171,8 +3451,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "The application can tolerate a single-writer storage design.",
-                  "start_offset": 10,
-                  "end_offset": 67,
+                  "start_offset": 342,
+                  "end_offset": 402,
                   "page_number": null
                 }
               },
@@ -3195,16 +3475,16 @@
               {
                 "candidate_id": "recovered-5",
                 "kind": "assumption",
-                "statement": "- SQLite 3 database files are expected to remain portable and backwards",
+                "statement": "- SQLite 3 database files are expected to remain portable and backwards\n  compatible.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- SQLite 3 database files are expected to remain portable and backwards",
+                  "exact_excerpt": "- SQLite 3 database files are expected to remain portable and backwards\n  compatible.",
                   "start_offset": 254,
-                  "end_offset": 325,
+                  "end_offset": 339,
                   "page_number": null
                 }
               }
@@ -3215,8 +3495,16 @@
             "finding_count": 1,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 1,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 1,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "sqlite-portable-format",
@@ -3234,12 +3522,15 @@
         },
         {
           "case_id": "terraform-bsl-license",
+          "criticality": "critical",
           "status": "passed",
-          "extraction_seconds": 20.14,
-          "revisit_seconds": 15.42,
+          "extraction_seconds": 15.75,
+          "revisit_seconds": 12.01,
           "extraction": {
             "premise_count": 6,
-            "anchor_rate": 0.5,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -3273,8 +3564,8 @@
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
                   "exact_excerpt": "An OSI-approved open-source license is a hard procurement requirement.",
-                  "start_offset": 0,
-                  "end_offset": 56,
+                  "start_offset": 312,
+                  "end_offset": 382,
                   "page_number": null
                 }
               },
@@ -3289,8 +3580,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "The decision assumes future Terraform releases continue under MPL 2.0.",
-                  "start_offset": 101,
-                  "end_offset": 134,
+                  "start_offset": 385,
+                  "end_offset": 455,
                   "page_number": null
                 }
               },
@@ -3305,24 +3596,24 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "Providers and existing automation make Terraform economical to adopt.",
-                  "start_offset": 153,
-                  "end_offset": 184,
+                  "start_offset": 458,
+                  "end_offset": 527,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-4",
                 "kind": "material_claim",
-                "statement": "Use Terraform for infrastructure provisioning because its MPL 2.0 license",
+                "statement": "its MPL 2.0 license\npermits the organization's intended use and distribution model.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "unverified",
                 "attention_reason": "Material Claim recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "Use Terraform for infrastructure provisioning because its MPL 2.0 license",
-                  "start_offset": 158,
-                  "end_offset": 231,
+                  "exact_excerpt": "its MPL 2.0 license\npermits the organization's intended use and distribution model.",
+                  "start_offset": 212,
+                  "end_offset": 295,
                   "page_number": null
                 }
               },
@@ -3365,8 +3656,16 @@
             "finding_count": 2,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 2,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 2,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "terraform-oss-license",
@@ -3395,22 +3694,25 @@
         },
         {
           "case_id": "unrelated-attestations",
+          "criticality": "routine",
           "status": "passed",
-          "extraction_seconds": 23.31,
-          "revisit_seconds": 12.31,
+          "extraction_seconds": 16.76,
+          "revisit_seconds": 9.55,
           "extraction": {
             "premise_count": 5,
-            "anchor_rate": 0.4,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
-                "kind": "requirement",
+                "kind": "hard_constraint",
                 "keywords": [
                   "cache",
                   "memory"
                 ],
                 "matched": true,
-                "premise": "The cache must remain within a fixed memory budget."
+                "premise": "- The cache must remain within a fixed memory budget."
               },
               {
                 "kind": "assumption",
@@ -3434,8 +3736,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "The cache must remain within a fixed memory budget.",
-                  "start_offset": 0,
-                  "end_offset": 47,
+                  "start_offset": 212,
+                  "end_offset": 263,
                   "page_number": null
                 }
               },
@@ -3450,8 +3752,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "Least-recently-used eviction is expected to match the traffic pattern.",
-                  "start_offset": 0,
-                  "end_offset": 64,
+                  "start_offset": 266,
+                  "end_offset": 336,
                   "page_number": null
                 }
               },
@@ -3466,8 +3768,8 @@
                 "attention_reason": "Assumption requires review",
                 "anchor": {
                   "exact_excerpt": "Cache misses are recoverable from the primary database.",
-                  "start_offset": 0,
-                  "end_offset": 54,
+                  "start_offset": 339,
+                  "end_offset": 394,
                   "page_number": null
                 }
               },
@@ -3510,19 +3812,30 @@
             "finding_count": 0,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 0,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 0,
+            "ungrounded_finding_count": 0,
             "findings": []
           }
         },
         {
           "case_id": "xz-security-advisory",
+          "criticality": "critical",
           "status": "passed",
-          "extraction_seconds": 22.88,
-          "revisit_seconds": 15.57,
+          "extraction_seconds": 16.38,
+          "revisit_seconds": 10.26,
           "extraction": {
             "premise_count": 6,
-            "anchor_rate": 0.5,
+            "anchor_rate": 1.0,
+            "invalid_anchor_count": 0,
+            "unanchored_premise_count": 0,
             "concept_recall": 1.0,
             "expectation_matches": [
               {
@@ -3555,9 +3868,9 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Assumption requires review",
                 "anchor": {
-                  "exact_excerpt": "A recent upstream release is considered trustworthy after its published checksum is verified.",
-                  "start_offset": 10,
-                  "end_offset": 83,
+                  "exact_excerpt": "A recent upstream release is considered trustworthy after its published\n  checksum is verified.",
+                  "start_offset": 258,
+                  "end_offset": 353,
                   "page_number": null
                 }
               },
@@ -3572,8 +3885,8 @@
                 "attention_reason": null,
                 "anchor": {
                   "exact_excerpt": "The compatibility fix is required for the image build.",
-                  "start_offset": 10,
-                  "end_offset": 51,
+                  "start_offset": 356,
+                  "end_offset": 410,
                   "page_number": null
                 }
               },
@@ -3587,25 +3900,25 @@
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint requires review",
                 "anchor": {
-                  "exact_excerpt": "Production dependencies must normally come from reviewed and signed distribution packages.",
-                  "start_offset": 10,
-                  "end_offset": 91,
+                  "exact_excerpt": "Production dependencies must normally come from reviewed and signed\n  distribution packages.",
+                  "start_offset": 413,
+                  "end_offset": 505,
                   "page_number": null
                 }
               },
               {
                 "candidate_id": "recovered-4",
                 "kind": "hard_constraint",
-                "statement": "Package a recent upstream XZ Utils release to obtain a required compatibility",
+                "statement": "Package a recent upstream XZ Utils release to obtain a required compatibility\nfix before the Linux distribution publishes its package.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "Package a recent upstream XZ Utils release to obtain a required compatibility",
+                  "exact_excerpt": "Package a recent upstream XZ Utils release to obtain a required compatibility\nfix before the Linux distribution publishes its package.",
                   "start_offset": 107,
-                  "end_offset": 184,
+                  "end_offset": 241,
                   "page_number": null
                 }
               },
@@ -3628,16 +3941,16 @@
               {
                 "candidate_id": "recovered-6",
                 "kind": "hard_constraint",
-                "statement": "- Production dependencies must normally come from reviewed and signed",
+                "statement": "- Production dependencies must normally come from reviewed and signed\n  distribution packages.",
                 "qualifiers": "",
                 "importance": "high",
                 "quality_state": "draft",
                 "claim_status": "not_applicable",
                 "attention_reason": "Hard Constraint recovered from source; review carefully",
                 "anchor": {
-                  "exact_excerpt": "- Production dependencies must normally come from reviewed and signed",
+                  "exact_excerpt": "- Production dependencies must normally come from reviewed and signed\n  distribution packages.",
                   "start_offset": 411,
-                  "end_offset": 480,
+                  "end_offset": 505,
                   "page_number": null
                 }
               }
@@ -3648,8 +3961,16 @@
             "finding_count": 2,
             "detection_recall": 1.0,
             "relationship_accuracy": 1.0,
+            "relationship_precision": 1.0,
+            "correct_relationship_count": 2,
+            "missed_relevant_count": 0,
+            "missed_relevant_ids": [],
+            "incorrect_relationship_count": 0,
+            "incorrect_relationship_ids": [],
             "false_positive_count": 0,
             "false_positive_ids": [],
+            "grounded_finding_count": 2,
+            "ungrounded_finding_count": 0,
             "findings": [
               {
                 "premise_id": "xz-upstream-trust",
@@ -3678,5 +3999,151 @@
         }
       ]
     }
-  ]
+  ],
+  "trust_gate": {
+    "name": "Stage 1 trust and evaluation gate",
+    "passed": false,
+    "dataset_checks": [
+      {
+        "metric": "minimum_case_count",
+        "actual": 12,
+        "operator": ">=",
+        "required": 30,
+        "passed": false
+      },
+      {
+        "metric": "independently_reviewed_cases",
+        "actual": 0,
+        "operator": ">=",
+        "required": 12,
+        "passed": false
+      }
+    ],
+    "models": [
+      {
+        "model": "qwen3.5:9b",
+        "passed": false,
+        "checks": [
+          {
+            "metric": "completed_case_rate",
+            "actual": 1.0,
+            "operator": ">=",
+            "required": 1.0,
+            "passed": true
+          },
+          {
+            "metric": "concept_recall",
+            "actual": 0.958,
+            "operator": ">=",
+            "required": 0.9,
+            "passed": true
+          },
+          {
+            "metric": "anchor_rate",
+            "actual": 1.0,
+            "operator": ">=",
+            "required": 0.9,
+            "passed": true
+          },
+          {
+            "metric": "revisit_detection_recall",
+            "actual": 0.875,
+            "operator": ">=",
+            "required": 0.9,
+            "passed": false
+          },
+          {
+            "metric": "relationship_precision",
+            "actual": 0.923,
+            "operator": ">=",
+            "required": 0.8,
+            "passed": true
+          },
+          {
+            "metric": "false_positive_count",
+            "actual": 0,
+            "operator": "<=",
+            "required": 0,
+            "passed": true
+          },
+          {
+            "metric": "critical_miss_count",
+            "actual": 1,
+            "operator": "<=",
+            "required": 0,
+            "passed": false
+          },
+          {
+            "metric": "fabricated_quote_count",
+            "actual": 0,
+            "operator": "<=",
+            "required": 0,
+            "passed": true
+          }
+        ]
+      },
+      {
+        "model": "gemma4:e4b",
+        "passed": false,
+        "checks": [
+          {
+            "metric": "completed_case_rate",
+            "actual": 1.0,
+            "operator": ">=",
+            "required": 1.0,
+            "passed": true
+          },
+          {
+            "metric": "concept_recall",
+            "actual": 0.958,
+            "operator": ">=",
+            "required": 0.9,
+            "passed": true
+          },
+          {
+            "metric": "anchor_rate",
+            "actual": 1.0,
+            "operator": ">=",
+            "required": 0.9,
+            "passed": true
+          },
+          {
+            "metric": "revisit_detection_recall",
+            "actual": 1.0,
+            "operator": ">=",
+            "required": 0.9,
+            "passed": true
+          },
+          {
+            "metric": "relationship_precision",
+            "actual": 0.941,
+            "operator": ">=",
+            "required": 0.8,
+            "passed": true
+          },
+          {
+            "metric": "false_positive_count",
+            "actual": 1,
+            "operator": "<=",
+            "required": 0,
+            "passed": false
+          },
+          {
+            "metric": "critical_miss_count",
+            "actual": 0,
+            "operator": "<=",
+            "required": 0,
+            "passed": true
+          },
+          {
+            "metric": "fabricated_quote_count",
+            "actual": 0,
+            "operator": "<=",
+            "required": 0,
+            "passed": true
+          }
+        ]
+      }
+    ]
+  }
 }

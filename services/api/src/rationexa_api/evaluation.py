@@ -82,9 +82,7 @@ def load_dataset(manifest_path: Path, cases_root: Path) -> tuple[dict[str, Any],
         case_dir = cases_root / case_id
         actual_hash = case_content_hash(case_dir)
         if actual_hash != expected_hash:
-            raise ValueError(
-                f"Frozen case {case_id} changed: expected {expected_hash}, found {actual_hash}"
-            )
+            raise ValueError(f"Frozen case {case_id} changed: expected {expected_hash}, found {actual_hash}")
         if actual_hash in hashes:
             raise ValueError(f"Dataset contains duplicate case content: {case_id}")
         hashes.add(actual_hash)
@@ -113,9 +111,7 @@ def validate_dataset_separation(*manifests: dict[str, Any]) -> None:
             if case_id in seen_ids:
                 raise ValueError(f"Case ID {case_id} appears in both {seen_ids[case_id]} and {dataset_id}")
             if digest in seen_hashes:
-                raise ValueError(
-                    f"Case content {case_id} duplicates content from dataset {seen_hashes[digest]}"
-                )
+                raise ValueError(f"Case content {case_id} duplicates content from dataset {seen_hashes[digest]}")
             seen_ids[case_id] = dataset_id
             seen_hashes[digest] = dataset_id
 
@@ -148,9 +144,14 @@ def score_extraction(
         )
 
     anchored = sum(_valid_anchor(premise.anchor, source_text) for premise in result.premises)
+    invalid_anchors = sum(
+        premise.anchor is not None and not _valid_anchor(premise.anchor, source_text) for premise in result.premises
+    )
     return {
         "premise_count": len(result.premises),
         "anchor_rate": round(anchored / len(result.premises), 3) if result.premises else 0.0,
+        "invalid_anchor_count": invalid_anchors,
+        "unanchored_premise_count": len(result.premises) - anchored,
         "concept_recall": round(sum(item["matched"] for item in matches) / len(matches), 3) if matches else 1.0,
         "expectation_matches": matches,
         "premises": [premise.model_dump(mode="json") for premise in result.premises],
@@ -180,25 +181,38 @@ def canonical_inputs(metadata: dict[str, Any]) -> list[RevisitPremiseInput]:
     ]
 
 
-def score_revisit(findings: list[Any], canonical: list[dict[str, Any]]) -> dict[str, Any]:
+def score_revisit(
+    findings: list[Any],
+    canonical: list[dict[str, Any]],
+    evidence_text: str | None = None,
+) -> dict[str, Any]:
     expected = {item["premise_id"]: set(item["expected_relationships"]) for item in canonical}
     expected_relevant = {premise_id for premise_id, relationships in expected.items() if relationships}
     finding_by_id = {finding.premise_id: finding for finding in findings}
     detected = expected_relevant & finding_by_id.keys()
     correct = {
-        premise_id
-        for premise_id in detected
-        if finding_by_id[premise_id].relationship.value in expected[premise_id]
+        premise_id for premise_id in detected if finding_by_id[premise_id].relationship.value in expected[premise_id]
     }
     false_positives = set(finding_by_id) - expected_relevant
+    incorrect_relationships = detected - correct
+    missed = expected_relevant - detected
+    grounded_findings = sum(evidence_text is None or finding.new_excerpt in evidence_text for finding in findings)
 
     return {
         "expected_relevant": len(expected_relevant),
         "finding_count": len(findings),
         "detection_recall": round(len(detected) / len(expected_relevant), 3) if expected_relevant else 1.0,
         "relationship_accuracy": round(len(correct) / len(expected_relevant), 3) if expected_relevant else 1.0,
+        "relationship_precision": round(len(correct) / len(findings), 3) if findings else 1.0,
+        "correct_relationship_count": len(correct),
+        "missed_relevant_count": len(missed),
+        "missed_relevant_ids": sorted(missed),
+        "incorrect_relationship_count": len(incorrect_relationships),
+        "incorrect_relationship_ids": sorted(incorrect_relationships),
         "false_positive_count": len(false_positives),
         "false_positive_ids": sorted(false_positives),
+        "grounded_finding_count": grounded_findings,
+        "ungrounded_finding_count": len(findings) - grounded_findings,
         "findings": [finding.model_dump(mode="json") for finding in findings],
     }
 
@@ -225,6 +239,7 @@ def evaluate_model(
             case_results.append(
                 {
                     "case_id": case.case_id,
+                    "criticality": case.metadata["criticality"],
                     "status": "passed",
                     "extraction_seconds": round(extraction_seconds, 2),
                     "revisit_seconds": round(revisit_seconds, 2),
@@ -233,7 +248,11 @@ def evaluate_model(
                         case.metadata["extraction_expectations"],
                         case.decision,
                     ),
-                    "revisit": score_revisit(findings, case.metadata["canonical_premises"]),
+                    "revisit": score_revisit(
+                        findings,
+                        case.metadata["canonical_premises"],
+                        case.evidence,
+                    ),
                 }
             )
         except Exception as exc:  # keep a multi-model run useful when one model fails
@@ -249,6 +268,18 @@ def evaluate_model(
             on_case_completed(list(case_results))
 
     passed = [item for item in case_results if item["status"] == "passed"]
+    expected_relevant = sum(item["revisit"]["expected_relevant"] for item in passed)
+    total_findings = sum(item["revisit"]["finding_count"] for item in passed)
+    correct_relationships = sum(item["revisit"]["correct_relationship_count"] for item in passed)
+    critical_miss_cases = [
+        item["case_id"]
+        for item in passed
+        if item["criticality"] == "critical"
+        and (item["revisit"]["missed_relevant_count"] or item["revisit"]["incorrect_relationship_count"])
+    ]
+    fabricated_quote_count = sum(
+        item["extraction"]["invalid_anchor_count"] + item["revisit"]["ungrounded_finding_count"] for item in passed
+    )
     aggregate = {
         "cases_passed": len(passed),
         "cases_total": len(case_results),
@@ -256,7 +287,17 @@ def evaluate_model(
         "anchor_rate": _mean([item["extraction"]["anchor_rate"] for item in passed]),
         "revisit_detection_recall": _mean([item["revisit"]["detection_recall"] for item in passed]),
         "relationship_accuracy": _mean([item["revisit"]["relationship_accuracy"] for item in passed]),
+        "relationship_precision": (round(correct_relationships / total_findings, 3) if total_findings else 1.0),
+        "expected_relevant_count": expected_relevant,
+        "correct_relationship_count": correct_relationships,
         "false_positive_count": sum(item["revisit"]["false_positive_count"] for item in passed),
+        "critical_miss_count": sum(
+            item["revisit"]["missed_relevant_count"] + item["revisit"]["incorrect_relationship_count"]
+            for item in passed
+            if item["criticality"] == "critical"
+        ),
+        "critical_miss_cases": critical_miss_cases,
+        "fabricated_quote_count": fabricated_quote_count,
         "total_seconds": round(
             sum(item["extraction_seconds"] + item["revisit_seconds"] for item in passed),
             2,
@@ -265,11 +306,88 @@ def evaluate_model(
     return {"model": model, "aggregate": aggregate, "cases": case_results}
 
 
+def evaluate_trust_gate(
+    report: dict[str, Any],
+    cases: list[RealCase],
+    thresholds: dict[str, Any],
+) -> dict[str, Any]:
+    independently_reviewed = sum(case.metadata.get("review_status") == "independently_reviewed" for case in cases)
+    dataset_checks = [
+        _gate_check("minimum_case_count", len(cases), thresholds["minimum_case_count"], ">="),
+        _gate_check(
+            "independently_reviewed_cases",
+            independently_reviewed,
+            len(cases) if thresholds.get("require_independent_review", True) else 0,
+            ">=",
+        ),
+    ]
+    model_gates = []
+    for model_result in report["models"]:
+        aggregate = model_result["aggregate"]
+        checks = [
+            _gate_check("completed_case_rate", aggregate["cases_passed"] / aggregate["cases_total"], 1.0, ">="),
+            _gate_check("concept_recall", aggregate["concept_recall"], thresholds["minimum_concept_recall"], ">="),
+            _gate_check("anchor_rate", aggregate["anchor_rate"], thresholds["minimum_anchor_rate"], ">="),
+            _gate_check(
+                "revisit_detection_recall",
+                aggregate["revisit_detection_recall"],
+                thresholds["minimum_revisit_detection_recall"],
+                ">=",
+            ),
+            _gate_check(
+                "relationship_precision",
+                aggregate["relationship_precision"],
+                thresholds["minimum_relationship_precision"],
+                ">=",
+            ),
+            _gate_check(
+                "false_positive_count", aggregate["false_positive_count"], thresholds["maximum_false_positives"], "<="
+            ),
+            _gate_check(
+                "critical_miss_count",
+                aggregate["critical_miss_count"],
+                thresholds["maximum_critical_misses"],
+                "<=",
+            ),
+            _gate_check(
+                "fabricated_quote_count",
+                aggregate["fabricated_quote_count"],
+                thresholds["maximum_fabricated_quotes"],
+                "<=",
+            ),
+        ]
+        model_gates.append(
+            {
+                "model": model_result["model"],
+                "passed": all(check["passed"] for check in checks),
+                "checks": checks,
+            }
+        )
+    return {
+        "name": thresholds.get("name", "Stage 1 trust gate"),
+        "passed": all(check["passed"] for check in dataset_checks) and all(model["passed"] for model in model_gates),
+        "dataset_checks": dataset_checks,
+        "models": model_gates,
+    }
+
+
+def _gate_check(metric: str, actual: float | int | None, required: float | int, operator: str) -> dict[str, Any]:
+    passed = actual is not None and (actual >= required if operator == ">=" else actual <= required)
+    return {
+        "metric": metric,
+        "actual": actual,
+        "operator": operator,
+        "required": required,
+        "passed": passed,
+    }
+
+
 def _mean(values: list[float]) -> float | None:
     return round(sum(values) / len(values), 3) if values else None
 
 
 def markdown_report(report: dict[str, Any]) -> str:
+    trust_gate = report.get("trust_gate")
     lines = [
         "# Rationexa local-model comparison",
         "",
@@ -279,18 +397,54 @@ def markdown_report(report: dict[str, Any]) -> str:
         "",
         "Scores use model extraction output, but revisit scoring gives every model the same curated premises.",
         "",
-        "| Model | Cases | Extraction recall | Anchor rate | Revisit recall "
-        "| Relationship accuracy | False positives | Time |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
+    if trust_gate:
+        lines.extend(
+            [
+                f"## {trust_gate['name']}: {'PASS' if trust_gate['passed'] else 'BLOCKED'}",
+                "",
+                "A blocked gate means the system remains an experimental human-in-the-loop prototype.",
+                "",
+            ]
+        )
+        failed_dataset_checks = [check for check in trust_gate["dataset_checks"] if not check["passed"]]
+        for check in failed_dataset_checks:
+            lines.append(
+                f"- Dataset blocker: `{check['metric']}` is {check['actual']}; "
+                f"requires {check['operator']} {check['required']}."
+            )
+        failed_model_checks = [
+            (model["model"], check)
+            for model in trust_gate["models"]
+            for check in model["checks"]
+            if not check["passed"]
+        ]
+        for model, check in failed_model_checks:
+            lines.append(
+                f"- Model blocker ({model}): `{check['metric']}` is {check['actual']}; "
+                f"requires {check['operator']} {check['required']}."
+            )
+        if failed_dataset_checks or failed_model_checks:
+            lines.append("")
+    lines.extend(
+        [
+            "| Model | Cases | Extraction recall | Anchor rate | Revisit recall "
+            "| Relationship precision | False positives | Critical misses | Fabricated quotes | Gate | Time |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    gate_by_model = {model["model"]: model for model in trust_gate.get("models", [])} if trust_gate else {}
     for model_result in report["models"]:
         aggregate = model_result["aggregate"]
+        model_gate = gate_by_model.get(model_result["model"])
+        gate_label = "PASS" if model_gate and model_gate["passed"] else "BLOCKED"
         lines.append(
             f"| {model_result['model']} | {aggregate['cases_passed']}/{aggregate['cases_total']} "
             f"| {_percent(aggregate['concept_recall'])} | {_percent(aggregate['anchor_rate'])} "
             f"| {_percent(aggregate['revisit_detection_recall'])} "
-            f"| {_percent(aggregate['relationship_accuracy'])} "
-            f"| {aggregate['false_positive_count']} | {aggregate['total_seconds']:.2f}s |"
+            f"| {_percent(aggregate['relationship_precision'])} "
+            f"| {aggregate['false_positive_count']} | {aggregate['critical_miss_count']} "
+            f"| {aggregate['fabricated_quote_count']} | {gate_label} | {aggregate['total_seconds']:.2f}s |"
         )
 
     for model_result in report["models"]:
@@ -301,9 +455,10 @@ def markdown_report(report: dict[str, Any]) -> str:
                 continue
             extraction = case["extraction"]
             revisit = case["revisit"]
-            relationships = ", ".join(
-                f"{finding['premise_id']}={finding['relationship']}" for finding in revisit["findings"]
-            ) or "none"
+            relationships = (
+                ", ".join(f"{finding['premise_id']}={finding['relationship']}" for finding in revisit["findings"])
+                or "none"
+            )
             lines.append(
                 f"- **{case['case_id']}** — extraction {_percent(extraction['concept_recall'])}; "
                 f"revisit {_percent(revisit['relationship_accuracy'])}; "
@@ -324,6 +479,7 @@ def run(
     checkpoint_path: Path | None = None,
     dataset_id: str = "custom",
     dataset_manifest_hash: str | None = None,
+    trust_gate_thresholds: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     model_results = []
     for model in models:
@@ -333,8 +489,7 @@ def run(
         def checkpoint(case_results: list[dict[str, Any]], current_model: str = model) -> None:
             latest = case_results[-1]
             print(
-                f"[{current_model}] {len(case_results)}/{len(cases)} "
-                f"{latest['case_id']}: {latest['status']}",
+                f"[{current_model}] {len(case_results)}/{len(cases)} {latest['case_id']}: {latest['status']}",
                 flush=True,
             )
             if checkpoint_path is not None:
@@ -364,6 +519,8 @@ def run(
         "cases": [case.case_id for case in cases],
         "models": model_results,
     }
+    if trust_gate_thresholds is not None:
+        report["trust_gate"] = evaluate_trust_gate(report, cases, trust_gate_thresholds)
     if checkpoint_path is not None:
         _write_json_atomic(
             checkpoint_path,
@@ -386,6 +543,7 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[4]
     development_manifest_path = repo_root / "packages/evals/datasets/development.manifest.json"
+    trust_gate_path = repo_root / "packages/evals/datasets/stage1-trust-gate.json"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--models", nargs="+", default=["qwen3.5:9b", "gemma4:e4b"])
     parser.add_argument(
@@ -404,6 +562,7 @@ def main() -> None:
         default=repo_root / "packages/evals/reports/local-model-comparison",
     )
     parser.add_argument("--timeout-seconds", type=float, default=300)
+    parser.add_argument("--trust-gate", type=Path, default=trust_gate_path)
     args = parser.parse_args()
 
     manifest, cases = load_dataset(args.dataset_manifest, args.cases_root)
@@ -411,6 +570,7 @@ def main() -> None:
         development_manifest = json.loads(development_manifest_path.read_text())
         validate_dataset_separation(development_manifest, manifest)
     manifest_hash = hashlib.sha256(args.dataset_manifest.read_bytes()).hexdigest()
+    trust_gate_thresholds = json.loads(args.trust_gate.read_text())
 
     report = run(
         args.models,
@@ -419,6 +579,7 @@ def main() -> None:
         checkpoint_path=args.output.with_suffix(".checkpoint.json"),
         dataset_id=str(manifest["id"]),
         dataset_manifest_hash=manifest_hash,
+        trust_gate_thresholds=trust_gate_thresholds,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n")

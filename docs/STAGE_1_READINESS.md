@@ -26,6 +26,10 @@ of done.
 - Background extraction and revisit jobs with visible phases, polling,
   cancellation, and late-result suppression.
 - Automated case-composition gate, API tests, lint, and web build checks.
+- Machine-readable Stage 1 trust gate with explicit case-count, independent-review,
+  recall, precision, false-positive, critical-miss, and fabricated-quote thresholds.
+- Side-by-side Compare mode with disagreement, latency, token, prompt, model, and
+  cost provenance.
 
 ## Acceptance-gate status
 
@@ -33,21 +37,17 @@ of done.
 
 - Development case count: 12 fixtures available.
 - Independent case review: pending.
-- Latest 12-case baseline: both Qwen and Gemma reached 83.3% concept recall.
-- Replaying the saved outputs through corrected source-based labels and the
-  wrapped-Markdown recovery reaches 100% concept recall for both models. A
-  fresh run and independent label review remain required before passing.
+- Fresh 2026-08-25 run: Qwen and Gemma each reached 95.8% concept recall.
+- Independent label review remains required before this development score can
+  count toward release readiness.
 - Target: at least 90% recall on human-labeled critical premises, with
   qualifier-preservation and correction-effort review.
 
 ### Gate 2: source anchors — not passed
 
 - Exact anchor validation exists.
-- Latest 12-case baseline before deterministic offset repair: Qwen anchor rate
-  37.4%; Gemma 43.3%.
-- Deterministic replay of all saved premises through the repair reaches 100%
-  grounded anchors for both models. The original pre-fix benchmark is retained,
-  and the replay is enforced by an automated regression test.
+- Fresh 2026-08-25 run after deterministic repair: both models reached 100%
+  exact-anchor validity and produced zero ungrounded/fabricated finding excerpts.
 - Target: at least 90% correct sampled anchors and no accepted invented quotes.
 - Moderated under-30-second source-verification test: pending.
 
@@ -55,9 +55,11 @@ of done.
 
 - Revisit classifier and side-by-side evidence UI exist.
 - Twelve development cases are available and both local models completed the
-  full baseline. Qwen reached 87.5% revisit recall and 83.3% relationship
-  accuracy with no false positives. Gemma reached 100% on both curated metrics
-  with one false positive.
+  fresh trust-gate run. Qwen reached 87.5% revisit recall and 92.3% relationship
+  precision with no false positives, but missed the critical `ingress-migration`
+  relationship. Gemma reached 100% revisit recall and 94.1% relationship
+  precision with no critical misses, but produced one false positive on
+  `node-repeatability`.
 - Target: at least 30 regression cases, 90% critical premise-match recall, 80%
   relationship precision, and zero critical misses in the release candidate.
 - Generalization status: the visible 12-case set is now restricted to
@@ -71,13 +73,12 @@ of done.
 ## Next build sequence
 
 1. Independently review and correct the labels in the 12-case suite.
-2. Run Qwen and Gemma over all 12 cases and classify every miss.
-3. Fix extraction and anchor reliability before adding more providers.
-4. Add Compare mode plus progress, timeout, and cancellation controls.
-5. Persist revisit model, prompt, latency, and cost provenance.
-6. Add one hosted provider to the same benchmark; do not select a default by
-   reputation alone.
-7. Expand to 30 regression cases and conduct the Gate 4 user test.
+2. Classify and address Qwen's critical ingress migration miss and Gemma's Node
+   repeatability false positive without weakening prompt-injection resistance.
+3. Expand to 30 independently reviewed regression cases and rerun the gate.
+4. Conduct the Gate 4 moderated user test.
+5. Add a hosted provider only after the trust gate is stable; do not select a
+   default by reputation alone.
 
 ## Release language
 
