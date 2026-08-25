@@ -9,7 +9,7 @@
   "evidence_source_urls": ["https://docs.docker.com/docker-hub/usage/pulls/"],
   "evidence_date": "2026-04-01",
   "extraction_expectations": [
-    {"kind": "hard_constraint", "keywords": ["self-hosted", "network"]},
+    {"kind": "hard_constraint", "keywords": ["private", "network"]},
     {"kind": "assumption", "keywords": ["registry", "capacity"]}
   ],
   "canonical_premises": [

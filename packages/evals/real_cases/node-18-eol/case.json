@@ -13,7 +13,7 @@
   "evidence_date": "2025-03-27",
   "extraction_expectations": [
     {"kind": "assumption", "keywords": ["Node 18", "supported"]},
-    {"kind": "revisit_condition", "keywords": ["newer", "migration"]}
+    {"kind": "revisit_condition", "keywords": ["newer", "update"]}
   ],
   "canonical_premises": [
     {

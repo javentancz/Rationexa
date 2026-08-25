@@ -44,7 +44,7 @@ class DeterministicProvider(ExtractionProvider):
     model = "rules-v1"
 
     def extract(self, source_text: str, filename: str) -> ExtractionResult:
-        sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+|\n+", source_text) if part.strip()]
+        sentences = _source_sentences(source_text)
         premises: list[CandidatePremise] = []
         title = filename.rsplit(".", 1)[0].replace("_", " ").strip() or "Imported decision"
         question = next(
@@ -144,7 +144,7 @@ class DeterministicProvider(ExtractionProvider):
 
     @staticmethod
     def _classify(sentence: str) -> PremiseKind | None:
-        value = sentence.lower()
+        value = " ".join(sentence.lower().split())
         if value.startswith(("#", "date:", "status:", "source:")):
             return None
         if (
@@ -152,6 +152,7 @@ class DeterministicProvider(ExtractionProvider):
             or "revisit when" in value
             or re.search(r"\b(later|eventually|future)\b.*\bmigrat", value)
             or re.search(r"\bmigrat\w*\b.*\b(possible|later|eventually|future)", value)
+            or re.search(r"\bmoving\b.*\bnewer\b.*\b(version|runtime|platform)\b", value)
         ):
             return PremiseKind.REVISIT_CONDITION
         if sentence.endswith("?") or any(word in value for word in ("unknown", "unclear", "to be confirmed")):
@@ -163,8 +164,19 @@ class DeterministicProvider(ExtractionProvider):
             return PremiseKind.HARD_CONSTRAINT
         if any(
             word in value
-            for word in ("assume", "expected", "likely", "we believe", "familiar", "quickly enough", "simpler than")
+            for word in (
+                "assume",
+                "expected",
+                "likely",
+                "we believe",
+                "familiar",
+                "quickly enough",
+                "simpler than",
+                "has enough",
+            )
         ):
+            return PremiseKind.ASSUMPTION
+        if re.search(r"\b(can|could|will)\b.*\bquickly\b", value):
             return PremiseKind.ASSUMPTION
         material_claim_pattern = (
             r"\b(\d+(?:\.\d+)?%?|pricing|price|rate limit|supports? "
@@ -296,10 +308,10 @@ def _revisit_input(premises: list[RevisitPremiseInput], new_evidence: str) -> st
 
 def _normalize_extraction(result: ExtractionResult, source_text: str | None = None) -> ExtractionResult:
     normalized = []
+    chosen = (result.chosen_option or "").strip().lower()
     for premise in result.premises:
         statement = premise.statement.strip()
         value = statement.lower()
-        chosen = (result.chosen_option or "").strip().lower()
         duplicates_choice = bool(
             chosen and chosen in value and re.match(r"^(adopt|choose|chose|select|selected|use)\b", value)
         )
@@ -358,11 +370,17 @@ def _normalize_extraction(result: ExtractionResult, source_text: str | None = No
         normalized.append(premise)
 
     if source_text:
-        source_sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+|\n+", source_text) if part.strip()]
-        represented = "\n".join(premise.statement.lower() for premise in normalized)
+        source_sentences = _source_recovery_spans(source_text)
+        represented = {_normalized_text(premise.statement) for premise in normalized}
         for sentence in source_sentences[:120]:
             kind = DeterministicProvider._classify(sentence)
-            if kind is None or sentence.lower() in represented:
+            normalized_sentence = _normalized_text(sentence)
+            duplicates_choice = bool(
+                chosen
+                and chosen in normalized_sentence
+                and re.match(r"^(adopt|choose|chose|select|selected|use)\b", normalized_sentence)
+            )
+            if kind is None or duplicates_choice or normalized_sentence in represented:
                 continue
             start = source_text.find(sentence)
             if start < 0:
@@ -394,7 +412,7 @@ def _normalize_extraction(result: ExtractionResult, source_text: str | None = No
                     ),
                 )
             )
-            represented += f"\n{sentence.lower()}"
+            represented.add(normalized_sentence)
     result.premises = normalized
     return result
 
@@ -418,6 +436,37 @@ def _repair_source_anchor(premise: CandidatePremise, source_text: str) -> Source
                 end_offset=start + len(excerpt),
             )
     return None
+
+
+def _source_sentences(source_text: str) -> list[str]:
+    """Keep soft-wrapped Markdown lines together while preserving exact source text."""
+    sentences = []
+    for block in re.split(r"\n{2,}", source_text):
+        block = block.strip()
+        if not block:
+            continue
+        if re.match(r"^(date|status|source):", block, re.I) and "\n" in block:
+            parts = block.splitlines()
+        else:
+            parts = re.split(r"(?<=[.!?])\s+", block)
+        sentences.extend(part.strip() for part in parts if part.strip())
+    return sentences
+
+
+def _source_recovery_spans(source_text: str) -> list[str]:
+    spans = []
+    for sentence in _source_sentences(source_text):
+        spans.append(sentence)
+        because = re.search(r"\bbecause\b", sentence, re.I)
+        if because is None:
+            continue
+        rationale = sentence[because.end() :].strip()
+        spans.extend(clause.strip() for clause in re.split(r",\s+(?:and\s+)?", rationale) if clause.strip())
+    return spans
+
+
+def _normalized_text(value: str) -> str:
+    return " ".join(value.lower().split())
 
 
 def _validated_findings(

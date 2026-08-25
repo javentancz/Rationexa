@@ -212,6 +212,73 @@ def test_extraction_trust_boundary_repairs_and_recovers_model_anchors() -> None:
     assert normalized.premises[2].anchor is None
 
 
+def test_extraction_recovery_keeps_soft_wrapped_markdown_sentence_together() -> None:
+    source = (
+        "## Decision\n\n"
+        "Choose PostgreSQL because it is open source, the team can\n"
+        "implement the APIs quickly, and contributors know SQL.\n"
+    )
+    result = ExtractionResult.model_validate(
+        {
+            "title": "Database",
+            "decision_question": "Which database?",
+            "chosen_option": "PostgreSQL",
+            "premises": [],
+        }
+    )
+
+    normalized = _normalize_extraction(result, source)
+
+    assert len(normalized.premises) == 1
+    assert "implement the APIs quickly" in normalized.premises[0].statement.replace("\n", " ")
+    assert normalized.premises[0].kind.value == "assumption"
+    assert normalized.premises[0].anchor is not None
+    anchor = normalized.premises[0].anchor
+    assert source[anchor.start_offset : anchor.end_offset] == anchor.exact_excerpt
+
+
+def test_extraction_recovery_does_not_duplicate_whitespace_collapsed_model_statement() -> None:
+    source = "The team can\nimplement the APIs quickly."
+    result = ExtractionResult.model_validate(
+        {
+            "title": "Database",
+            "decision_question": "Which database?",
+            "premises": [
+                {
+                    "candidate_id": "p1",
+                    "kind": "assumption",
+                    "statement": "The team can implement the APIs quickly.",
+                }
+            ],
+        }
+    )
+
+    normalized = _normalize_extraction(result, source)
+
+    assert len(normalized.premises) == 1
+    assert normalized.premises[0].anchor is not None
+
+
+def test_extraction_recovery_recognizes_soft_wrapped_runtime_revisit_condition() -> None:
+    source = (
+        "The pin assumes Node 18 remains a\n"
+        "supported production runtime. Moving to a newer major version will require a\n"
+        "deliberate toolchain and compatibility update."
+    )
+    result = ExtractionResult.model_validate(
+        {
+            "title": "Runtime",
+            "decision_question": "Which runtime?",
+            "premises": [],
+        }
+    )
+
+    normalized = _normalize_extraction(result, source)
+
+    assert [premise.kind.value for premise in normalized.premises] == ["assumption", "revisit_condition"]
+    assert all(premise.anchor is not None for premise in normalized.premises)
+
+
 def test_ollama_revisit_uses_structured_semantic_assessment() -> None:
     captured: dict = {}
     evidence = "The retired controller no longer receives upgrades or security updates."

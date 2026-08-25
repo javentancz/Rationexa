@@ -9,7 +9,7 @@
   "evidence_source_urls": ["https://github.blog/changelog/2024-06-25-artifact-attestations-is-generally-available/"],
   "evidence_date": "2024-06-25",
   "extraction_expectations": [
-    {"kind": "requirement", "keywords": ["cache", "memory"]},
+    {"kind": "hard_constraint", "keywords": ["cache", "memory"]},
     {"kind": "assumption", "keywords": ["least-recently-used", "traffic"]}
   ],
   "canonical_premises": [

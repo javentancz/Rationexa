@@ -30,6 +30,9 @@ of done.
 - Development case count: 12 fixtures available.
 - Independent case review: pending.
 - Latest 12-case baseline: both Qwen and Gemma reached 83.3% concept recall.
+- Replaying the saved outputs through corrected source-based labels and the
+  wrapped-Markdown recovery reaches 100% concept recall for both models. A
+  fresh run and independent label review remain required before passing.
 - Target: at least 90% recall on human-labeled critical premises, with
   qualifier-preservation and correction-effort review.
 

@@ -55,6 +55,23 @@ all saved premises can be grounded after repair: Qwen 100% (76 of 76) and Gemma
 model run, so the original pre-fix benchmark remains preserved above. A
 regression test now replays every saved premise through the repair function.
 
+## Label audit and wrapped-source recovery
+
+A source-based audit found four expectation problems: the Node.js source says
+"moving" and "update" rather than "migration"; the private-network constraint
+does not contain the word "self-hosted"; and a fixed memory budget written with
+"must" is a hard constraint rather than a requirement. Those labels were
+corrected while retaining `curated_pending_independent_review` status.
+
+The normalizer now keeps soft-wrapped Markdown sentences intact, avoids
+whitespace-only duplicate premises, recognizes an explicit move to a newer
+runtime as a revisit condition, and can recover an exact rationale clause such
+as "the team can implement the APIs quickly." Replaying both saved model
+outputs through the updated normalizer and corrected source-based labels gives
+100% concept recall and 100% anchor validity for both models. This replay tests
+normalization of fixed outputs; only a fresh benchmark can measure model-run
+variance.
+
 ## Current model decision
 
 Do not freeze a production default yet. Keep Qwen as the conservative local
@@ -65,6 +82,6 @@ default—Qwen for extraction and Gemma for revisit—beats either model alone.
 ## Next reliability work
 
 1. Independently review the 12-case labels and rerun both local models.
-2. Review extraction misses and qualifier preservation after grounding.
+2. Review qualifier preservation and false-positive definitions.
 3. Add Compare mode using the same versioned prompts and case suite.
 4. Test one hosted provider only after the local baseline is accepted.
