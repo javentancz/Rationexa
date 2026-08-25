@@ -14,7 +14,7 @@ Rationexa assists review; it does not autonomously declare decisions wrong, reve
 
 ## Run locally
 
-The August 2026 development baseline is Node.js 24.19 LTS, pnpm 11.23,
+The development baseline is Node.js 24.19 LTS, pnpm 11.23,
 Python 3.14.7, and PostgreSQL 18. Use `.nvmrc` and `.python-version` with your
 preferred runtime manager.
 
@@ -37,7 +37,7 @@ pnpm install
 pnpm dev:web
 ```
 
-Open `http://localhost:3000`. The default provider is local Ollama running Qwen3.5 9B, so no external API key is required. The first model download is approximately 6.6 GB.
+Open `http://localhost:3000`. The default provider is local Ollama running Qwen3.5 9B, so no external API key is required.
 
 Extraction and revisit run as background jobs in the web app. The workspace
 shows queued, model, validation, and persistence phases and lets the reviewer

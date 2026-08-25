@@ -378,3 +378,58 @@ def test_stage_two_decision_library_search_and_revisit_history() -> None:
         assert refreshed["revisit_count"] == 1
         assert refreshed["pending_revisit_count"] == 1
         assert refreshed["last_revisited_at"] is not None
+
+
+def test_stage_two_markdown_export_contains_reviewed_record_and_revisit_history() -> None:
+    with TestClient(app) as client:
+        decision = create_finalized_decision(
+            client,
+            source=(
+                "We decided to use Vendor B because we assumed Vendor B does not support external users. "
+                "Revisit if Vendor B introduces external-user support."
+            ),
+            title="Exportable vendor decision",
+            criticality="critical",
+        )
+        revisit = client.post(
+            f"/v1/decisions/{decision['id']}/revisit-checks",
+            json={
+                "filename": "vendor-release-note.txt",
+                "content": "Vendor B now supports external users.",
+            },
+        )
+        assert revisit.status_code == 201
+        finding = revisit.json()["findings"][0]
+        judged = client.post(
+            f"/v1/revisit-checks/{revisit.json()['id']}/findings/{finding['premise_id']}/judgment",
+            json={"judgment": "worth_reviewing", "notes": "Confirmed by the project owner."},
+        )
+        assert judged.status_code == 200
+
+        exported = client.get(
+            f"/v1/decisions/{decision['id']}/export/markdown",
+            headers={"Origin": "http://localhost:3000"},
+        )
+
+        assert exported.status_code == 200
+        assert exported.headers["content-type"].startswith("text/markdown")
+        assert exported.headers["content-disposition"] == (
+            'attachment; filename="exportable-vendor-decision-record.md"'
+        )
+        assert exported.headers["access-control-expose-headers"] == "Content-Disposition"
+        assert "# Exportable vendor decision" in exported.text
+        assert "## Preserved premises" in exported.text
+        assert "Reviewed source excerpt" in exported.text
+        assert "## Revisit history" in exported.text
+        assert "vendor-release-note.txt" in exported.text
+        assert "deterministic / rules-v1" in exported.text
+        assert "worth reviewing" in exported.text
+        assert "Confirmed by the project owner." in exported.text
+        assert "storage_uri" not in exported.text
+
+
+def test_markdown_export_returns_not_found_for_unknown_decision() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/decisions/missing/export/markdown")
+
+    assert response.status_code == 404

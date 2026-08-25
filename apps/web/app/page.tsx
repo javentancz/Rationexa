@@ -138,6 +138,7 @@ export default function Home() {
   const [libraryCriticality, setLibraryCriticality] = useState<"all" | Criticality>("all");
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [revisitHistory, setRevisitHistory] = useState<RevisitResult[]>([]);
+  const [exportBusy, setExportBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -391,8 +392,35 @@ export default function Home() {
     }
   }
 
+  async function downloadMarkdown() {
+    if (!decision) return;
+    setExportBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`${api}/v1/decisions/${decision.id}/export/markdown`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.detail ?? `Export failed with status ${response.status}`);
+      }
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "decision-record.md";
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not export this decision");
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   function resetWorkspace() {
-    setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setError(null);
+    setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setExportBusy(false); setError(null);
   }
 
   return (
@@ -498,7 +526,7 @@ export default function Home() {
               </section>
               <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Ready to finalize?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before finalizing.` : `${counts.confirm} premises will be preserved · ${counts.unknown} unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "finalize" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0 || unanchoredCritical.length > 0} onClick={reviewAndFinalize}>{busyPhase === "finalize" ? <><span className="spinner" />Saving decision…</> : "Save reviewed decision →"}</button></section>
             </> : <section className="card finalized-summary">
-              <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><button className="text-button" onClick={resetWorkspace}>New review</button></div>
+              <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" onClick={resetWorkspace}>New review</button></div></div>
               <div className="record-meta"><div><span>Chosen option</span><strong>{draft.chosenOption || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Extracted by</span><strong>{extraction.model}</strong></div></div>
               <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
             </section>}
@@ -506,7 +534,7 @@ export default function Home() {
         ) : null}
 
         {view === "workspace" && decision && !extraction ? <section className="card finalized-summary">
-          <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><button className="text-button" onClick={() => setView("library")}>Back to library</button></div>
+          <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" onClick={() => setView("library")}>Back to library</button></div></div>
           <div className="record-meta"><div><span>Chosen option</span><strong>{decision.chosen_option || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Saved</span><strong>{formatDate(decision.created_at)}</strong></div></div>
           <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
         </section> : null}

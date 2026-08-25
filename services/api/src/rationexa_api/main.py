@@ -21,6 +21,7 @@ from .db import (
     init_db,
     now_utc,
 )
+from .exports import export_filename, render_decision_markdown
 from .jobs import job_manager
 from .prompts import EXTRACTION_PROMPT_VERSION, REVISIT_PROMPT_VERSION
 from .providers import available_models, default_model_id, get_provider
@@ -74,6 +75,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 Db = Annotated[Session, Depends(get_db)]
@@ -400,6 +402,24 @@ def list_revisit_checks(decision_id: str, db: Db) -> list[RevisitRead]:
         select(RevisitRow).where(RevisitRow.decision_id == decision_id).order_by(RevisitRow.created_at.desc())
     ).all()
     return [revisit_read(row) for row in rows]
+
+
+@app.get("/v1/decisions/{decision_id}/export/markdown")
+def export_decision_markdown(decision_id: str, db: Db) -> Response:
+    decision = db.get(DecisionRow, decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    revisits = db.scalars(
+        select(RevisitRow)
+        .where(RevisitRow.decision_id == decision_id)
+        .order_by(RevisitRow.created_at.asc(), RevisitRow.id.asc())
+    ).all()
+    filename = export_filename(decision.title)
+    return Response(
+        content=render_decision_markdown(decision, revisits),
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post(

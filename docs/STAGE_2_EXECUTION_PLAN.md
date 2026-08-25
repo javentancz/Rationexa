@@ -22,8 +22,11 @@ Status: implemented.
 
 ## Milestone 2 - sharing and export
 
+Status: in progress. Markdown export is implemented; revocable share links and
+PDF export remain.
+
 - Create revocable read-only share links.
-- Export a decision record and its revisit history to Markdown first.
+- Export a decision record and its revisit history to Markdown first. Implemented.
 - Add PDF export only after the Markdown record is stable.
 - Never expose provider keys or private source artifacts through a share link.
 
