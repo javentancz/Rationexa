@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, create_engine
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -107,6 +107,13 @@ class RevisitRow(Base):
     evidence_artifact_id: Mapped[str] = mapped_column(ForeignKey("artifacts.id"))
     status: Mapped[str] = mapped_column(String(30), default="needs_review")
     findings: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    provider: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    latency_ms: Mapped[int | None] = mapped_column(nullable=True)
+    input_tokens: Mapped[int | None] = mapped_column(nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(nullable=True)
+    estimated_cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
@@ -118,6 +125,25 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    _add_missing_revisit_provenance_columns()
+
+
+def _add_missing_revisit_provenance_columns() -> None:
+    """Keep existing Stage 1 databases readable until formal migrations are introduced."""
+    existing = {column["name"] for column in inspect(engine).get_columns("revisit_checks")}
+    column_definitions = {
+        "provider": "VARCHAR(80)",
+        "model": "VARCHAR(120)",
+        "prompt_version": "VARCHAR(40)",
+        "latency_ms": "INTEGER",
+        "input_tokens": "INTEGER",
+        "output_tokens": "INTEGER",
+        "estimated_cost_usd": "FLOAT",
+    }
+    with engine.begin() as connection:
+        for name, sql_type in column_definitions.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE revisit_checks ADD COLUMN {name} {sql_type}"))
 
 
 def get_db() -> Generator[Session]:

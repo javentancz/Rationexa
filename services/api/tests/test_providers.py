@@ -48,7 +48,11 @@ def test_ollama_provider_sends_schema_and_validates_response() -> None:
         captured.update(json.loads(request.content))
         return httpx.Response(
             200,
-            json={"message": {"role": "assistant", "content": json.dumps(extraction)}},
+            json={
+                "message": {"role": "assistant", "content": json.dumps(extraction)},
+                "prompt_eval_count": 123,
+                "eval_count": 45,
+            },
         )
 
     client = httpx.Client(
@@ -68,6 +72,11 @@ def test_ollama_provider_sends_schema_and_validates_response() -> None:
     assert captured["think"] is False
     assert captured["options"]["temperature"] == 0
     assert captured["format"]["type"] == "object"
+    assert provider.last_usage == {
+        "input_tokens": 123,
+        "output_tokens": 45,
+        "estimated_cost_usd": 0.0,
+    }
 
 
 def test_model_catalog_and_selector_use_allowlisted_ollama_model() -> None:

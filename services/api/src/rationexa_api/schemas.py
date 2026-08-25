@@ -212,6 +212,13 @@ class RevisitRead(BaseModel):
     decision_id: str
     status: str
     findings: list[RevisitFinding]
+    provider: str | None = None
+    model: str | None = None
+    prompt_version: str | None = None
+    latency_ms: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    estimated_cost_usd: float | None = None
     created_at: datetime
 
 

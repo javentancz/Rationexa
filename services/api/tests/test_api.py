@@ -1,8 +1,9 @@
 import time
 
 from fastapi.testclient import TestClient
+from sqlalchemy import inspect
 
-from rationexa_api.db import ExtractionRow, SessionLocal
+from rationexa_api.db import ExtractionRow, SessionLocal, engine
 from rationexa_api.main import app
 
 
@@ -76,9 +77,32 @@ def test_stage_one_vertical_slice() -> None:
             },
         )
         assert revisit.status_code == 201
-        assert revisit.json()["findings"]
-        assert any(finding["relationship"] == "contradicts" for finding in revisit.json()["findings"])
-        assert any(finding["source_fallback_performed"] for finding in revisit.json()["findings"])
+        revisit_body = revisit.json()
+        assert revisit_body["findings"]
+        assert revisit_body["provider"] == "deterministic"
+        assert revisit_body["model"] == "rules-v1"
+        assert revisit_body["prompt_version"] == "revisit-v2"
+        assert revisit_body["latency_ms"] >= 0
+        assert revisit_body["input_tokens"] == 0
+        assert revisit_body["output_tokens"] == 0
+        assert revisit_body["estimated_cost_usd"] == 0.0
+        assert any(finding["relationship"] == "contradicts" for finding in revisit_body["findings"])
+        assert any(finding["source_fallback_performed"] for finding in revisit_body["findings"])
+
+
+def test_revisit_provenance_columns_exist() -> None:
+    with TestClient(app):
+        columns = {column["name"] for column in inspect(engine).get_columns("revisit_checks")}
+
+    assert {
+        "provider",
+        "model",
+        "prompt_version",
+        "latency_ms",
+        "input_tokens",
+        "output_tokens",
+        "estimated_cost_usd",
+    } <= columns
 
 
 def test_rejects_model_outside_server_allowlist() -> None:

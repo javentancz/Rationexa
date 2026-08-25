@@ -55,6 +55,7 @@ type DecisionDraft = { title: string; question: string; context: string; chosenO
 type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string };
 type ModelCatalog = { default_model_id: string; models: ModelOption[] };
 type Job = { id: string; kind: "extraction" | "revisit"; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; phase: string; progress: number; result?: unknown; error?: string };
+type RevisitResult = { findings: Finding[]; provider?: string; model?: string; prompt_version?: string; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
@@ -84,6 +85,7 @@ export default function Home() {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [selectedModelId, setSelectedModelId] = useState("");
   const [lastRevisitModel, setLastRevisitModel] = useState<string | null>(null);
+  const [lastRevisitProvenance, setLastRevisitProvenance] = useState<string | null>(null);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
 
   useEffect(() => {
@@ -215,10 +217,13 @@ export default function Home() {
     try {
       const created = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/revisit-jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "new-evidence.txt", content: evidence, model_id: selectedModelId || undefined }) }));
       const completed = await waitForJob(created);
-      const result = completed.result as { findings: Finding[] };
+      const result = completed.result as RevisitResult;
       setFindings(result.findings);
       setRevisitCompleted(true);
       setLastRevisitModel(selectedModel?.label ?? selectedModelId);
+      const tokens = (result.input_tokens ?? 0) + (result.output_tokens ?? 0);
+      const cost = result.estimated_cost_usd == null ? "cost pending" : `$${result.estimated_cost_usd.toFixed(4)}`;
+      setLastRevisitProvenance(`${result.provider ?? "unknown"}/${result.model ?? "unknown"} · ${result.prompt_version ?? "unknown prompt"} · ${result.latency_ms ?? 0} ms · ${tokens} tokens · ${cost}`);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Revisit failed";
       if (message !== "Operation cancelled") setError(message);
@@ -228,7 +233,7 @@ export default function Home() {
   }
 
   function resetWorkspace() {
-    setExtraction(null); setDecision(null); setFindings([]); setRevisitCompleted(false); setLastRevisitModel(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJob(null); setBusyPhase(null); setError(null);
+    setExtraction(null); setDecision(null); setFindings([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJob(null); setBusyPhase(null); setError(null);
   }
 
   return (
@@ -332,7 +337,7 @@ export default function Home() {
           <div className="section-heading"><div><span className="overline">Step 4 · Revisit</span><h2>What changed?</h2><p>Compare new evidence with the premises you preserved using {selectedModel?.label ?? "the selected model"}.</p></div><span className="decision-badge">{decision.criticality}</span></div>
           <label className="field"><span>New evidence</span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); }} rows={5} /></label>
           <div className="form-footer"><span>This check flags relationships; it does not overturn the decision.</span><button className="primary" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || !evidence.trim()}>{busyPhase === "revisit" ? <><span className="spinner" />Checking with {selectedModel?.label ?? "model"}…</> : "Check against premises →"}</button></div>
-          {findings.length ? <div className="findings"><div className="findings-heading"><h3>Review findings</h3><span>{findings.length} material relationship{findings.length === 1 ? "" : "s"} found · {lastRevisitModel}</span></div>{findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.relationship}</span><small>{finding.confidence_band} confidence</small></div><h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{finding.source_fallback_performed ? <div className="finding-provenance">Original source anchor verified</div> : null}{finding.missing_context_question ? <div className="missing-context">Question: {finding.missing_context_question}</div> : null}</article>)}</div> : revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>{lastRevisitModel} found no material effect on the consequential premises preserved in this decision.</span></div> : null}
+          {findings.length ? <div className="findings"><div className="findings-heading"><h3>Review findings</h3><span>{findings.length} material relationship{findings.length === 1 ? "" : "s"} found · {lastRevisitModel}</span></div>{lastRevisitProvenance ? <div className="finding-provenance">Run provenance: {lastRevisitProvenance}</div> : null}{findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.relationship}</span><small>{finding.confidence_band} confidence</small></div><h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{finding.source_fallback_performed ? <div className="finding-provenance">Original source anchor verified</div> : null}{finding.missing_context_question ? <div className="missing-context">Question: {finding.missing_context_question}</div> : null}</article>)}</div> : revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>{lastRevisitModel} found no material effect on the consequential premises preserved in this decision.</span>{lastRevisitProvenance ? <span>Run provenance: {lastRevisitProvenance}</span> : null}</div> : null}
         </section> : null}
       </main>
     </div>

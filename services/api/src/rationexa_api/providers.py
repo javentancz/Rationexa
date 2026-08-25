@@ -24,6 +24,7 @@ from .schemas import (
 class ExtractionProvider(ABC):
     name: str
     model: str
+    last_usage: dict[str, int | float | None]
 
     @abstractmethod
     def extract(self, source_text: str, filename: str) -> ExtractionResult:
@@ -44,6 +45,7 @@ class DeterministicProvider(ExtractionProvider):
     model = "rules-v1"
 
     def extract(self, source_text: str, filename: str) -> ExtractionResult:
+        self.last_usage = {"input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0.0}
         sentences = _source_sentences(source_text)
         premises: list[CandidatePremise] = []
         title = filename.rsplit(".", 1)[0].replace("_", " ").strip() or "Imported decision"
@@ -127,6 +129,7 @@ class DeterministicProvider(ExtractionProvider):
         new_evidence: str,
         criticality: str,
     ) -> list[RevisitFinding]:
+        self.last_usage = {"input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0.0}
         from .services import compare_premise
 
         findings = []
@@ -201,6 +204,7 @@ class OpenAIResponsesProvider(ExtractionProvider):
             raise ValueError("OPENAI_API_KEY is required when AI_PROVIDER=openai")
         self.model = settings.openai_model
         self.client = OpenAI(api_key=settings.openai_api_key)
+        self.last_usage = {}
 
     def extract(self, source_text: str, filename: str) -> ExtractionResult:
         response = self.client.responses.parse(
@@ -210,6 +214,7 @@ class OpenAIResponsesProvider(ExtractionProvider):
             input=f"Filename: {filename}\n\nSOURCE TEXT\n{source_text}",
             text_format=ExtractionResult,
         )
+        self._capture_usage(response)
         if response.output_parsed is None:
             raise ValueError("The model did not return a valid decision extraction")
         return _normalize_extraction(response.output_parsed, source_text)
@@ -227,9 +232,18 @@ class OpenAIResponsesProvider(ExtractionProvider):
             input=_revisit_input(premises, new_evidence),
             text_format=RevisitAssessmentBatch,
         )
+        self._capture_usage(response)
         if response.output_parsed is None:
             raise ValueError("The model did not return valid revisit findings")
         return _validated_findings(response.output_parsed, premises, new_evidence, criticality)
+
+    def _capture_usage(self, response: object) -> None:
+        usage = getattr(response, "usage", None)
+        self.last_usage = {
+            "input_tokens": getattr(usage, "input_tokens", None),
+            "output_tokens": getattr(usage, "output_tokens", None),
+            "estimated_cost_usd": None,
+        }
 
 
 class OllamaProvider(ExtractionProvider):
@@ -241,6 +255,7 @@ class OllamaProvider(ExtractionProvider):
             base_url=settings.ollama_base_url.rstrip("/"),
             timeout=settings.ollama_timeout_seconds,
         )
+        self.last_usage = {}
 
     def extract(self, source_text: str, filename: str) -> ExtractionResult:
         content = self._structured_chat(
@@ -295,6 +310,11 @@ class OllamaProvider(ExtractionProvider):
             raise ValueError(f"Ollama request failed: {detail}") from exc
 
         payload = response.json()
+        self.last_usage = {
+            "input_tokens": payload.get("prompt_eval_count"),
+            "output_tokens": payload.get("eval_count"),
+            "estimated_cost_usd": 0.0,
+        }
         content = payload.get("message", {}).get("content")
         if not content:
             raise ValueError("Ollama returned no structured content")

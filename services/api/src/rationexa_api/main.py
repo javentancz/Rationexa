@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from time import perf_counter
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Response, UploadFile, status
@@ -19,7 +20,7 @@ from .db import (
     init_db,
 )
 from .jobs import job_manager
-from .prompts import EXTRACTION_PROMPT_VERSION
+from .prompts import EXTRACTION_PROMPT_VERSION, REVISIT_PROMPT_VERSION
 from .providers import available_models, default_model_id, get_provider
 from .schemas import (
     ArtifactCreate,
@@ -339,7 +340,9 @@ def perform_revisit(
     try:
         if job_id:
             job_manager.update(job_id, phase="Comparing evidence with premises", progress=35)
+        started_at = perf_counter()
         findings = provider.revisit(premises, evidence.extracted_text, decision.criticality)
+        latency_ms = max(0, round((perf_counter() - started_at) * 1000))
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     if job_id and job_manager.is_cancelled(job_id):
@@ -350,6 +353,13 @@ def perform_revisit(
         decision_id=decision.id,
         evidence_artifact_id=evidence.id,
         findings=[finding.model_dump(mode="json") for finding in findings],
+        provider=provider.name,
+        model=provider.model,
+        prompt_version=REVISIT_PROMPT_VERSION,
+        latency_ms=latency_ms,
+        input_tokens=provider.last_usage.get("input_tokens"),
+        output_tokens=provider.last_usage.get("output_tokens"),
+        estimated_cost_usd=provider.last_usage.get("estimated_cost_usd"),
     )
     db.add(row)
     db.commit()
@@ -469,5 +479,12 @@ def revisit_read(row: RevisitRow) -> RevisitRead:
         decision_id=row.decision_id,
         status=row.status,
         findings=row.findings,
+        provider=row.provider,
+        model=row.model,
+        prompt_version=row.prompt_version,
+        latency_ms=row.latency_ms,
+        input_tokens=row.input_tokens,
+        output_tokens=row.output_tokens,
+        estimated_cost_usd=row.estimated_cost_usd,
         created_at=row.created_at,
     )
