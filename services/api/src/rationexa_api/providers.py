@@ -12,6 +12,7 @@ from .schemas import (
     CandidatePremise,
     Criticality,
     ExtractionResult,
+    ModelOption,
     PremiseKind,
     RevisitAssessmentBatch,
     RevisitFinding,
@@ -448,9 +449,58 @@ def _ground_excerpt(candidate: str, source_text: str) -> str | None:
     return match.group(0) if match else None
 
 
-def get_provider(settings: Settings) -> ExtractionProvider:
-    if settings.ai_provider.lower() == "ollama":
-        return OllamaProvider(settings)
-    if settings.ai_provider.lower() == "openai":
-        return OpenAIResponsesProvider(settings)
+def available_models(settings: Settings) -> list[ModelOption]:
+    provider = settings.ai_provider.lower()
+    if provider == "ollama":
+        descriptions = {
+            "qwen3.5:9b": ("Qwen 3.5 9B", "Careful premise extraction; lower false-positive rate in the current eval"),
+            "gemma4:e4b": ("Gemma 4 E4B", "Faster evidence revisits; stronger relationship recall in the current eval"),
+        }
+        return [
+            ModelOption(
+                id=f"ollama/{model}",
+                provider="ollama",
+                model=model,
+                label=descriptions.get(model, (model, "Locally configured Ollama model"))[0],
+                location="local",
+                best_for=descriptions.get(model, (model, "Locally configured Ollama model"))[1],
+            )
+            for model in settings.configured_ollama_models
+        ]
+    if provider == "openai":
+        return [
+            ModelOption(
+                id=f"openai/{settings.openai_model}",
+                provider="openai",
+                model=settings.openai_model,
+                label=settings.openai_model,
+                location="hosted",
+                best_for="Hosted structured extraction and evidence review",
+            )
+        ]
+    return [
+        ModelOption(
+            id="deterministic/rules-v1",
+            provider="deterministic",
+            model="rules-v1",
+            label="Deterministic rules",
+            location="local",
+            best_for="Fast tests without a language model",
+        )
+    ]
+
+
+def default_model_id(settings: Settings) -> str:
+    return available_models(settings)[0].id
+
+
+def get_provider(settings: Settings, model_id: str | None = None) -> ExtractionProvider:
+    options = available_models(settings)
+    selected = next((option for option in options if option.id == (model_id or default_model_id(settings))), None)
+    if selected is None:
+        raise ValueError("The selected model is not in the server's configured model allowlist")
+    if selected.provider == "ollama":
+        return OllamaProvider(settings.model_copy(update={"ollama_model": selected.model}))
+    if selected.provider == "openai":
+        return OpenAIResponsesProvider(settings.model_copy(update={"openai_model": selected.model}))
     return DeterministicProvider()

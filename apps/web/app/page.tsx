@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Criticality = "routine" | "important" | "critical";
 type ReviewAction = "confirm" | "unknown" | "reject";
@@ -52,6 +52,8 @@ type Finding = {
 
 type PremiseReview = { action: ReviewAction; statement: string; kind: string };
 type DecisionDraft = { title: string; question: string; context: string; chosenOption: string; rationale: string };
+type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string };
+type ModelCatalog = { default_model_id: string; models: ModelOption[] };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
@@ -78,6 +80,24 @@ export default function Home() {
   const [selectedPremise, setSelectedPremise] = useState<string | null>(null);
   const [busyPhase, setBusyPhase] = useState<"extract" | "finalize" | "revisit" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [models, setModels] = useState<ModelOption[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState("");
+  const [lastRevisitModel, setLastRevisitModel] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${api}/v1/models`)
+      .then(responseJson)
+      .then((catalog: ModelCatalog) => {
+        if (cancelled) return;
+        setModels(catalog.models);
+        setSelectedModelId((current) => current || catalog.default_model_id);
+      })
+      .catch((caught) => {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : "Could not load model options");
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const premises = extraction?.result.premises ?? [];
   const counts = useMemo(() => {
@@ -94,6 +114,7 @@ export default function Home() {
     return review?.action === "confirm" && attentionKinds.has(review.kind) && !premise.anchor;
   }) : [], [criticality, premises, reviews]);
   const activePremise = premises.find((premise) => premise.candidate_id === selectedPremise) ?? premises[0];
+  const selectedModel = models.find((model) => model.id === selectedModelId);
   const stage = decision ? 4 : extraction ? 2 : 1;
 
   function initializeExtraction(next: Extraction) {
@@ -120,7 +141,7 @@ export default function Home() {
       } else {
         artifact = await responseJson(await fetch(`${api}/v1/artifacts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "decision-note.txt", media_type: "text/plain", content: source }) }));
       }
-      const next = await responseJson(await fetch(`${api}/v1/decisions/extractions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artifact_id: artifact.id }) }));
+      const next = await responseJson(await fetch(`${api}/v1/decisions/extractions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artifact_id: artifact.id, model_id: selectedModelId || undefined }) }));
       initializeExtraction(next);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Extraction failed");
@@ -168,9 +189,10 @@ export default function Home() {
     setBusyPhase("revisit");
     setError(null);
     try {
-      const result = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/revisit-checks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "new-evidence.txt", content: evidence }) }));
+      const result = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/revisit-checks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "new-evidence.txt", content: evidence, model_id: selectedModelId || undefined }) }));
       setFindings(result.findings);
       setRevisitCompleted(true);
+      setLastRevisitModel(selectedModel?.label ?? selectedModelId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Revisit failed");
     } finally {
@@ -179,7 +201,7 @@ export default function Home() {
   }
 
   function resetWorkspace() {
-    setExtraction(null); setDecision(null); setFindings([]); setRevisitCompleted(false); setReviews({}); setDraft(null); setSelectedPremise(null); setError(null);
+    setExtraction(null); setDecision(null); setFindings([]); setRevisitCompleted(false); setLastRevisitModel(null); setReviews({}); setDraft(null); setSelectedPremise(null); setError(null);
   }
 
   return (
@@ -191,13 +213,19 @@ export default function Home() {
           <a className="nav-item active" href="#workspace"><span>◇</span>Decision workspace</a>
           <span className="nav-item disabled"><span>▤</span>Decision library <small>Next</small></span>
         </nav>
-        <div className="sidebar-note"><strong>Local-first prototype</strong><span>Qwen runs privately through Ollama on this Mac.</span></div>
+        <div className="sidebar-note"><strong>Local-first prototype</strong><span>Choose an installed Ollama model for each AI-assisted step.</span></div>
       </aside>
 
       <main id="workspace" className="workspace">
         <header className="topbar">
           <div><span className="overline">Decision intelligence</span><h1>{draft?.title || "New decision review"}</h1></div>
-          <div className="runtime"><span className="runtime-dot" />{extraction ? `${extraction.provider} · ${extraction.model}` : "Local model ready"}</div>
+          <div className="model-control">
+            <label htmlFor="model-select">Model for next AI step</label>
+            <select id="model-select" aria-label="AI model" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)} disabled={busyPhase !== null || models.length === 0}>
+              {models.length ? models.map((model) => <option key={model.id} value={model.id}>{model.label} · {model.location}</option>) : <option>Loading models…</option>}
+            </select>
+            <small>{selectedModel?.best_for ?? "Loading configured model options…"}</small>
+          </div>
         </header>
 
         <ol className="stepper" aria-label="Decision workflow">
@@ -218,7 +246,7 @@ export default function Home() {
             </div>
             <form onSubmit={extract}>
               {sourceMode === "paste" ? <label className="field"><span>Decision source</span><textarea aria-label="Decision source" value={source} onChange={(event) => setSource(event.target.value)} rows={10} placeholder="Paste the source material here…" /></label> : <label className="upload-zone"><input aria-label="Decision file" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /><span className="upload-icon">⇧</span><strong>{file ? file.name : "Choose a PDF, Markdown, or text file"}</strong><small>Maximum file size: 10 MB</small></label>}
-              <div className="form-footer"><span>Qwen will suggest structure. You remain the reviewer.</span><button className="primary" disabled={busyPhase === "extract" || (sourceMode === "paste" ? !source.trim() : !file)}>{busyPhase === "extract" ? <><span className="spinner" />Extracting with Qwen…</> : "Extract decision →"}</button></div>
+              <div className="form-footer"><span>{selectedModel?.label ?? "The selected model"} will suggest structure. You remain the reviewer.</span><button className="primary" disabled={busyPhase === "extract" || !selectedModelId || (sourceMode === "paste" ? !source.trim() : !file)}>{busyPhase === "extract" ? <><span className="spinner" />Extracting with {selectedModel?.label ?? "model"}…</> : "Extract decision →"}</button></div>
             </form>
           </section>
         ) : null}
@@ -229,7 +257,7 @@ export default function Home() {
               <section className="review-layout">
               <div className="review-main">
                 <section className="card decision-summary">
-                  <div className="section-heading compact"><div><span className="overline">Decision record</span><h2>Review the extracted decision</h2></div><button className="text-button" onClick={resetWorkspace}>Start over</button></div>
+                  <div className="section-heading compact"><div><span className="overline">Decision record · {extraction.model}</span><h2>Review the extracted decision</h2></div><button className="text-button" onClick={resetWorkspace}>Start over</button></div>
                   <div className="field-grid">
                     <label className="field full"><span>Decision title</span><input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
                     <label className="field full"><span>Decision question</span><input value={draft.question} onChange={(event) => updateDraft("question", event.target.value)} /></label>
@@ -265,17 +293,17 @@ export default function Home() {
               <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Ready to finalize?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before finalizing.` : `${counts.confirm} premises will be preserved · ${counts.unknown} unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "finalize" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0 || unanchoredCritical.length > 0} onClick={reviewAndFinalize}>{busyPhase === "finalize" ? <><span className="spinner" />Saving decision…</> : "Save reviewed decision →"}</button></section>
             </> : <section className="card finalized-summary">
               <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><button className="text-button" onClick={resetWorkspace}>New review</button></div>
-              <div className="record-meta"><div><span>Chosen option</span><strong>{draft.chosenOption || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div></div>
+              <div className="record-meta"><div><span>Chosen option</span><strong>{draft.chosenOption || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Extracted by</span><strong>{extraction.model}</strong></div></div>
               <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
             </section>}
           </>
         ) : null}
 
         {decision ? <section className="card revisit-card">
-          <div className="section-heading"><div><span className="overline">Step 4 · Revisit</span><h2>What changed?</h2><p>Compare new evidence with the premises you preserved.</p></div><span className="decision-badge">{decision.criticality}</span></div>
+          <div className="section-heading"><div><span className="overline">Step 4 · Revisit</span><h2>What changed?</h2><p>Compare new evidence with the premises you preserved using {selectedModel?.label ?? "the selected model"}.</p></div><span className="decision-badge">{decision.criticality}</span></div>
           <label className="field"><span>New evidence</span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); }} rows={5} /></label>
-          <div className="form-footer"><span>This check flags relationships; it does not overturn the decision.</span><button className="primary" onClick={revisit} disabled={busyPhase === "revisit" || !evidence.trim()}>{busyPhase === "revisit" ? <><span className="spinner" />Checking premises…</> : "Check against premises →"}</button></div>
-          {findings.length ? <div className="findings"><div className="findings-heading"><h3>Review findings</h3><span>{findings.length} material relationship{findings.length === 1 ? "" : "s"} found</span></div>{findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.relationship}</span><small>{finding.confidence_band} confidence</small></div><h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{finding.source_fallback_performed ? <div className="finding-provenance">Original source anchor verified</div> : null}{finding.missing_context_question ? <div className="missing-context">Question: {finding.missing_context_question}</div> : null}</article>)}</div> : revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>The evidence did not meaningfully affect the consequential premises preserved in this decision.</span></div> : null}
+          <div className="form-footer"><span>This check flags relationships; it does not overturn the decision.</span><button className="primary" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || !evidence.trim()}>{busyPhase === "revisit" ? <><span className="spinner" />Checking with {selectedModel?.label ?? "model"}…</> : "Check against premises →"}</button></div>
+          {findings.length ? <div className="findings"><div className="findings-heading"><h3>Review findings</h3><span>{findings.length} material relationship{findings.length === 1 ? "" : "s"} found · {lastRevisitModel}</span></div>{findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.relationship}</span><small>{finding.confidence_band} confidence</small></div><h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{finding.source_fallback_performed ? <div className="finding-provenance">Original source anchor verified</div> : null}{finding.missing_context_question ? <div className="missing-context">Question: {finding.missing_context_question}</div> : null}</article>)}</div> : revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>{lastRevisitModel} found no material effect on the consequential premises preserved in this decision.</span></div> : null}
         </section> : null}
       </main>
     </div>

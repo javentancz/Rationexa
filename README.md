@@ -57,9 +57,15 @@ The command writes a detailed JSON result and a readable Markdown summary to
 `packages/evals/reports/`. Extraction and revisit are scored separately; each
 model receives the same curated premises for revisit so the comparison is fair.
 
-To try Gemma 4 in the web app instead of Qwen, set
-`OLLAMA_MODEL=gemma4:e4b` in `.env` and restart the API. The model only reasons
-over text supplied to Rationexa; it does not browse the live web by itself.
+The web app reads its model dropdown from `GET /v1/models`. Select Qwen or
+Gemma before extraction, and you may select a different model before the
+revisit check. See [the model provider standard](docs/MODEL_PROVIDER_STANDARD.md)
+for the adapter contract, provenance rules, and evaluation gates.
+
+To expose another installed Ollama model, add it to the comma-separated
+`OLLAMA_MODELS` allowlist in `.env` and restart the API. Local models only
+reason over text supplied to Rationexa; they do not browse the live web by
+themselves.
 
 ## Quality checks
 

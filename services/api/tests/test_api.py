@@ -15,6 +15,10 @@ def test_stage_one_vertical_slice() -> None:
         health = client.get("/healthz")
         assert health.status_code == 200
 
+        models = client.get("/v1/models")
+        assert models.status_code == 200
+        assert models.json()["default_model_id"] == "deterministic/rules-v1"
+
         artifact = client.post(
             "/v1/artifacts",
             json={"filename": "decision.txt", "media_type": "text/plain", "content": source},
@@ -73,6 +77,22 @@ def test_stage_one_vertical_slice() -> None:
         assert revisit.json()["findings"]
         assert any(finding["relationship"] == "contradicts" for finding in revisit.json()["findings"])
         assert any(finding["source_fallback_performed"] for finding in revisit.json()["findings"])
+
+
+def test_rejects_model_outside_server_allowlist() -> None:
+    with TestClient(app) as client:
+        artifact = client.post(
+            "/v1/artifacts",
+            json={"filename": "decision.txt", "content": "We decided to use PostgreSQL."},
+        ).json()
+
+        response = client.post(
+            "/v1/decisions/extractions",
+            json={"artifact_id": artifact["id"], "model_id": "ollama/not-installed"},
+        )
+
+        assert response.status_code == 422
+        assert "allowlist" in response.json()["detail"]
 
 
 def test_critical_decision_rejects_unanchored_consequential_premise() -> None:

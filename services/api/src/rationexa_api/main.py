@@ -18,7 +18,7 @@ from .db import (
     init_db,
 )
 from .prompts import EXTRACTION_PROMPT_VERSION
-from .providers import get_provider
+from .providers import available_models, default_model_id, get_provider
 from .schemas import (
     ArtifactCreate,
     ArtifactRead,
@@ -30,6 +30,7 @@ from .schemas import (
     ExtractionResult,
     ExtractionReviewRequest,
     HealthRead,
+    ModelCatalogRead,
     PremiseKind,
     RevisitPremiseInput,
     RevisitRead,
@@ -71,6 +72,14 @@ Db = Annotated[Session, Depends(get_db)]
 @app.get("/healthz", response_model=HealthRead)
 def health() -> HealthRead:
     return HealthRead(status="ok", service=settings.app_name)
+
+
+@app.get("/v1/models", response_model=ModelCatalogRead)
+def list_models() -> ModelCatalogRead:
+    return ModelCatalogRead(
+        default_model_id=default_model_id(settings),
+        models=available_models(settings),
+    )
 
 
 def save_artifact(db: Session, filename: str, media_type: str, content: bytes, source_type: str) -> ArtifactRow:
@@ -121,7 +130,10 @@ def create_extraction(payload: ExtractionRequest, db: Db) -> ExtractionRead:
     artifact = db.get(ArtifactRow, payload.artifact_id)
     if artifact is None:
         raise HTTPException(status_code=404, detail="Artifact not found")
-    provider = get_provider(settings)
+    try:
+        provider = get_provider(settings, payload.model_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     try:
         result = provider.extract(artifact.extracted_text, artifact.filename)
     except ValueError as exc:
@@ -294,7 +306,10 @@ def create_revisit(decision_id: str, payload: RevisitRequest, db: Db) -> Revisit
         for premise in decision.premises
         if PremiseKind(premise.kind) in CONSEQUENTIAL_KINDS
     ]
-    provider = get_provider(settings)
+    try:
+        provider = get_provider(settings, payload.model_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     try:
         findings = provider.revisit(premises, evidence.extracted_text, decision.criticality)
     except ValueError as exc:

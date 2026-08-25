@@ -49,6 +49,20 @@ class ArtifactRead(BaseModel):
     created_at: datetime
 
 
+class ModelOption(BaseModel):
+    id: str
+    provider: str
+    model: str
+    label: str
+    location: Literal["local", "hosted"]
+    best_for: str
+
+
+class ModelCatalogRead(BaseModel):
+    default_model_id: str
+    models: list[ModelOption]
+
+
 class SourceAnchor(BaseModel):
     exact_excerpt: str
     start_offset: int = Field(ge=0)
@@ -81,6 +95,7 @@ class ExtractionResult(BaseModel):
 
 class ExtractionRequest(BaseModel):
     artifact_id: str
+    model_id: str | None = Field(default=None, min_length=1, max_length=160)
 
 
 class ExtractionRead(BaseModel):
@@ -143,6 +158,7 @@ class RevisitRequest(BaseModel):
     filename: str = "new-evidence.txt"
     content: str = Field(min_length=1, max_length=2_000_000)
     media_type: str = "text/plain"
+    model_id: str | None = Field(default=None, min_length=1, max_length=160)
 
 
 class RevisitFinding(BaseModel):

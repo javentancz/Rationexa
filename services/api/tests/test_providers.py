@@ -4,7 +4,13 @@ import httpx
 import pytest
 
 from rationexa_api.config import Settings
-from rationexa_api.providers import OllamaProvider, _ground_excerpt, _normalize_extraction
+from rationexa_api.providers import (
+    OllamaProvider,
+    _ground_excerpt,
+    _normalize_extraction,
+    available_models,
+    get_provider,
+)
 from rationexa_api.schemas import ExtractionResult, Relationship, RevisitPremiseInput
 
 
@@ -62,6 +68,21 @@ def test_ollama_provider_sends_schema_and_validates_response() -> None:
     assert captured["think"] is False
     assert captured["options"]["temperature"] == 0
     assert captured["format"]["type"] == "object"
+
+
+def test_model_catalog_and_selector_use_allowlisted_ollama_model() -> None:
+    settings = Settings(
+        ai_provider="ollama",
+        ollama_model="qwen3.5:9b",
+        ollama_models="qwen3.5:9b,gemma4:e4b",
+    )
+
+    options = available_models(settings)
+    provider = get_provider(settings, "ollama/gemma4:e4b")
+
+    assert [option.id for option in options] == ["ollama/qwen3.5:9b", "ollama/gemma4:e4b"]
+    assert provider.model == "gemma4:e4b"
+    provider.client.close()
 
 
 def test_ollama_provider_wraps_timeout() -> None:
