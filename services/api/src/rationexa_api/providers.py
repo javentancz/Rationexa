@@ -353,6 +353,8 @@ def _normalize_extraction(result: ExtractionResult, source_text: str | None = No
         }
         premise.importance = "high" if high_attention else "normal"
         premise.attention_reason = f"{kind.value.replace('_', ' ').title()} requires review" if high_attention else None
+        if source_text:
+            premise.anchor = _repair_source_anchor(premise, source_text)
         normalized.append(premise)
 
     if source_text:
@@ -395,6 +397,27 @@ def _normalize_extraction(result: ExtractionResult, source_text: str | None = No
             represented += f"\n{sentence.lower()}"
     result.premises = normalized
     return result
+
+
+def _repair_source_anchor(premise: CandidatePremise, source_text: str) -> SourceAnchor | None:
+    """Ground a model anchor deterministically or recover one from a verbatim statement."""
+    candidates = []
+    if premise.anchor is not None:
+        candidates.append(premise.anchor.exact_excerpt)
+    candidates.append(premise.statement)
+
+    for candidate in candidates:
+        excerpt = _ground_excerpt(candidate, source_text)
+        if excerpt is None:
+            continue
+        start = source_text.find(excerpt)
+        if start >= 0:
+            return SourceAnchor(
+                exact_excerpt=excerpt,
+                start_offset=start,
+                end_offset=start + len(excerpt),
+            )
+    return None
 
 
 def _validated_findings(

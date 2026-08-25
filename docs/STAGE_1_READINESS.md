@@ -29,22 +29,27 @@ of done.
 
 - Development case count: 12 fixtures available.
 - Independent case review: pending.
-- Latest three-case baseline: Qwen concept recall 66.7%; Gemma 50.0%.
+- Latest 12-case baseline: both Qwen and Gemma reached 83.3% concept recall.
 - Target: at least 90% recall on human-labeled critical premises, with
   qualifier-preservation and correction-effort review.
 
 ### Gate 2: source anchors — not passed
 
 - Exact anchor validation exists.
-- Latest three-case baseline: Qwen anchor rate 29.6%; Gemma 53.3%.
+- Latest 12-case baseline before deterministic offset repair: Qwen anchor rate
+  37.4%; Gemma 43.3%.
+- Rescoring saved output with the repair projects Qwen at 72.4% and Gemma at
+  80.3%; a fresh benchmark is required to confirm it.
 - Target: at least 90% correct sampled anchors and no accepted invented quotes.
 - Moderated under-30-second source-verification test: pending.
 
 ### Gate 3: conflict detection — not passed
 
 - Revisit classifier and side-by-side evidence UI exist.
-- Twelve development cases are available, but the full benchmark has not yet
-  been rerun over them.
+- Twelve development cases are available and both local models completed the
+  full baseline. Qwen reached 87.5% revisit recall and 83.3% relationship
+  accuracy with no false positives. Gemma reached 100% on both curated metrics
+  with one false positive.
 - Target: at least 30 regression cases, 90% critical premise-match recall, 80%
   relationship precision, and zero critical misses in the release candidate.
 

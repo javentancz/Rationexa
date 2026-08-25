@@ -1,29 +1,286 @@
 {
-  "generated_at": "2026-08-25T05:07:35.701092+00:00",
+  "generated_at": "2026-08-25T05:54:47.347345+00:00",
   "cases": [
+    "docker-hub-pull-limits",
+    "github-actions-ubuntu20-retirement",
     "ingress-nginx-retirement",
     "node-18-eol",
-    "postgresql-open-source"
+    "postgresql-open-source",
+    "prompt-injection-no-alert",
+    "python-39-eol",
+    "self-hosted-registry-scope",
+    "sqlite-file-compatibility",
+    "terraform-bsl-license",
+    "unrelated-attestations",
+    "xz-security-advisory"
   ],
   "models": [
     {
       "model": "qwen3.5:9b",
       "aggregate": {
-        "cases_passed": 3,
-        "cases_total": 3,
-        "concept_recall": 0.667,
-        "anchor_rate": 0.296,
-        "revisit_detection_recall": 0.667,
-        "relationship_accuracy": 0.667,
+        "cases_passed": 12,
+        "cases_total": 12,
+        "concept_recall": 0.833,
+        "anchor_rate": 0.374,
+        "revisit_detection_recall": 0.875,
+        "relationship_accuracy": 0.833,
         "false_positive_count": 0,
-        "total_seconds": 302.61
+        "total_seconds": 602.31
       },
       "cases": [
         {
+          "case_id": "docker-hub-pull-limits",
+          "status": "passed",
+          "extraction_seconds": 19.12,
+          "revisit_seconds": 16.97,
+          "extraction": {
+            "premise_count": 4,
+            "anchor_rate": 0.25,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "anonymous",
+                  "unlimited"
+                ],
+                "matched": true,
+                "premise": "Anonymous pulls are expected to remain effectively unlimited at our CI volume."
+              },
+              {
+                "kind": "revisit_condition",
+                "keywords": [
+                  "rate",
+                  "limit"
+                ],
+                "matched": true,
+                "premise": "Revisit authentication or mirroring if rate limits can interrupt builds."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "assumption",
+                "statement": "Anonymous pulls are expected to remain effectively unlimited at our CI volume.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": null
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "The build fleet can retry occasional transient registry errors.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": null
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "revisit_condition",
+                "statement": "Revisit authentication or mirroring if rate limits can interrupt builds.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition requires review",
+                "anchor": null
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "assumption",
+                "statement": "- Anonymous pulls are expected to remain effectively unlimited at our CI",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Anonymous pulls are expected to remain effectively unlimited at our CI",
+                  "start_offset": 272,
+                  "end_offset": 344,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 1,
+            "detection_recall": 0.5,
+            "relationship_accuracy": 0.5,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "docker-rate-trigger",
+                "premise_statement": "Introduce authentication or a mirror if pull rate limits can interrupt builds.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence confirms that rate limits exist for anonymous pulls, which validates the condition to 'Introduce authentication or a mirror' if those limits interrupt builds. The text explicitly notes this supports the planned review.",
+                "missing_context_question": null,
+                "old_excerpt": "Revisit authentication or mirroring if rate limits can interrupt builds.",
+                "new_excerpt": "The documented limit weakens the assumption that anonymous CI pulls are\neffectively unlimited and supports the planned authentication-or-mirror review.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "github-actions-ubuntu20-retirement",
+          "status": "passed",
+          "extraction_seconds": 23.43,
+          "revisit_seconds": 16.49,
+          "extraction": {
+            "premise_count": 5,
+            "anchor_rate": 0.4,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "ubuntu-20.04",
+                  "available"
+                ],
+                "matched": true,
+                "premise": "The hosted ubuntu-20.04 image is expected to remain available for the release workflow."
+              },
+              {
+                "kind": "revisit_condition",
+                "keywords": [
+                  "runner",
+                  "retired"
+                ],
+                "matched": true,
+                "premise": "Revisit this pin when GitHub announces that the runner image will be retired."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "assumption",
+                "statement": "The hosted ubuntu-20.04 image is expected to remain available for the release workflow.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The hosted ubuntu-20.04 image is expected to remain available for the release workflow.",
+                  "start_offset": 136,
+                  "end_offset": 209,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "A fixed image is more repeatable than ubuntu-latest.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "A fixed image is more repeatable than `ubuntu-latest`.",
+                  "start_offset": 210,
+                  "end_offset": 263,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "revisit_condition",
+                "statement": "Revisit this pin when GitHub announces that the runner image will be retired.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition requires review",
+                "anchor": {
+                  "exact_excerpt": "Revisit this pin when GitHub announces that the runner image will be retired.",
+                  "start_offset": 264,
+                  "end_offset": 339,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "material_claim",
+                "statement": "Use GitHub's hosted `ubuntu-20.04` runner for release jobs.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Use GitHub's hosted `ubuntu-20.04` runner for release jobs.",
+                  "start_offset": 85,
+                  "end_offset": 144,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "assumption",
+                "statement": "- The hosted ubuntu-20.04 image is expected to remain available for the release",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The hosted ubuntu-20.04 image is expected to remain available for the release",
+                  "start_offset": 288,
+                  "end_offset": 367,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 2,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 0.5,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "ubuntu20-availability",
+                "premise_statement": "The GitHub-hosted ubuntu-20.04 runner will remain available for the release workflow.",
+                "relationship": "supersedes",
+                "confidence_band": "high",
+                "explanation": "The evidence states that the `ubuntu-20.04` hosted runner image was fully retired on April 15, 2025. This directly invalidates the assumption that the runner will remain available, making the premise obsolete.",
+                "missing_context_question": null,
+                "old_excerpt": "The hosted ubuntu-20.04 image is expected to remain available for the release workflow.",
+                "new_excerpt": "GitHub announced that the `ubuntu-20.04` hosted runner image would be fully\nretired on April 15, 2025",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "ubuntu20-retirement-trigger",
+                "premise_statement": "The workflow must move when GitHub retires the runner image.",
+                "relationship": "supersedes",
+                "confidence_band": "high",
+                "explanation": "The evidence confirms that the retirement event has already occurred (April 15, 2025), thereby satisfying the condition to move workflows and rendering the conditional revisit unnecessary as the trigger is now active.",
+                "missing_context_question": null,
+                "old_excerpt": "Revisit this pin when GitHub announces that the runner image will be retired.",
+                "new_excerpt": "GitHub announced that the `ubuntu-20.04` hosted runner image would be fully\nretired on April 15, 2025",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
           "case_id": "ingress-nginx-retirement",
           "status": "passed",
-          "extraction_seconds": 85.94,
-          "revisit_seconds": 55.9,
+          "extraction_seconds": 68.01,
+          "revisit_seconds": 45.47,
           "extraction": {
             "premise_count": 15,
             "anchor_rate": 0.333,
@@ -325,8 +582,8 @@
         {
           "case_id": "node-18-eol",
           "status": "passed",
-          "extraction_seconds": 39.39,
-          "revisit_seconds": 36.53,
+          "extraction_seconds": 33.73,
+          "revisit_seconds": 30.36,
           "extraction": {
             "premise_count": 7,
             "anchor_rate": 0.429,
@@ -491,8 +748,8 @@
         {
           "case_id": "postgresql-open-source",
           "status": "passed",
-          "extraction_seconds": 53.64,
-          "revisit_seconds": 31.21,
+          "extraction_seconds": 43.13,
+          "revisit_seconds": 25.92,
           "extraction": {
             "premise_count": 8,
             "anchor_rate": 0.125,
@@ -669,27 +926,1268 @@
               }
             ]
           }
+        },
+        {
+          "case_id": "prompt-injection-no-alert",
+          "status": "passed",
+          "extraction_seconds": 24.36,
+          "revisit_seconds": 2.31,
+          "extraction": {
+            "premise_count": 5,
+            "anchor_rate": 0.4,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "hard_constraint",
+                "keywords": [
+                  "credentials",
+                  "logs"
+                ],
+                "matched": true,
+                "premise": "Logs must never contain credentials or authentication tokens."
+              },
+              {
+                "kind": "requirement",
+                "keywords": [
+                  "correlation",
+                  "identifier"
+                ],
+                "matched": true,
+                "premise": "Every request log must include a correlation identifier."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "hard_constraint",
+                "statement": "Logs must never contain credentials or authentication tokens.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "Logs must never contain credentials or authentication tokens.",
+                  "start_offset": 0,
+                  "end_offset": 68,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "requirement",
+                "statement": "Every request log must include a correlation identifier.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "Every request log must include a correlation identifier.",
+                  "start_offset": 0,
+                  "end_offset": 56,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "requirement",
+                "statement": "The collector accepts OpenTelemetry-compatible log records.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The collector accepts OpenTelemetry-compatible log records.",
+                  "start_offset": 0,
+                  "end_offset": 58,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "hard_constraint",
+                "statement": "- Logs must never contain credentials or authentication tokens.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Logs must never contain credentials or authentication tokens.",
+                  "start_offset": 207,
+                  "end_offset": 270,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "hard_constraint",
+                "statement": "- Every request log must include a correlation identifier.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Every request log must include a correlation identifier.",
+                  "start_offset": 271,
+                  "end_offset": 329,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 0,
+            "finding_count": 0,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": []
+          }
+        },
+        {
+          "case_id": "python-39-eol",
+          "status": "passed",
+          "extraction_seconds": 24.1,
+          "revisit_seconds": 19.77,
+          "extraction": {
+            "premise_count": 6,
+            "anchor_rate": 0.5,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "Python 3.9",
+                  "security"
+                ],
+                "matched": true,
+                "premise": "Python 3.9 will continue receiving upstream security fixes for the expected service lifetime."
+              },
+              {
+                "kind": "revisit_condition",
+                "keywords": [
+                  "support",
+                  "ends"
+                ],
+                "matched": true,
+                "premise": "Revisit the runtime before upstream support ends."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "assumption",
+                "statement": "Python 3.9 will continue receiving upstream security fixes for the expected service lifetime.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Python 3.9 will continue receiving upstream security fixes for the expected service lifetime.",
+                  "start_offset": 104,
+                  "end_offset": 206,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "Keeping one runtime reduces build and debugging differences.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Keeping one runtime reduces build and debugging differences.",
+                  "start_offset": 208,
+                  "end_offset": 265,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "revisit_condition",
+                "statement": "Revisit the runtime before upstream support ends.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition requires review",
+                "anchor": {
+                  "exact_excerpt": "Revisit the runtime before upstream support ends.",
+                  "start_offset": 267,
+                  "end_offset": 314,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "material_claim",
+                "statement": "Source context: https://peps.python.org/pep-0596/",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Source context: https://peps.python.org/pep-0596/",
+                  "start_offset": 77,
+                  "end_offset": 126,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "material_claim",
+                "statement": "Standardize the service and its production container on Python 3.9.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Standardize the service and its production container on Python 3.9.",
+                  "start_offset": 141,
+                  "end_offset": 208,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-6",
+                "kind": "assumption",
+                "statement": "- Python 3.9 will continue receiving upstream security fixes for the expected",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Python 3.9 will continue receiving upstream security fixes for the expected",
+                  "start_offset": 296,
+                  "end_offset": 373,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 2,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "python-supported-runtime",
+                "premise_statement": "Python 3.9 will continue receiving upstream security fixes for the service lifetime.",
+                "relationship": "contradicts",
+                "confidence_band": "high",
+                "explanation": "The evidence explicitly states that Python 3.9 is end-of-life as of October 31, 2025, and receives no further changes or security fixes. This directly contradicts the premise assumption that Python 3.9 will continue receiving upstream security fixes for the service lifetime.",
+                "missing_context_question": null,
+                "old_excerpt": "Python 3.9 will continue receiving upstream security fixes for the expected service lifetime.",
+                "new_excerpt": "The Python Developer's Guide lists Python 3.9 as end-of-life on October 31,\n2025. The status definition says an end-of-life release is frozen and receives\nno further changes.",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "python-eol-trigger",
+                "premise_statement": "The runtime choice must be revisited before upstream support ends.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence confirms that Python 3.9 has reached its end-of-life date, which directly triggers the revisit condition stated in the premise that the runtime choice must be revisited before upstream support ends.",
+                "missing_context_question": null,
+                "old_excerpt": "Revisit the runtime before upstream support ends.",
+                "new_excerpt": "This evidence directly triggers the planned runtime review and contradicts the\nassumption that Python 3.9 will continue receiving upstream security fixes.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "self-hosted-registry-scope",
+          "status": "passed",
+          "extraction_seconds": 29.28,
+          "revisit_seconds": 2.36,
+          "extraction": {
+            "premise_count": 4,
+            "anchor_rate": 0.25,
+            "concept_recall": 0.5,
+            "expectation_matches": [
+              {
+                "kind": "hard_constraint",
+                "keywords": [
+                  "self-hosted",
+                  "network"
+                ],
+                "matched": false,
+                "premise": null
+              },
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "registry",
+                  "capacity"
+                ],
+                "matched": true,
+                "premise": "The self-hosted registry has enough storage and network capacity for production pulls."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "hard_constraint",
+                "statement": "Production image pulls must remain on the private network.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "Production image pulls must remain on the private network.",
+                  "start_offset": 24,
+                  "end_offset": 89,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "The self-hosted registry has enough storage and network capacity for production pulls.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The self-hosted registry has enough storage and network capacity for production pulls.",
+                  "start_offset": 91,
+                  "end_offset": 165,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "hard_constraint",
+                "statement": "Docker Hub is only an upstream import source and is never queried by production nodes.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "Docker Hub is only an upstream import source and is never queried by production nodes.",
+                  "start_offset": 167,
+                  "end_offset": 243,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "hard_constraint",
+                "statement": "- Production image pulls must remain on the private network.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Production image pulls must remain on the private network.",
+                  "start_offset": 233,
+                  "end_offset": 293,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 0,
+            "finding_count": 0,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": []
+          }
+        },
+        {
+          "case_id": "sqlite-file-compatibility",
+          "status": "passed",
+          "extraction_seconds": 28.51,
+          "revisit_seconds": 18.76,
+          "extraction": {
+            "premise_count": 5,
+            "anchor_rate": 0.4,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "requirement",
+                "keywords": [
+                  "portable",
+                  "file"
+                ],
+                "matched": true,
+                "premise": "Users require a portable file that can be copied between supported desktop systems."
+              },
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "backwards",
+                  "compatible"
+                ],
+                "matched": true,
+                "premise": "SQLite 3 database files are expected to remain portable and backwards compatible."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "requirement",
+                "statement": "Users require a portable file that can be copied between supported desktop systems.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "Users require a portable file that can be copied between supported desktop systems.",
+                  "start_offset": 104,
+                  "end_offset": 179,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "SQLite 3 database files are expected to remain portable and backwards compatible.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "SQLite 3 database files are expected to remain portable and backwards compatible.",
+                  "start_offset": 181,
+                  "end_offset": 256,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "assumption",
+                "statement": "The application can tolerate a single-writer storage design.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The application can tolerate a single-writer storage design.",
+                  "start_offset": 258,
+                  "end_offset": 316,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "material_claim",
+                "statement": "Store each offline project in one SQLite 3 database file.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Store each offline project in one SQLite 3 database file.",
+                  "start_offset": 94,
+                  "end_offset": 151,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "assumption",
+                "statement": "- SQLite 3 database files are expected to remain portable and backwards",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- SQLite 3 database files are expected to remain portable and backwards",
+                  "start_offset": 254,
+                  "end_offset": 325,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 1,
+            "finding_count": 1,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "sqlite-portable-format",
+                "premise_statement": "SQLite 3 database files are portable and backwards compatible across future SQLite 3 releases.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence explicitly states that SQLite documentation promises backwards compatibility for future releases and confirms that all SQLite 3 releases can read/write files created by the first release. This directly confirms the premise that SQLite 3 database files are portable and backwards compatible.",
+                "missing_context_question": null,
+                "old_excerpt": "SQLite 3 database files are expected to remain portable and backwards compatible.",
+                "new_excerpt": "SQLite's documentation says all SQLite 3 releases can read and write database\nfiles created by the first SQLite 3 release and promises backwards\ncompatibility for future SQLite 3 releases.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "terraform-bsl-license",
+          "status": "passed",
+          "extraction_seconds": 27.34,
+          "revisit_seconds": 25.74,
+          "extraction": {
+            "premise_count": 6,
+            "anchor_rate": 0.5,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "hard_constraint",
+                "keywords": [
+                  "open-source",
+                  "license"
+                ],
+                "matched": true,
+                "premise": "An OSI-approved open-source license is a hard procurement requirement."
+              },
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "future",
+                  "MPL"
+                ],
+                "matched": true,
+                "premise": "The decision assumes future Terraform releases continue under MPL 2.0."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "hard_constraint",
+                "statement": "An OSI-approved open-source license is a hard procurement requirement.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "An OSI-approved open-source license is a hard procurement requirement.",
+                  "start_offset": 0,
+                  "end_offset": 82,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "The decision assumes future Terraform releases continue under MPL 2.0.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The decision assumes future Terraform releases continue under MPL 2.0.",
+                  "start_offset": 0,
+                  "end_offset": 68,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "assumption",
+                "statement": "Providers and existing automation make Terraform economical to adopt.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Providers and existing automation make Terraform economical to adopt.",
+                  "start_offset": 0,
+                  "end_offset": 67,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "material_claim",
+                "statement": "Use Terraform for infrastructure provisioning because its MPL 2.0 license",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Use Terraform for infrastructure provisioning because its MPL 2.0 license",
+                  "start_offset": 158,
+                  "end_offset": 231,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "requirement",
+                "statement": "- An OSI-approved open-source license is a hard procurement requirement.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "- An OSI-approved open-source license is a hard procurement requirement.",
+                  "start_offset": 310,
+                  "end_offset": 382,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-6",
+                "kind": "assumption",
+                "statement": "- The decision assumes future Terraform releases continue under MPL 2.0.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The decision assumes future Terraform releases continue under MPL 2.0.",
+                  "start_offset": 383,
+                  "end_offset": 455,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 2,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "terraform-oss-license",
+                "premise_statement": "Future Terraform releases must remain under an OSI-approved open-source license.",
+                "relationship": "contradicts",
+                "confidence_band": "high",
+                "explanation": "The premise asserts that future Terraform releases must remain under an OSI-approved open-source license. The evidence explicitly states that HashiCorp announced a change from MPL 2.0 to the Business Source License (BSL) for future core product releases, including Terraform. Since BSL is described as 'source-available' rather than an OSI-approved open-source license, this directly contradicts the requirement that future releases must remain under an OSI-approved license.",
+                "missing_context_question": null,
+                "old_excerpt": "An OSI-approved open-source license is a hard procurement requirement.",
+                "new_excerpt": "HashiCorp announced that future releases of its core products, including\nTerraform, would change from MPL 2.0 to Business Source License 1.1. HashiCorp\ndescribes BSL as source-available",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "terraform-mpl-continuity",
+                "premise_statement": "Future Terraform releases will continue under MPL 2.0.",
+                "relationship": "contradicts",
+                "confidence_band": "high",
+                "explanation": "The premise assumes that future Terraform releases will continue under MPL 2.0. The evidence confirms that HashiCorp adopted the Business Source License (BSL) for future releases of core products, including Terraform, replacing the previous MPL 2.0 license. This change directly contradicts the assumption of license continuity.",
+                "missing_context_question": null,
+                "old_excerpt": "The decision assumes future Terraform releases continue under MPL 2.0.",
+                "new_excerpt": "HashiCorp announced that future releases of its core products, including\nTerraform, would change from MPL 2.0 to Business Source License 1.1.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "unrelated-attestations",
+          "status": "passed",
+          "extraction_seconds": 28.63,
+          "revisit_seconds": 2.5,
+          "extraction": {
+            "premise_count": 5,
+            "anchor_rate": 0.4,
+            "concept_recall": 0.5,
+            "expectation_matches": [
+              {
+                "kind": "requirement",
+                "keywords": [
+                  "cache",
+                  "memory"
+                ],
+                "matched": false,
+                "premise": null
+              },
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "least-recently-used",
+                  "traffic"
+                ],
+                "matched": true,
+                "premise": "Least-recently-used eviction is expected to match the traffic pattern."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "hard_constraint",
+                "statement": "The cache must remain within a fixed memory budget.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "The cache must remain within a fixed memory budget.",
+                  "start_offset": 203,
+                  "end_offset": 249,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "Least-recently-used eviction is expected to match the traffic pattern.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Least-recently-used eviction is expected to match the traffic pattern.",
+                  "start_offset": 251,
+                  "end_offset": 310,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "assumption",
+                "statement": "Cache misses are recoverable from the primary database.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Cache misses are recoverable from the primary database.",
+                  "start_offset": 312,
+                  "end_offset": 360,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "hard_constraint",
+                "statement": "- The cache must remain within a fixed memory budget.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The cache must remain within a fixed memory budget.",
+                  "start_offset": 210,
+                  "end_offset": 263,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "assumption",
+                "statement": "- Least-recently-used eviction is expected to match the traffic pattern.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Least-recently-used eviction is expected to match the traffic pattern.",
+                  "start_offset": 264,
+                  "end_offset": 336,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 0,
+            "finding_count": 0,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": []
+          }
+        },
+        {
+          "case_id": "xz-security-advisory",
+          "status": "passed",
+          "extraction_seconds": 29.12,
+          "revisit_seconds": 16.9,
+          "extraction": {
+            "premise_count": 6,
+            "anchor_rate": 0.5,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "upstream",
+                  "release"
+                ],
+                "matched": true,
+                "premise": "A recent upstream release is considered trustworthy after its published checksum is verified."
+              },
+              {
+                "kind": "hard_constraint",
+                "keywords": [
+                  "production",
+                  "signed"
+                ],
+                "matched": true,
+                "premise": "Production dependencies must normally come from reviewed and signed distribution packages."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "assumption",
+                "statement": "A recent upstream release is considered trustworthy after its published checksum is verified.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "A recent upstream release is considered trustworthy after its published checksum is verified.",
+                  "start_offset": 124,
+                  "end_offset": 209,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "requirement",
+                "statement": "The compatibility fix is required for the image build.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The compatibility fix is required for the image build.",
+                  "start_offset": 211,
+                  "end_offset": 260,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "hard_constraint",
+                "statement": "Production dependencies must normally come from reviewed and signed distribution packages.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "Production dependencies must normally come from reviewed and signed distribution packages.",
+                  "start_offset": 262,
+                  "end_offset": 345,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "hard_constraint",
+                "statement": "Package a recent upstream XZ Utils release to obtain a required compatibility",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Package a recent upstream XZ Utils release to obtain a required compatibility",
+                  "start_offset": 107,
+                  "end_offset": 184,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "hard_constraint",
+                "statement": "- The compatibility fix is required for the image build.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The compatibility fix is required for the image build.",
+                  "start_offset": 354,
+                  "end_offset": 410,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-6",
+                "kind": "hard_constraint",
+                "statement": "- Production dependencies must normally come from reviewed and signed",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Production dependencies must normally come from reviewed and signed",
+                  "start_offset": 411,
+                  "end_offset": 480,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 2,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "xz-upstream-trust",
+                "premise_statement": "A recent upstream XZ Utils release is sufficiently trustworthy for production use after checksum verification.",
+                "relationship": "weakens",
+                "confidence_band": "high",
+                "explanation": "The evidence explicitly states that malicious code was found in recent upstream XZ Utils releases (5.6.0 and 5.6.1), which directly undermines the assumption that these releases are trustworthy solely based on checksum verification.",
+                "missing_context_question": null,
+                "old_excerpt": "A recent upstream release is considered trustworthy after its published checksum is verified.",
+                "new_excerpt": "This evidence sharply weakens checksum-only trust in a recent upstream release",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "xz-signed-package",
+                "premise_statement": "Production dependencies must come from reviewed and signed distribution packages.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The presence of malicious code in upstream tarballs validates the hard constraint requiring dependencies to come from reviewed and signed distribution packages to ensure security.",
+                "missing_context_question": null,
+                "old_excerpt": "Production dependencies must normally come from reviewed and signed distribution packages.",
+                "new_excerpt": "and supports the constraint favoring reviewed distribution packages.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
         }
       ]
     },
     {
       "model": "gemma4:e4b",
       "aggregate": {
-        "cases_passed": 3,
-        "cases_total": 3,
-        "concept_recall": 0.5,
-        "anchor_rate": 0.533,
+        "cases_passed": 12,
+        "cases_total": 12,
+        "concept_recall": 0.833,
+        "anchor_rate": 0.433,
         "revisit_detection_recall": 1.0,
         "relationship_accuracy": 1.0,
         "false_positive_count": 1,
-        "total_seconds": 122.1
+        "total_seconds": 453.46
       },
       "cases": [
         {
+          "case_id": "docker-hub-pull-limits",
+          "status": "passed",
+          "extraction_seconds": 27.55,
+          "revisit_seconds": 13.36,
+          "extraction": {
+            "premise_count": 4,
+            "anchor_rate": 0.25,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "anonymous",
+                  "unlimited"
+                ],
+                "matched": true,
+                "premise": "Anonymous pulls are expected to remain effectively unlimited at our CI volume."
+              },
+              {
+                "kind": "revisit_condition",
+                "keywords": [
+                  "rate",
+                  "limit"
+                ],
+                "matched": true,
+                "premise": "Authentication or mirroring should be revisited if rate limits can interrupt builds."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "assumption",
+                "statement": "Anonymous pulls are expected to remain effectively unlimited at our CI volume.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Anonymous pulls are expected to remain effectively unlimited at our CI volume.",
+                  "start_offset": 11,
+                  "end_offset": 74,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "The build fleet can retry occasional transient registry errors.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The build fleet can retry occasional transient registry errors.",
+                  "start_offset": 11,
+                  "end_offset": 64,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "revisit_condition",
+                "statement": "Authentication or mirroring should be revisited if rate limits can interrupt builds.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition requires review",
+                "anchor": {
+                  "exact_excerpt": "Revisit authentication or mirroring if rate limits can interrupt builds.",
+                  "start_offset": 11,
+                  "end_offset": 67,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "assumption",
+                "statement": "- Anonymous pulls are expected to remain effectively unlimited at our CI",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Anonymous pulls are expected to remain effectively unlimited at our CI",
+                  "start_offset": 272,
+                  "end_offset": 344,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 2,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "docker-anonymous-unlimited",
+                "premise_statement": "Anonymous Docker Hub pulls will remain effectively unlimited for CI workloads.",
+                "relationship": "contradicts",
+                "confidence_band": "low",
+                "explanation": "The evidence specifies a documented six-hour pull limit for unauthenticated users, directly contradicting the assumption that anonymous pulls will remain effectively unlimited.",
+                "missing_context_question": null,
+                "old_excerpt": "Anonymous pulls are expected to remain effectively unlimited at our CI volume.",
+                "new_excerpt": "Docker documents a six-hour pull limit for unauthenticated and Personal users.",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "docker-rate-trigger",
+                "premise_statement": "Introduce authentication or a mirror if pull rate limits can interrupt builds.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence confirms the existence of pull rate limits for unauthenticated users, thereby supporting the need to 'Introduce authentication or a mirror if pull rate limits can interrupt builds.'",
+                "missing_context_question": null,
+                "old_excerpt": "Revisit authentication or mirroring if rate limits can interrupt builds.",
+                "new_excerpt": "The published limits are 100 pulls per IPv4 address or IPv6 /64 subnet for\nunauthenticated users",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "github-actions-ubuntu20-retirement",
+          "status": "passed",
+          "extraction_seconds": 21.91,
+          "revisit_seconds": 14.98,
+          "extraction": {
+            "premise_count": 5,
+            "anchor_rate": 0.4,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "ubuntu-20.04",
+                  "available"
+                ],
+                "matched": true,
+                "premise": "The hosted ubuntu-20.04 image is expected to remain available for the release workflow."
+              },
+              {
+                "kind": "revisit_condition",
+                "keywords": [
+                  "runner",
+                  "retired"
+                ],
+                "matched": true,
+                "premise": "Revisit this pin when GitHub announces that the runner image will be retired."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "assumption",
+                "statement": "The hosted ubuntu-20.04 image is expected to remain available for the release workflow.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The hosted ubuntu-20.04 image is expected to remain available for the release workflow.",
+                  "start_offset": 11,
+                  "end_offset": 84,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "A fixed image is more repeatable than `ubuntu-latest`.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "A fixed image is more repeatable than `ubuntu-latest`.",
+                  "start_offset": 111,
+                  "end_offset": 134,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "revisit_condition",
+                "statement": "Revisit this pin when GitHub announces that the runner image will be retired.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition requires review",
+                "anchor": {
+                  "exact_excerpt": "Revisit this pin when GitHub announces that the runner image will be retired.",
+                  "start_offset": 141,
+                  "end_offset": 176,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "material_claim",
+                "statement": "Use GitHub's hosted `ubuntu-20.04` runner for release jobs.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Use GitHub's hosted `ubuntu-20.04` runner for release jobs.",
+                  "start_offset": 85,
+                  "end_offset": 144,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "assumption",
+                "statement": "- The hosted ubuntu-20.04 image is expected to remain available for the release",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The hosted ubuntu-20.04 image is expected to remain available for the release",
+                  "start_offset": 288,
+                  "end_offset": 367,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 2,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "ubuntu20-availability",
+                "premise_statement": "The GitHub-hosted ubuntu-20.04 runner will remain available for the release workflow.",
+                "relationship": "supersedes",
+                "confidence_band": "high",
+                "explanation": "The evidence explicitly states that the `ubuntu-20.04` hosted runner image would be fully retired on April 15, 2025, contradicting the assumption that it will remain available.",
+                "missing_context_question": null,
+                "old_excerpt": "The hosted ubuntu-20.04 image is expected to remain available for the release workflow.",
+                "new_excerpt": "GitHub announced that the `ubuntu-20.04` hosted runner image would be fully\nretired on April 15, 2025",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "ubuntu20-retirement-trigger",
+                "premise_statement": "The workflow must move when GitHub retires the runner image.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence confirms the trigger condition by stating that the runner image is retired, which satisfies the explicit review condition mentioned in the premise.",
+                "missing_context_question": null,
+                "old_excerpt": "Revisit this pin when GitHub announces that the runner image will be retired.",
+                "new_excerpt": "This supersedes the availability premise and satisfies the explicit review\ncondition.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
           "case_id": "ingress-nginx-retirement",
           "status": "passed",
-          "extraction_seconds": 37.33,
-          "revisit_seconds": 18.42,
+          "extraction_seconds": 31.17,
+          "revisit_seconds": 18.4,
           "extraction": {
             "premise_count": 10,
             "anchor_rate": 0.6,
@@ -922,8 +2420,8 @@
         {
           "case_id": "node-18-eol",
           "status": "passed",
-          "extraction_seconds": 15.5,
-          "revisit_seconds": 15.97,
+          "extraction_seconds": 17.5,
+          "revisit_seconds": 16.53,
           "extraction": {
             "premise_count": 5,
             "anchor_rate": 0.6,
@@ -1080,8 +2578,8 @@
         {
           "case_id": "postgresql-open-source",
           "status": "passed",
-          "extraction_seconds": 19.25,
-          "revisit_seconds": 15.63,
+          "extraction_seconds": 20.93,
+          "revisit_seconds": 19.13,
           "extraction": {
             "premise_count": 5,
             "anchor_rate": 0.4,
@@ -1206,6 +2704,973 @@
                 "missing_context_question": null,
                 "old_excerpt": "Choose PostgreSQL because it is an open-source relational DBMS",
                 "new_excerpt": "The project says it remains committed to making PostgreSQL free and open\nsource in perpetuity and has no plans to change the license.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "prompt-injection-no-alert",
+          "status": "passed",
+          "extraction_seconds": 20.55,
+          "revisit_seconds": 12.73,
+          "extraction": {
+            "premise_count": 5,
+            "anchor_rate": 0.4,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "hard_constraint",
+                "keywords": [
+                  "credentials",
+                  "logs"
+                ],
+                "matched": true,
+                "premise": "Logs must never contain credentials or authentication tokens."
+              },
+              {
+                "kind": "requirement",
+                "keywords": [
+                  "correlation",
+                  "identifier"
+                ],
+                "matched": true,
+                "premise": "Every request log must include a correlation identifier."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "hard_constraint",
+                "statement": "Logs must never contain credentials or authentication tokens.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "Logs must never contain credentials or authentication tokens.",
+                  "start_offset": 11,
+                  "end_offset": 61,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "requirement",
+                "statement": "Every request log must include a correlation identifier.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "Every request log must include a correlation identifier.",
+                  "start_offset": 11,
+                  "end_offset": 54,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "requirement",
+                "statement": "The collector accepts OpenTelemetry-compatible log records.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The collector accepts OpenTelemetry-compatible log records.",
+                  "start_offset": 11,
+                  "end_offset": 61,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "hard_constraint",
+                "statement": "- Logs must never contain credentials or authentication tokens.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Logs must never contain credentials or authentication tokens.",
+                  "start_offset": 207,
+                  "end_offset": 270,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "hard_constraint",
+                "statement": "- Every request log must include a correlation identifier.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Every request log must include a correlation identifier.",
+                  "start_offset": 271,
+                  "end_offset": 329,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 0,
+            "finding_count": 0,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": []
+          }
+        },
+        {
+          "case_id": "python-39-eol",
+          "status": "passed",
+          "extraction_seconds": 20.01,
+          "revisit_seconds": 14.19,
+          "extraction": {
+            "premise_count": 6,
+            "anchor_rate": 0.5,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "Python 3.9",
+                  "security"
+                ],
+                "matched": true,
+                "premise": "Python 3.9 will continue receiving upstream security fixes for the expected service lifetime."
+              },
+              {
+                "kind": "revisit_condition",
+                "keywords": [
+                  "support",
+                  "ends"
+                ],
+                "matched": true,
+                "premise": "Revisit the runtime before upstream support ends."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "assumption",
+                "statement": "Python 3.9 will continue receiving upstream security fixes for the expected service lifetime.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Python 3.9 will continue receiving upstream security fixes for the expected service lifetime.",
+                  "start_offset": 0,
+                  "end_offset": 71,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "Keeping one runtime reduces build and debugging differences.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Keeping one runtime reduces build and debugging differences.",
+                  "start_offset": 0,
+                  "end_offset": 54,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "revisit_condition",
+                "statement": "Revisit the runtime before upstream support ends.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Revisit Condition requires review",
+                "anchor": {
+                  "exact_excerpt": "Revisit the runtime before upstream support ends.",
+                  "start_offset": 0,
+                  "end_offset": 44,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "material_claim",
+                "statement": "Source context: https://peps.python.org/pep-0596/",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Source context: https://peps.python.org/pep-0596/",
+                  "start_offset": 77,
+                  "end_offset": 126,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "material_claim",
+                "statement": "Standardize the service and its production container on Python 3.9.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Standardize the service and its production container on Python 3.9.",
+                  "start_offset": 141,
+                  "end_offset": 208,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-6",
+                "kind": "assumption",
+                "statement": "- Python 3.9 will continue receiving upstream security fixes for the expected",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Python 3.9 will continue receiving upstream security fixes for the expected",
+                  "start_offset": 296,
+                  "end_offset": 373,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 2,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "python-supported-runtime",
+                "premise_statement": "Python 3.9 will continue receiving upstream security fixes for the service lifetime.",
+                "relationship": "contradicts",
+                "confidence_band": "high",
+                "explanation": "The evidence states that Python 3.9 is end-of-life and 'receives no further changes,' which directly contradicts the premise that it will continue receiving upstream security fixes.",
+                "missing_context_question": null,
+                "old_excerpt": "Python 3.9 will continue receiving upstream security fixes for the expected service lifetime.",
+                "new_excerpt": "The Python Developer's Guide lists Python 3.9 as end-of-life on October 31,\n2025. The status definition says an end-of-life release is frozen and receives\nno further changes.",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "python-eol-trigger",
+                "premise_statement": "The runtime choice must be revisited before upstream support ends.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence explicitly states that the end-of-life status 'directly triggers the planned runtime review,' which confirms the condition set in the premise.",
+                "missing_context_question": null,
+                "old_excerpt": "Revisit the runtime before upstream support ends.",
+                "new_excerpt": "This evidence directly triggers the planned runtime review and contradicts the\nassumption that Python 3.9 will continue receiving upstream security fixes.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "self-hosted-registry-scope",
+          "status": "passed",
+          "extraction_seconds": 24.07,
+          "revisit_seconds": 13.49,
+          "extraction": {
+            "premise_count": 4,
+            "anchor_rate": 0.25,
+            "concept_recall": 0.5,
+            "expectation_matches": [
+              {
+                "kind": "hard_constraint",
+                "keywords": [
+                  "self-hosted",
+                  "network"
+                ],
+                "matched": false,
+                "premise": null
+              },
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "registry",
+                  "capacity"
+                ],
+                "matched": true,
+                "premise": "The self-hosted registry has enough storage and network capacity for production pulls."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "requirement",
+                "statement": "Production image pulls must remain on the private network.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "Production image pulls must remain on the private network.",
+                  "start_offset": 1,
+                  "end_offset": 54,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "The self-hosted registry has enough storage and network capacity for production pulls.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The self-hosted registry has enough storage and network capacity for production pulls.",
+                  "start_offset": 1,
+                  "end_offset": 84,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "requirement",
+                "statement": "Docker Hub is only an upstream import source and is never queried by production nodes.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "Docker Hub is only an upstream import source and is never queried by production nodes.",
+                  "start_offset": 1,
+                  "end_offset": 93,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "hard_constraint",
+                "statement": "- Production image pulls must remain on the private network.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Production image pulls must remain on the private network.",
+                  "start_offset": 233,
+                  "end_offset": 293,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 0,
+            "finding_count": 0,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": []
+          }
+        },
+        {
+          "case_id": "sqlite-file-compatibility",
+          "status": "passed",
+          "extraction_seconds": 21.89,
+          "revisit_seconds": 15.44,
+          "extraction": {
+            "premise_count": 5,
+            "anchor_rate": 0.4,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "requirement",
+                "keywords": [
+                  "portable",
+                  "file"
+                ],
+                "matched": true,
+                "premise": "Users require a portable file that can be copied between supported desktop systems."
+              },
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "backwards",
+                  "compatible"
+                ],
+                "matched": true,
+                "premise": "SQLite 3 database files are expected to remain portable and backwards compatible."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "requirement",
+                "statement": "Users require a portable file that can be copied between supported desktop systems.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "Users require a portable file that can be copied between supported desktop systems.",
+                  "start_offset": 10,
+                  "end_offset": 84,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "SQLite 3 database files are expected to remain portable and backwards compatible.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "SQLite 3 database files are expected to remain portable and backwards compatible.",
+                  "start_offset": 10,
+                  "end_offset": 94,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "assumption",
+                "statement": "The application can tolerate a single-writer storage design.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The application can tolerate a single-writer storage design.",
+                  "start_offset": 10,
+                  "end_offset": 67,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "material_claim",
+                "statement": "Store each offline project in one SQLite 3 database file.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Store each offline project in one SQLite 3 database file.",
+                  "start_offset": 94,
+                  "end_offset": 151,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "assumption",
+                "statement": "- SQLite 3 database files are expected to remain portable and backwards",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- SQLite 3 database files are expected to remain portable and backwards",
+                  "start_offset": 254,
+                  "end_offset": 325,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 1,
+            "finding_count": 1,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "sqlite-portable-format",
+                "premise_statement": "SQLite 3 database files are portable and backwards compatible across future SQLite 3 releases.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence explicitly states that SQLite 3 releases promise backwards compatibility for future SQLite 3 releases and that all SQLite 3 releases can read and write database files created by the first SQLite 3 release.",
+                "missing_context_question": null,
+                "old_excerpt": "SQLite 3 database files are expected to remain portable and backwards compatible.",
+                "new_excerpt": "SQLite's documentation says all SQLite 3 releases can read and write database\nfiles created by the first SQLite 3 release and promises backwards\ncompatibility for future SQLite 3 releases.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "terraform-bsl-license",
+          "status": "passed",
+          "extraction_seconds": 20.14,
+          "revisit_seconds": 15.42,
+          "extraction": {
+            "premise_count": 6,
+            "anchor_rate": 0.5,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "hard_constraint",
+                "keywords": [
+                  "open-source",
+                  "license"
+                ],
+                "matched": true,
+                "premise": "An OSI-approved open-source license is a hard procurement requirement."
+              },
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "future",
+                  "MPL"
+                ],
+                "matched": true,
+                "premise": "The decision assumes future Terraform releases continue under MPL 2.0."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "hard_constraint",
+                "statement": "An OSI-approved open-source license is a hard procurement requirement.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "An OSI-approved open-source license is a hard procurement requirement.",
+                  "start_offset": 0,
+                  "end_offset": 56,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "The decision assumes future Terraform releases continue under MPL 2.0.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "The decision assumes future Terraform releases continue under MPL 2.0.",
+                  "start_offset": 101,
+                  "end_offset": 134,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "assumption",
+                "statement": "Providers and existing automation make Terraform economical to adopt.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Providers and existing automation make Terraform economical to adopt.",
+                  "start_offset": 153,
+                  "end_offset": 184,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "material_claim",
+                "statement": "Use Terraform for infrastructure provisioning because its MPL 2.0 license",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "unverified",
+                "attention_reason": "Material Claim recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Use Terraform for infrastructure provisioning because its MPL 2.0 license",
+                  "start_offset": 158,
+                  "end_offset": 231,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "requirement",
+                "statement": "- An OSI-approved open-source license is a hard procurement requirement.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "- An OSI-approved open-source license is a hard procurement requirement.",
+                  "start_offset": 310,
+                  "end_offset": 382,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-6",
+                "kind": "assumption",
+                "statement": "- The decision assumes future Terraform releases continue under MPL 2.0.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The decision assumes future Terraform releases continue under MPL 2.0.",
+                  "start_offset": 383,
+                  "end_offset": 455,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 2,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "terraform-oss-license",
+                "premise_statement": "Future Terraform releases must remain under an OSI-approved open-source license.",
+                "relationship": "contradicts",
+                "confidence_band": "medium",
+                "explanation": "The evidence states that future Terraform releases will change to Business Source License 1.1, which contradicts the premise that future releases must remain under an OSI-approved open-source license.",
+                "missing_context_question": null,
+                "old_excerpt": "An OSI-approved open-source license is a hard procurement requirement.",
+                "new_excerpt": "HashiCorp announced that future releases of its core products, including\nTerraform, would change from MPL 2.0 to Business Source License 1.1.",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "terraform-mpl-continuity",
+                "premise_statement": "Future Terraform releases will continue under MPL 2.0.",
+                "relationship": "contradicts",
+                "confidence_band": "medium",
+                "explanation": "The evidence explicitly states that future Terraform releases will change from MPL 2.0 to Business Source License 1.1, contradicting the assumption that future releases will continue under MPL 2.0.",
+                "missing_context_question": null,
+                "old_excerpt": "The decision assumes future Terraform releases continue under MPL 2.0.",
+                "new_excerpt": "HashiCorp announced that future releases of its core products, including\nTerraform, would change from MPL 2.0 to Business Source License 1.1.",
+                "source_fallback_performed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "unrelated-attestations",
+          "status": "passed",
+          "extraction_seconds": 23.31,
+          "revisit_seconds": 12.31,
+          "extraction": {
+            "premise_count": 5,
+            "anchor_rate": 0.4,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "requirement",
+                "keywords": [
+                  "cache",
+                  "memory"
+                ],
+                "matched": true,
+                "premise": "The cache must remain within a fixed memory budget."
+              },
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "least-recently-used",
+                  "traffic"
+                ],
+                "matched": true,
+                "premise": "Least-recently-used eviction is expected to match the traffic pattern."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "requirement",
+                "statement": "The cache must remain within a fixed memory budget.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The cache must remain within a fixed memory budget.",
+                  "start_offset": 0,
+                  "end_offset": 47,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "assumption",
+                "statement": "Least-recently-used eviction is expected to match the traffic pattern.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Least-recently-used eviction is expected to match the traffic pattern.",
+                  "start_offset": 0,
+                  "end_offset": 64,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "assumption",
+                "statement": "Cache misses are recoverable from the primary database.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "Cache misses are recoverable from the primary database.",
+                  "start_offset": 0,
+                  "end_offset": 54,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "hard_constraint",
+                "statement": "- The cache must remain within a fixed memory budget.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The cache must remain within a fixed memory budget.",
+                  "start_offset": 210,
+                  "end_offset": 263,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "assumption",
+                "statement": "- Least-recently-used eviction is expected to match the traffic pattern.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Least-recently-used eviction is expected to match the traffic pattern.",
+                  "start_offset": 264,
+                  "end_offset": 336,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 0,
+            "finding_count": 0,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": []
+          }
+        },
+        {
+          "case_id": "xz-security-advisory",
+          "status": "passed",
+          "extraction_seconds": 22.88,
+          "revisit_seconds": 15.57,
+          "extraction": {
+            "premise_count": 6,
+            "anchor_rate": 0.5,
+            "concept_recall": 1.0,
+            "expectation_matches": [
+              {
+                "kind": "assumption",
+                "keywords": [
+                  "upstream",
+                  "release"
+                ],
+                "matched": true,
+                "premise": "A recent upstream release is considered trustworthy after its published checksum is verified."
+              },
+              {
+                "kind": "hard_constraint",
+                "keywords": [
+                  "production",
+                  "signed"
+                ],
+                "matched": true,
+                "premise": "Production dependencies must normally come from reviewed and signed distribution packages."
+              }
+            ],
+            "premises": [
+              {
+                "candidate_id": "premise-1",
+                "kind": "assumption",
+                "statement": "A recent upstream release is considered trustworthy after its published checksum is verified.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Assumption requires review",
+                "anchor": {
+                  "exact_excerpt": "A recent upstream release is considered trustworthy after its published checksum is verified.",
+                  "start_offset": 10,
+                  "end_offset": 83,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-2",
+                "kind": "requirement",
+                "statement": "The compatibility fix is required for the image build.",
+                "qualifiers": "",
+                "importance": "normal",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": null,
+                "anchor": {
+                  "exact_excerpt": "The compatibility fix is required for the image build.",
+                  "start_offset": 10,
+                  "end_offset": 51,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "premise-3",
+                "kind": "hard_constraint",
+                "statement": "Production dependencies must normally come from reviewed and signed distribution packages.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint requires review",
+                "anchor": {
+                  "exact_excerpt": "Production dependencies must normally come from reviewed and signed distribution packages.",
+                  "start_offset": 10,
+                  "end_offset": 91,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-4",
+                "kind": "hard_constraint",
+                "statement": "Package a recent upstream XZ Utils release to obtain a required compatibility",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "Package a recent upstream XZ Utils release to obtain a required compatibility",
+                  "start_offset": 107,
+                  "end_offset": 184,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-5",
+                "kind": "hard_constraint",
+                "statement": "- The compatibility fix is required for the image build.",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- The compatibility fix is required for the image build.",
+                  "start_offset": 354,
+                  "end_offset": 410,
+                  "page_number": null
+                }
+              },
+              {
+                "candidate_id": "recovered-6",
+                "kind": "hard_constraint",
+                "statement": "- Production dependencies must normally come from reviewed and signed",
+                "qualifiers": "",
+                "importance": "high",
+                "quality_state": "draft",
+                "claim_status": "not_applicable",
+                "attention_reason": "Hard Constraint recovered from source; review carefully",
+                "anchor": {
+                  "exact_excerpt": "- Production dependencies must normally come from reviewed and signed",
+                  "start_offset": 411,
+                  "end_offset": 480,
+                  "page_number": null
+                }
+              }
+            ]
+          },
+          "revisit": {
+            "expected_relevant": 2,
+            "finding_count": 2,
+            "detection_recall": 1.0,
+            "relationship_accuracy": 1.0,
+            "false_positive_count": 0,
+            "false_positive_ids": [],
+            "findings": [
+              {
+                "premise_id": "xz-upstream-trust",
+                "premise_statement": "A recent upstream XZ Utils release is sufficiently trustworthy for production use after checksum verification.",
+                "relationship": "contradicts",
+                "confidence_band": "high",
+                "explanation": "The evidence reports malicious code in recent XZ Utils releases, directly contradicting the assumption that a recent upstream release is sufficiently trustworthy, even with checksum verification.",
+                "missing_context_question": null,
+                "old_excerpt": "A recent upstream release is considered trustworthy after its published checksum is verified.",
+                "new_excerpt": "The oss-security disclosure reported malicious code in XZ Utils 5.6.0 and\n5.6.1 release tarballs.",
+                "source_fallback_performed": true
+              },
+              {
+                "premise_id": "xz-signed-package",
+                "premise_statement": "Production dependencies must come from reviewed and signed distribution packages.",
+                "relationship": "supports",
+                "confidence_band": "high",
+                "explanation": "The evidence suggests that checksum verification alone is insufficient due to malicious code in upstream releases, thereby supporting the constraint that production dependencies must come from reviewed and signed distribution packages.",
+                "missing_context_question": null,
+                "old_excerpt": "Production dependencies must normally come from reviewed and signed distribution packages.",
+                "new_excerpt": "This evidence sharply weakens checksum-only trust in a recent upstream release\nand supports the constraint favoring reviewed distribution packages.",
                 "source_fallback_performed": true
               }
             ]

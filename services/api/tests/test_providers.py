@@ -167,6 +167,51 @@ def test_extraction_trust_boundary_recovers_omitted_source_backed_obligation() -
     assert normalized.premises[0].anchor.exact_excerpt == obligation
 
 
+def test_extraction_trust_boundary_repairs_and_recovers_model_anchors() -> None:
+    source = "The service must stay in the EU.\nThe current provider is expected to remain available."
+    result = ExtractionResult.model_validate(
+        {
+            "title": "Hosting",
+            "decision_question": "Where should the service run?",
+            "premises": [
+                {
+                    "candidate_id": "p1",
+                    "kind": "hard_constraint",
+                    "statement": "The service must stay in the EU.",
+                    "anchor": {
+                        "exact_excerpt": "The service must stay in the EU.",
+                        "start_offset": 999,
+                        "end_offset": 1000,
+                    },
+                },
+                {
+                    "candidate_id": "p2",
+                    "kind": "assumption",
+                    "statement": "The current provider is expected to remain available.",
+                },
+                {
+                    "candidate_id": "p3",
+                    "kind": "assumption",
+                    "statement": "An invented availability guarantee.",
+                    "anchor": {
+                        "exact_excerpt": "An invented quote.",
+                        "start_offset": 0,
+                        "end_offset": 18,
+                    },
+                },
+            ],
+        }
+    )
+
+    normalized = _normalize_extraction(result, source)
+
+    assert normalized.premises[0].anchor is not None
+    assert normalized.premises[0].anchor.start_offset == 0
+    assert normalized.premises[1].anchor is not None
+    assert normalized.premises[1].anchor.exact_excerpt == "The current provider is expected to remain available."
+    assert normalized.premises[2].anchor is None
+
+
 def test_ollama_revisit_uses_structured_semantic_assessment() -> None:
     captured: dict = {}
     evidence = "The retired controller no longer receives upgrades or security updates."
