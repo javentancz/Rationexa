@@ -223,7 +223,11 @@ def review_extraction(extraction_id: str, payload: ExtractionReviewRequest, db: 
             premise.kind = review.kind or premise.kind
             premise.importance = "high" if premise.kind in CONSEQUENTIAL_KINDS else "normal"
         if review.action == "unknown":
-            premise.quality_state = "draft"
+            premise.kind = PremiseKind.UNKNOWN
+            premise.quality_state = "confirmed"
+            premise.claim_status = "unverified"
+            premise.importance = "high"
+            premise.attention_reason = "Human reviewer preserved this premise as unknown"
         else:
             premise.quality_state = "confirmed"
         reviewed.append(premise)
@@ -252,7 +256,9 @@ def finalize_decision(extraction_id: str, payload: DecisionFinalizeRequest, db: 
         unanchored = [
             item.candidate_id
             for item in result.premises
-            if item.quality_state == "confirmed" and item.kind in CONSEQUENTIAL_KINDS and item.anchor is None
+            if item.quality_state == "confirmed"
+            and item.kind in CONSEQUENTIAL_KINDS - {PremiseKind.UNKNOWN}
+            and item.anchor is None
         ]
         if unanchored:
             raise HTTPException(

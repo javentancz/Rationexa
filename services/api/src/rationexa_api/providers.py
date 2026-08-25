@@ -149,7 +149,7 @@ class DeterministicProvider(ExtractionProvider):
     @staticmethod
     def _classify(sentence: str) -> PremiseKind | None:
         value = " ".join(sentence.lower().split())
-        if value.startswith(("#", "date:", "status:", "source:")):
+        if _is_structure_only(sentence) or value.startswith(("#", "date:", "status:", "source:")):
             return None
         if (
             value.startswith("revisit ")
@@ -334,6 +334,8 @@ def _normalize_extraction(result: ExtractionResult, source_text: str | None = No
     chosen = (result.chosen_option or "").strip().lower()
     for premise in result.premises:
         statement = premise.statement.strip()
+        if _is_structure_only(statement):
+            continue
         value = statement.lower()
         duplicates_choice = bool(
             chosen and chosen in value and re.match(r"^(adopt|choose|chose|select|selected|use)\b", value)
@@ -379,6 +381,8 @@ def _normalize_extraction(result: ExtractionResult, source_text: str | None = No
                 kind = PremiseKind.ASSUMPTION
 
         premise.kind = kind
+        if _semantically_duplicates_existing(statement, kind, normalized):
+            continue
         high_attention = kind in {
             PremiseKind.HARD_CONSTRAINT,
             PremiseKind.ASSUMPTION,
@@ -403,7 +407,12 @@ def _normalize_extraction(result: ExtractionResult, source_text: str | None = No
                 and chosen in normalized_sentence
                 and re.match(r"^(adopt|choose|chose|select|selected|use)\b", normalized_sentence)
             )
-            if kind is None or duplicates_choice or normalized_sentence in represented:
+            if (
+                kind is None
+                or duplicates_choice
+                or normalized_sentence in represented
+                or _semantically_duplicates_existing(sentence, kind, normalized)
+            ):
                 continue
             start = source_text.find(sentence)
             if start < 0:
@@ -490,6 +499,38 @@ def _source_recovery_spans(source_text: str) -> list[str]:
 
 def _normalized_text(value: str) -> str:
     return " ".join(value.lower().split())
+
+
+def _is_structure_only(value: str) -> bool:
+    """Reject headings and list counters that a model mislabeled as claims."""
+    normalized = " ".join(value.strip().split())
+    return bool(
+        re.fullmatch(
+            r"(?:[-*]\s*)?(?:[a-z][a-z &/]+:\s*)?(?:\d+[.)]?|[-*])",
+            normalized,
+            re.I,
+        )
+    )
+
+
+def _semantically_duplicates_existing(
+    statement: str,
+    kind: PremiseKind,
+    existing: list[CandidatePremise],
+) -> bool:
+    from .services import meaningful_terms
+
+    terms = meaningful_terms(statement)
+    if not terms:
+        return False
+    for premise in existing:
+        if premise.kind != kind:
+            continue
+        existing_terms = meaningful_terms(premise.statement)
+        smaller = min(len(terms), len(existing_terms))
+        if smaller and len(terms & existing_terms) / smaller >= 0.9:
+            return True
+    return False
 
 
 def _validated_findings(

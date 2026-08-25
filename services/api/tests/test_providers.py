@@ -169,6 +169,45 @@ def test_extraction_trust_boundary_repairs_obvious_fact_collapse() -> None:
     assert all(premise.importance == "high" for premise in normalized.premises[1:])
 
 
+def test_extraction_trust_boundary_removes_list_markers_and_semantic_duplicates() -> None:
+    result = ExtractionResult.model_validate(
+        {
+            "title": "Client delivery",
+            "decision_question": "What assumptions affect delivery?",
+            "premises": [
+                {
+                    "candidate_id": "p1",
+                    "kind": "unknown",
+                    "statement": (
+                        "The exact backend programming language, framework, and integration protocols "
+                        "are currently unconfirmed."
+                    ),
+                },
+                {
+                    "candidate_id": "p2",
+                    "kind": "material_claim",
+                    "statement": "- Operational & Delivery Assumptions: 1.",
+                },
+                {"candidate_id": "p3", "kind": "material_claim", "statement": "2."},
+                {"candidate_id": "p4", "kind": "material_claim", "statement": "3."},
+                {
+                    "candidate_id": "p5",
+                    "kind": "unknown",
+                    "statement": (
+                        "- Identified Unknowns & Risks: - Exact backend programming language, framework, "
+                        "and integration protocols (currently unconfirmed)."
+                    ),
+                },
+            ],
+        }
+    )
+
+    normalized = _normalize_extraction(result)
+
+    assert len(normalized.premises) == 1
+    assert normalized.premises[0].candidate_id == "p1"
+
+
 def test_extraction_trust_boundary_recovers_omitted_source_backed_obligation() -> None:
     obligation = "The team accepts responsibility for controller upgrades, monitoring, and troubleshooting."
     source = f"Date: 2026-02-10\n{obligation}"

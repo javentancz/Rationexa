@@ -245,3 +245,46 @@ def test_critical_decision_rejects_unanchored_consequential_premise() -> None:
 
         assert finalized.status_code == 422
         assert "require source anchors" in finalized.json()["detail"]
+
+
+def test_keep_unknown_preserves_premise_in_final_decision() -> None:
+    source = "The client's deployment framework is still unknown and must be confirmed later."
+
+    with TestClient(app) as client:
+        artifact = client.post(
+            "/v1/artifacts",
+            json={"filename": "unknown.txt", "media_type": "text/plain", "content": source},
+        ).json()
+        extraction = client.post(
+            "/v1/decisions/extractions",
+            json={"artifact_id": artifact["id"]},
+        ).json()
+        candidate = extraction["result"]["premises"][0]
+
+        reviewed = client.post(
+            f"/v1/extractions/{extraction['id']}/review",
+            json={
+                "reviews": [
+                    {
+                        "candidate_id": candidate["candidate_id"],
+                        "action": "unknown",
+                        "statement": candidate["statement"],
+                        "kind": candidate["kind"],
+                    }
+                ]
+            },
+        )
+
+        assert reviewed.status_code == 200
+        reviewed_premise = reviewed.json()["result"]["premises"][0]
+        assert reviewed_premise["kind"] == "unknown"
+        assert reviewed_premise["quality_state"] == "confirmed"
+
+        finalized = client.post(
+            f"/v1/extractions/{extraction['id']}/finalize",
+            json={"criticality": "critical"},
+        )
+
+        assert finalized.status_code == 201
+        assert len(finalized.json()["premises"]) == 1
+        assert finalized.json()["premises"][0]["kind"] == "unknown"
