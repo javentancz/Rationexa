@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -127,7 +128,12 @@ def score_revisit(findings: list[Any], canonical: list[dict[str, Any]]) -> dict[
     }
 
 
-def evaluate_model(model: str, cases: list[RealCase], provider: ExtractionProvider) -> dict[str, Any]:
+def evaluate_model(
+    model: str,
+    cases: list[RealCase],
+    provider: ExtractionProvider,
+    on_case_completed: Callable[[list[dict[str, Any]]], None] | None = None,
+) -> dict[str, Any]:
     case_results = []
     for case in cases:
         started = time.perf_counter()
@@ -164,6 +170,8 @@ def evaluate_model(model: str, cases: list[RealCase], provider: ExtractionProvid
                     "elapsed_seconds": round(time.perf_counter() - started, 2),
                 }
             )
+        if on_case_completed is not None:
+            on_case_completed(list(case_results))
 
     passed = [item for item in case_results if item["status"] == "passed"]
     aggregate = {
@@ -232,21 +240,65 @@ def _percent(value: float | None) -> str:
     return "n/a" if value is None else f"{value * 100:.1f}%"
 
 
-def run(models: list[str], cases_dir: Path, timeout_seconds: float) -> dict[str, Any]:
+def run(
+    models: list[str],
+    cases_dir: Path,
+    timeout_seconds: float,
+    checkpoint_path: Path | None = None,
+) -> dict[str, Any]:
     cases = load_cases(cases_dir)
     model_results = []
     for model in models:
         settings = Settings(ollama_model=model, ollama_timeout_seconds=timeout_seconds)
         provider = OllamaProvider(settings)
+
+        def checkpoint(case_results: list[dict[str, Any]], current_model: str = model) -> None:
+            latest = case_results[-1]
+            print(
+                f"[{current_model}] {len(case_results)}/{len(cases)} "
+                f"{latest['case_id']}: {latest['status']}",
+                flush=True,
+            )
+            if checkpoint_path is not None:
+                _write_json_atomic(
+                    checkpoint_path,
+                    {
+                        "status": "running",
+                        "updated_at": datetime.now(UTC).isoformat(),
+                        "case_ids": [case.case_id for case in cases],
+                        "models_requested": models,
+                        "models_completed": model_results,
+                        "current_model": current_model,
+                        "current_model_cases": case_results,
+                    },
+                )
+
         try:
-            model_results.append(evaluate_model(model, cases, provider))
+            model_results.append(evaluate_model(model, cases, provider, checkpoint))
         finally:
             provider.client.close()
-    return {
+    report = {
         "generated_at": datetime.now(UTC).isoformat(),
         "cases": [case.case_id for case in cases],
         "models": model_results,
     }
+    if checkpoint_path is not None:
+        _write_json_atomic(
+            checkpoint_path,
+            {
+                "status": "complete",
+                "updated_at": datetime.now(UTC).isoformat(),
+                "report": report,
+            },
+        )
+    return report
+
+
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2) + "\n")
+    temporary.replace(path)
 
 
 def main() -> None:
@@ -266,7 +318,12 @@ def main() -> None:
     parser.add_argument("--timeout-seconds", type=float, default=300)
     args = parser.parse_args()
 
-    report = run(args.models, args.cases_dir, args.timeout_seconds)
+    report = run(
+        args.models,
+        args.cases_dir,
+        args.timeout_seconds,
+        checkpoint_path=args.output.with_suffix(".checkpoint.json"),
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n")
     args.output.with_suffix(".md").write_text(markdown_report(report))

@@ -16,3 +16,4 @@ artifacts/
 .mypy_cache/
 .coverage
 *.tsbuildinfo
+packages/evals/reports/*.checkpoint.json

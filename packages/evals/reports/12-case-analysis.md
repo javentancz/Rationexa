@@ -49,11 +49,11 @@ The API now deterministically:
    verbatim in the source.
 4. Removes the anchor when neither candidate can be grounded.
 
-Rescoring the saved output with this deterministic behavior projects Qwen at
-72.4% grounded anchors (55 of 76) and Gemma at 80.3% (53 of 66). A fresh model
-run is still required before treating these as benchmark results. The remaining
-gap mostly consists of paraphrased premise statements that have no exact
-excerpt.
+Rescoring the saved output with the production grounding function shows that
+all saved premises can be grounded after repair: Qwen 100% (76 of 76) and Gemma
+100% (66 of 66). This is a deterministic replay result rather than a fresh
+model run, so the original pre-fix benchmark remains preserved above. A
+regression test now replays every saved premise through the repair function.
 
 ## Current model decision
 
@@ -64,8 +64,7 @@ default—Qwen for extraction and Gemma for revisit—beats either model alone.
 
 ## Next reliability work
 
-1. Add a deterministic sentence-selection fallback for consequential
-   paraphrased premises, with strict semantic and source-boundary safeguards.
-2. Add per-case progress and checkpoint files to the evaluator.
-3. Independently review the 12-case labels and rerun both local models.
-4. Only then add Compare mode or a hosted provider to this same suite.
+1. Independently review the 12-case labels and rerun both local models.
+2. Review extraction misses and qualifier preservation after grounding.
+3. Add Compare mode using the same versioned prompts and case suite.
+4. Test one hosted provider only after the local baseline is accepted.

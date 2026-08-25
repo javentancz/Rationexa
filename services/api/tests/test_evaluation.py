@@ -2,8 +2,15 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from rationexa_api.evaluation import load_cases, score_extraction, score_revisit
-from rationexa_api.schemas import ExtractionResult, RevisitFinding
+from rationexa_api.evaluation import (
+    _write_json_atomic,
+    evaluate_model,
+    load_cases,
+    score_extraction,
+    score_revisit,
+)
+from rationexa_api.providers import DeterministicProvider, _repair_source_anchor
+from rationexa_api.schemas import CandidatePremise, ExtractionResult, RevisitFinding
 
 
 def test_load_cases_requires_case_metadata(tmp_path: Path) -> None:
@@ -98,3 +105,49 @@ def test_real_case_suite_meets_stage_one_smoke_coverage() -> None:
         assert case.metadata["evidence_source_urls"]
         assert case.metadata["extraction_expectations"]
         assert case.metadata["canonical_premises"]
+
+
+def test_saved_benchmark_premises_are_groundable_after_offset_repair() -> None:
+    repo_root = Path(__file__).parents[3]
+    report = json.loads(
+        (repo_root / "packages" / "evals" / "reports" / "local-model-comparison.json").read_text()
+    )
+
+    for model in report["models"]:
+        for case in model["cases"]:
+            source = (
+                repo_root / "packages" / "evals" / "real_cases" / case["case_id"] / "decision.md"
+            ).read_text()
+            for premise_data in case["extraction"]["premises"]:
+                premise = CandidatePremise.model_validate(premise_data)
+                assert _repair_source_anchor(premise, source) is not None, (
+                    model["model"],
+                    case["case_id"],
+                    premise.statement,
+                )
+
+
+def test_evaluator_reports_progress_after_each_case() -> None:
+    cases_dir = Path(__file__).parents[3] / "packages" / "evals" / "real_cases"
+    cases = load_cases(cases_dir)[:2]
+    completed_counts = []
+
+    result = evaluate_model(
+        "rules-v1",
+        cases,
+        DeterministicProvider(),
+        lambda completed: completed_counts.append(len(completed)),
+    )
+
+    assert completed_counts == [1, 2]
+    assert result["aggregate"]["cases_passed"] == 2
+
+
+def test_checkpoint_writer_replaces_complete_json_atomically(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "comparison.checkpoint.json"
+
+    _write_json_atomic(checkpoint, {"status": "running", "completed": 1})
+    _write_json_atomic(checkpoint, {"status": "complete", "completed": 2})
+
+    assert json.loads(checkpoint.read_text()) == {"status": "complete", "completed": 2}
+    assert not checkpoint.with_suffix(".json.tmp").exists()

@@ -38,8 +38,9 @@ of done.
 - Exact anchor validation exists.
 - Latest 12-case baseline before deterministic offset repair: Qwen anchor rate
   37.4%; Gemma 43.3%.
-- Rescoring saved output with the repair projects Qwen at 72.4% and Gemma at
-  80.3%; a fresh benchmark is required to confirm it.
+- Deterministic replay of all saved premises through the repair reaches 100%
+  grounded anchors for both models. The original pre-fix benchmark is retained,
+  and the replay is enforced by an automated regression test.
 - Target: at least 90% correct sampled anchors and no accepted invented quotes.
 - Moderated under-30-second source-verification test: pending.
 

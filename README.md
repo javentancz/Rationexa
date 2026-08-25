@@ -59,6 +59,9 @@ ollama pull gemma4:e4b
 The command writes a detailed JSON result and a readable Markdown summary to
 `packages/evals/reports/`. Extraction and revisit are scored separately; each
 model receives the same curated premises for revisit so the comparison is fair.
+It prints one progress line per completed case and atomically updates a
+`local-model-comparison.checkpoint.json` file, so a long local run no longer
+looks frozen and partial results survive interruption.
 
 The web app reads its model dropdown from `GET /v1/models`. Select Qwen or
 Gemma before extraction, and you may select a different model before the
