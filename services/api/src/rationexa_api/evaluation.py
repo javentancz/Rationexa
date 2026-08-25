@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import time
 from collections.abc import Callable
@@ -28,6 +29,22 @@ class RealCase:
         return str(self.metadata["id"])
 
 
+CASE_FILENAMES = ("case.json", "decision.md", "new-evidence.md")
+
+
+def case_content_hash(case_dir: Path) -> str:
+    digest = hashlib.sha256()
+    for filename in CASE_FILENAMES:
+        path = case_dir / filename
+        if not path.is_file():
+            raise ValueError(f"Case {case_dir.name} is missing {filename}")
+        digest.update(filename.encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def load_cases(cases_dir: Path) -> list[RealCase]:
     cases = []
     for metadata_path in sorted(cases_dir.glob("*/case.json")):
@@ -43,6 +60,64 @@ def load_cases(cases_dir: Path) -> list[RealCase]:
     if not cases:
         raise ValueError(f"No real cases found in {cases_dir}")
     return cases
+
+
+def load_dataset(manifest_path: Path, cases_root: Path) -> tuple[dict[str, Any], list[RealCase]]:
+    manifest = json.loads(manifest_path.read_text())
+    if manifest.get("schema_version") != 1:
+        raise ValueError(f"Unsupported dataset manifest schema in {manifest_path}")
+    entries = manifest.get("cases")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError(f"Dataset {manifest.get('id', manifest_path.name)} contains no cases")
+
+    ids = [str(entry["id"]) for entry in entries]
+    if len(ids) != len(set(ids)):
+        raise ValueError("Dataset manifest contains duplicate case IDs")
+
+    cases = []
+    hashes = set()
+    for entry in entries:
+        case_id = str(entry["id"])
+        expected_hash = str(entry["sha256"])
+        case_dir = cases_root / case_id
+        actual_hash = case_content_hash(case_dir)
+        if actual_hash != expected_hash:
+            raise ValueError(
+                f"Frozen case {case_id} changed: expected {expected_hash}, found {actual_hash}"
+            )
+        if actual_hash in hashes:
+            raise ValueError(f"Dataset contains duplicate case content: {case_id}")
+        hashes.add(actual_hash)
+        metadata = json.loads((case_dir / "case.json").read_text())
+        if metadata.get("id") != case_id:
+            raise ValueError(f"Case directory {case_id} contains metadata ID {metadata.get('id')}")
+        cases.append(
+            RealCase(
+                directory=case_dir,
+                metadata=metadata,
+                decision=(case_dir / "decision.md").read_text(),
+                evidence=(case_dir / "new-evidence.md").read_text(),
+            )
+        )
+    return manifest, cases
+
+
+def validate_dataset_separation(*manifests: dict[str, Any]) -> None:
+    seen_ids: dict[str, str] = {}
+    seen_hashes: dict[str, str] = {}
+    for manifest in manifests:
+        dataset_id = str(manifest.get("id", "unknown"))
+        for entry in manifest.get("cases", []):
+            case_id = str(entry["id"])
+            digest = str(entry["sha256"])
+            if case_id in seen_ids:
+                raise ValueError(f"Case ID {case_id} appears in both {seen_ids[case_id]} and {dataset_id}")
+            if digest in seen_hashes:
+                raise ValueError(
+                    f"Case content {case_id} duplicates content from dataset {seen_hashes[digest]}"
+                )
+            seen_ids[case_id] = dataset_id
+            seen_hashes[digest] = dataset_id
 
 
 def score_extraction(
@@ -199,6 +274,8 @@ def markdown_report(report: dict[str, Any]) -> str:
         "# Rationexa local-model comparison",
         "",
         f"Generated: {report['generated_at']}",
+        f"Dataset: {report.get('dataset_id', 'legacy/unversioned')}",
+        f"Manifest SHA-256: {report.get('dataset_manifest_hash') or 'not recorded'}",
         "",
         "Scores use model extraction output, but revisit scoring gives every model the same curated premises.",
         "",
@@ -242,11 +319,12 @@ def _percent(value: float | None) -> str:
 
 def run(
     models: list[str],
-    cases_dir: Path,
+    cases: list[RealCase],
     timeout_seconds: float,
     checkpoint_path: Path | None = None,
+    dataset_id: str = "custom",
+    dataset_manifest_hash: str | None = None,
 ) -> dict[str, Any]:
-    cases = load_cases(cases_dir)
     model_results = []
     for model in models:
         settings = Settings(ollama_model=model, ollama_timeout_seconds=timeout_seconds)
@@ -266,6 +344,8 @@ def run(
                         "status": "running",
                         "updated_at": datetime.now(UTC).isoformat(),
                         "case_ids": [case.case_id for case in cases],
+                        "dataset_id": dataset_id,
+                        "dataset_manifest_hash": dataset_manifest_hash,
                         "models_requested": models,
                         "models_completed": model_results,
                         "current_model": current_model,
@@ -279,6 +359,8 @@ def run(
             provider.client.close()
     report = {
         "generated_at": datetime.now(UTC).isoformat(),
+        "dataset_id": dataset_id,
+        "dataset_manifest_hash": dataset_manifest_hash,
         "cases": [case.case_id for case in cases],
         "models": model_results,
     }
@@ -303,10 +385,16 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
 
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[4]
+    development_manifest_path = repo_root / "packages/evals/datasets/development.manifest.json"
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--models", nargs="+", default=["qwen3.5:9b", "gemma4:e4b"])
     parser.add_argument(
-        "--cases-dir",
+        "--dataset-manifest",
+        type=Path,
+        default=development_manifest_path,
+    )
+    parser.add_argument(
+        "--cases-root",
         type=Path,
         default=repo_root / "packages/evals/real_cases",
     )
@@ -318,11 +406,19 @@ def main() -> None:
     parser.add_argument("--timeout-seconds", type=float, default=300)
     args = parser.parse_args()
 
+    manifest, cases = load_dataset(args.dataset_manifest, args.cases_root)
+    if args.dataset_manifest.resolve() != development_manifest_path.resolve():
+        development_manifest = json.loads(development_manifest_path.read_text())
+        validate_dataset_separation(development_manifest, manifest)
+    manifest_hash = hashlib.sha256(args.dataset_manifest.read_bytes()).hexdigest()
+
     report = run(
         args.models,
-        args.cases_dir,
+        cases,
         args.timeout_seconds,
         checkpoint_path=args.output.with_suffix(".checkpoint.json"),
+        dataset_id=str(manifest["id"]),
+        dataset_manifest_hash=manifest_hash,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n")

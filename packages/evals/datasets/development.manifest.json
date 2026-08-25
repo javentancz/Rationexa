@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "development-v1",
+  "status": "frozen",
+  "purpose": "Visible cases used for pipeline development and debugging; never report these as holdout accuracy.",
+  "frozen_at": "2026-08-25",
+  "label_visibility": "open",
+  "cases": [
+    {"id": "docker-hub-pull-limits", "sha256": "f824bab5ba53c3e5dd19ea0fdf50ad34c964ac22b3fe9c006bc83329089b3df5"},
+    {"id": "github-actions-ubuntu20-retirement", "sha256": "cf620cee2d66ad578af984f6114a1358c4ef4f3c871ffd3ba4dc1cb32b9efa42"},
+    {"id": "ingress-nginx-retirement", "sha256": "5b408ad30c7fbacfb38de5dfc57fd528cff0b8dc376705e3182987a32db252b2"},
+    {"id": "node-18-eol", "sha256": "3e756b4132aa2668a6c0d09798b72a6b39966025d407ba367598dd0bc05167c0"},
+    {"id": "postgresql-open-source", "sha256": "e4b0077e8e5767e6bbbc4bee13c80e5f68bb978897b72568a87e934636e5353d"},
+    {"id": "prompt-injection-no-alert", "sha256": "d2045e1db5465dea56b6eb6a8b761c85c7d0c215e9d86ca752c6f94ebe5ffc86"},
+    {"id": "python-39-eol", "sha256": "abfa0e9db16fb5c7b7dffaba1a9fe3f8e542c52d60e3fdc0464f7a9384bb2674"},
+    {"id": "self-hosted-registry-scope", "sha256": "b8e0298d0065763fa3811386ed57abdcfa2036f48b089783794473a46bbb66b7"},
+    {"id": "sqlite-file-compatibility", "sha256": "f9eeed35723a46ef1c8ae06f1f760a54aa83869651196d12fbbc478ff4e6ec27"},
+    {"id": "terraform-bsl-license", "sha256": "a5ba5e242ea51162ddeff0f095568e806918923898aa0f0a736778e10c0aac49"},
+    {"id": "unrelated-attestations", "sha256": "92434aba762f40599fc9664797da6c81b95d5a5648b39c3e17b13186411ceadb"},
+    {"id": "xz-security-advisory", "sha256": "3f19f4d6eb0bcfb18bbee403b753be7e81567e5696f3b3ad37b6bacd8c80b1d4"}
+  ]
+}

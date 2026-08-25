@@ -2,12 +2,17 @@ import json
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
 from rationexa_api.evaluation import (
     _write_json_atomic,
+    case_content_hash,
     evaluate_model,
     load_cases,
+    load_dataset,
     score_extraction,
     score_revisit,
+    validate_dataset_separation,
 )
 from rationexa_api.providers import DeterministicProvider, _repair_source_anchor
 from rationexa_api.schemas import CandidatePremise, ExtractionResult, RevisitFinding
@@ -90,10 +95,15 @@ def test_score_revisit_separates_relationship_errors_and_false_positives() -> No
 
 
 def test_real_case_suite_meets_stage_one_smoke_coverage() -> None:
-    cases_dir = Path(__file__).parents[3] / "packages" / "evals" / "real_cases"
-    cases = load_cases(cases_dir)
+    evals_dir = Path(__file__).parents[3] / "packages" / "evals"
+    manifest, cases = load_dataset(
+        evals_dir / "datasets" / "development.manifest.json",
+        evals_dir / "real_cases",
+    )
     categories = Counter(case.metadata["category"] for case in cases)
 
+    assert manifest["id"] == "development-v1"
+    assert manifest["status"] == "frozen"
     assert len(cases) >= 12
     assert categories["lifecycle"] >= 4
     assert categories["contradiction"] + categories["weakening"] >= 3
@@ -151,3 +161,44 @@ def test_checkpoint_writer_replaces_complete_json_atomically(tmp_path: Path) -> 
 
     assert json.loads(checkpoint.read_text()) == {"status": "complete", "completed": 2}
     assert not checkpoint.with_suffix(".json.tmp").exists()
+
+
+def test_frozen_dataset_rejects_changed_case_content(tmp_path: Path) -> None:
+    cases_root = tmp_path / "cases"
+    case_dir = cases_root / "sample"
+    case_dir.mkdir(parents=True)
+    (case_dir / "case.json").write_text(json.dumps({"id": "sample"}))
+    (case_dir / "decision.md").write_text("Original decision")
+    (case_dir / "new-evidence.md").write_text("Original evidence")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "id": "frozen-test",
+                "cases": [{"id": "sample", "sha256": case_content_hash(case_dir)}],
+            }
+        )
+    )
+
+    load_dataset(manifest_path, cases_root)
+    (case_dir / "decision.md").write_text("Decision changed after freezing")
+
+    with pytest.raises(ValueError, match="Frozen case sample changed"):
+        load_dataset(manifest_path, cases_root)
+
+
+def test_dataset_separation_rejects_id_or_content_leakage() -> None:
+    development = {"id": "development", "cases": [{"id": "case-a", "sha256": "aaa"}]}
+
+    with pytest.raises(ValueError, match="Case ID case-a"):
+        validate_dataset_separation(
+            development,
+            {"id": "holdout", "cases": [{"id": "case-a", "sha256": "bbb"}]},
+        )
+
+    with pytest.raises(ValueError, match="duplicates content"):
+        validate_dataset_separation(
+            development,
+            {"id": "holdout", "cases": [{"id": "case-b", "sha256": "aaa"}]},
+        )

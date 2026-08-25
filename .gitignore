@@ -17,3 +17,6 @@ artifacts/
 .coverage
 *.tsbuildinfo
 packages/evals/reports/*.checkpoint.json
+packages/evals/holdout_cases/*
+!packages/evals/holdout_cases/README.md
+packages/evals/datasets/holdout.manifest.json

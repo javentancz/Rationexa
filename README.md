@@ -47,7 +47,9 @@ The real-case suite contains 12 curated decisions paired with later
 authoritative evidence: four lifecycle cases, three contradiction/weakening
 cases, two positive-support cases, and three irrelevant/adversarial cases.
 They are suitable for development regression testing and remain marked pending
-independent review. To compare Qwen 3.5 with Gemma 4 locally:
+independent review. They are frozen as the visible `development-v1` dataset;
+its manifest hashes prevent silently editing a case and reporting the result as
+the same benchmark. To compare Qwen 3.5 with Gemma 4 locally:
 
 ```bash
 ollama pull qwen3.5:9b
@@ -62,6 +64,18 @@ model receives the same curated premises for revisit so the comparison is fair.
 It prints one progress line per completed case and atomically updates a
 `local-model-comparison.checkpoint.json` file, so a long local run no longer
 looks frozen and partial results survive interruption.
+
+Production model selection must use a separately maintained, independently
+reviewed holdout of at least 30 cases. Keep its content and labels outside this
+repository, verify that its IDs and content hashes do not overlap the
+development manifest, and pass its paths explicitly:
+
+```bash
+.venv/bin/python -m rationexa_api.evaluation \
+  --dataset-manifest /secure/path/holdout.manifest.json \
+  --cases-root /secure/path/holdout-cases \
+  --output packages/evals/reports/holdout-model-comparison
+```
 
 The web app reads its model dropdown from `GET /v1/models`. Select Qwen or
 Gemma before extraction, and you may select a different model before the

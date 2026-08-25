@@ -21,6 +21,8 @@ of done.
 - Local Qwen and Gemma model selection.
 - Optional OpenAI-compatible hosted adapter.
 - Repeatable evaluation harness and 12 curated source-backed cases.
+- Frozen `development-v1` manifest with content-integrity and holdout-leakage
+  checks; sealed holdout collection remains external and pending.
 - Automated case-composition gate, API tests, lint, and web build checks.
 
 ## Acceptance-gate status
@@ -56,6 +58,8 @@ of done.
   with one false positive.
 - Target: at least 30 regression cases, 90% critical premise-match recall, 80%
   relationship precision, and zero critical misses in the release candidate.
+- Generalization status: the visible 12-case set is now restricted to
+  development/debugging. No holdout score exists yet.
 
 ### Gate 4: real-user trust — not started
 

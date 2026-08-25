@@ -59,3 +59,11 @@ that contains prompt-injection text. Score extraction coverage, valid anchor
 rate, revisit recall, relationship accuracy, false positives, latency, and
 human correction rate. Keep a separate pilot set of at least 30 cases before
 making broad reliability claims.
+
+The checked-in 12 cases are the visible, frozen `development-v1` set. They may
+be used for debugging but never described as holdout accuracy. Model selection
+requires a sealed, independently reviewed set of at least 30 cases stored
+outside the development repository. Freeze the code commit, prompt versions,
+model IDs, thresholds, case IDs, and case hashes before the first holdout run.
+Reject any development/holdout overlap by case ID or content hash, and record
+the dataset manifest hash in every report.
