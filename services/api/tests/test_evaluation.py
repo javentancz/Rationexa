@@ -161,9 +161,9 @@ def test_real_case_suite_meets_stage_one_smoke_coverage() -> None:
     )
     categories = Counter(case.metadata["category"] for case in cases)
 
-    assert manifest["id"] == "development-v1"
+    assert manifest["id"] == "development-v2"
     assert manifest["status"] == "frozen"
-    assert len(cases) >= 12
+    assert len(cases) >= 30
     assert categories["lifecycle"] >= 4
     assert categories["contradiction"] + categories["weakening"] >= 3
     assert categories["positive_support"] >= 2

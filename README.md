@@ -49,11 +49,11 @@ For fast tests without starting Ollama, set `AI_PROVIDER=deterministic`. To use 
 
 ## Compare local models on real cases
 
-The real-case suite contains 12 curated decisions paired with later
-authoritative evidence: four lifecycle cases, three contradiction/weakening
-cases, two positive-support cases, and three irrelevant/adversarial cases.
-They are suitable for development regression testing and remain marked pending
-independent review. They are frozen as the visible `development-v1` dataset;
+The real-case suite contains 30 curated decisions paired with later
+authoritative evidence. It covers lifecycle and retirement events, security,
+pricing, licensing, positive support, irrelevant evidence, and prompt injection.
+The cases are suitable for development regression testing and remain marked
+pending independent review. They are frozen as the visible `development-v2` dataset;
 its manifest hashes prevent silently editing a case and reporting the result as
 the same benchmark. To compare Qwen 3.5 with Gemma 4 locally:
 
@@ -75,7 +75,7 @@ The report also applies `packages/evals/datasets/stage1-trust-gate.json`. A
 model is blocked if it misses a critical relationship, invents an evidence
 excerpt, exceeds the false-positive allowance, or falls below the configured
 recall/precision thresholds. The overall Stage 1 gate additionally requires 30
-independently reviewed cases; the visible 12-case development set cannot by
+independently reviewed cases; the visible 30-case development set cannot by
 itself produce a release-ready verdict.
 
 Production model selection must use a separately maintained, independently

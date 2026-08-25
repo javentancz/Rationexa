@@ -6,6 +6,7 @@ import pytest
 from rationexa_api.config import Settings
 from rationexa_api.providers import (
     OllamaProvider,
+    _direct_requirement_support,
     _ground_excerpt,
     _normalize_extraction,
     available_models,
@@ -118,6 +119,16 @@ def test_ground_excerpt_recovers_exact_source_whitespace() -> None:
 
     assert grounded == source
     assert _ground_excerpt("an invented quote", source) is None
+
+
+def test_requirement_support_requires_direct_subject_and_outcome_overlap() -> None:
+    requirement = "The project needs a repeatable local Node.js toolchain."
+
+    assert not _direct_requirement_support(requirement, "It creates security and toolchain risk.")
+    assert _direct_requirement_support(
+        "Production dependencies must come from reviewed and signed distribution packages.",
+        "The advisory favors reviewed distribution packages.",
+    )
 
 
 def test_extraction_trust_boundary_repairs_obvious_fact_collapse() -> None:

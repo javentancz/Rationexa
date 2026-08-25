@@ -14,6 +14,7 @@ from .schemas import (
     ExtractionResult,
     ModelOption,
     PremiseKind,
+    Relationship,
     RevisitAssessmentBatch,
     RevisitFinding,
     RevisitPremiseInput,
@@ -506,6 +507,11 @@ def _validated_findings(
             or premise is None
             or assessment.premise_id in seen
             or not excerpt
+            or (
+                premise.kind in {PremiseKind.REQUIREMENT, PremiseKind.HARD_CONSTRAINT}
+                and assessment.relationship == Relationship.SUPPORTS
+                and not _direct_requirement_support(premise.statement, excerpt)
+            )
         ):
             continue
         seen.add(assessment.premise_id)
@@ -525,6 +531,32 @@ def _validated_findings(
             )
         )
     return findings
+
+
+def _direct_requirement_support(statement: str, excerpt: str) -> bool:
+    """Reject generic 'supports' labels based only on a shared product name."""
+    stopwords = {
+        "and",
+        "for",
+        "from",
+        "have",
+        "must",
+        "needs",
+        "remain",
+        "service",
+        "should",
+        "support",
+        "supports",
+        "that",
+        "the",
+        "this",
+        "with",
+    }
+    statement_tokens = {
+        token for token in re.findall(r"[a-z0-9][a-z0-9.-]+", statement.lower()) if token not in stopwords
+    }
+    excerpt_tokens = {token for token in re.findall(r"[a-z0-9][a-z0-9.-]+", excerpt.lower()) if token not in stopwords}
+    return len(statement_tokens & excerpt_tokens) >= 2
 
 
 def _ground_excerpt(candidate: str, source_text: str) -> str | None:

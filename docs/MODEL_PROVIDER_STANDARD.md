@@ -44,9 +44,9 @@ names are therefore provenance, not an implementation detail.
 
 ## Evaluation gates
 
-The current three real cases are enough for a smoke test, not for choosing a
-production model. Before Stage 1 pilot use, expand to at least 12 reviewed
-cases:
+The visible development suite contains 30 source-backed cases. It is broad
+enough for repeatable development regression, but it is not a production model
+selection set until its labels have been independently reviewed:
 
 - four lifecycle, retirement, or supersession cases;
 - three contradiction or weakening cases;
@@ -57,10 +57,10 @@ Include short and long ADRs, messy Markdown/PDF extraction, ambiguous evidence,
 license or policy changes, security advisories, pricing changes, and evidence
 that contains prompt-injection text. Score extraction coverage, valid anchor
 rate, revisit recall, relationship accuracy, false positives, latency, and
-human correction rate. Keep a separate pilot set of at least 30 cases before
-making broad reliability claims.
+human correction rate. Keep a separate sealed pilot set of at least 30
+independently reviewed cases before making broad reliability claims.
 
-The checked-in 12 cases are the visible, frozen `development-v1` set. They may
+The checked-in 30 cases are the visible, frozen `development-v2` set. They may
 be used for debugging but never described as holdout accuracy. Model selection
 requires a sealed, independently reviewed set of at least 30 cases stored
 outside the development repository. Freeze the code commit, prompt versions,

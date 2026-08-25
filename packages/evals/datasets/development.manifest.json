@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "id": "development-v1",
+  "id": "development-v2",
   "status": "frozen",
   "purpose": "Visible cases used for pipeline development and debugging; never report these as holdout accuracy.",
   "frozen_at": "2026-08-25",
@@ -17,6 +17,24 @@
     {"id": "sqlite-file-compatibility", "sha256": "f9eeed35723a46ef1c8ae06f1f760a54aa83869651196d12fbbc478ff4e6ec27"},
     {"id": "terraform-bsl-license", "sha256": "a5ba5e242ea51162ddeff0f095568e806918923898aa0f0a736778e10c0aac49"},
     {"id": "unrelated-attestations", "sha256": "92434aba762f40599fc9664797da6c81b95d5a5648b39c3e17b13186411ceadb"},
-    {"id": "xz-security-advisory", "sha256": "3f19f4d6eb0bcfb18bbee403b753be7e81567e5696f3b3ad37b6bacd8c80b1d4"}
+    {"id": "xz-security-advisory", "sha256": "3f19f4d6eb0bcfb18bbee403b753be7e81567e5696f3b3ad37b6bacd8c80b1d4"},
+    {"id":"angular-19-unsupported","sha256":"34b7acee90b4ce9179c18cf6d1f45bba42c6521304f93e8c923271946cea0cc8"},
+    {"id":"aws-sdk-js-v2-end-of-support","sha256":"bf0d717ac8adff4bfad4e2eab9a0a93189983d53e495965c5598340602589b53"},
+    {"id":"centos-7-eol","sha256":"811b7df9d0dfe1314682714cc3cdf75c433bbe8f601a90c6b97147039ef67402"},
+    {"id":"codeql-action-v2-retired","sha256":"aabe28eabcbee9e99b40ff0d31271bf69b1a3101c166c18ccec05666e90aff95"},
+    {"id":"create-react-app-deprecation","sha256":"76eb24a6153cf4e1b66bf0afc625b811cdc6ad9ed429aeb4724d2a097434a68b"},
+    {"id":"docker-content-trust-retirement","sha256":"6a19f74e01f74fc6f3f443b9331e5dc56b3053dbabb1397095b9ef6455f8f003"},
+    {"id":"dotnet-6-end-of-support","sha256":"02e52a9e9bbbdedb12414d23908626dfc3801edc31bf53f884dd1e9047de46d2"},
+    {"id":"github-actions-node20-transition","sha256":"df9714d81e259939f5529024f4811dc904f1f7fa14ec1940f001fb545edb9e3a"},
+    {"id":"github-actions-pricing-postponed","sha256":"85b1c3f0da1e5c4a29bb0a332e6ec51cd86e812d872552b25504ac751cbe42b1"},
+    {"id":"github-artifact-v3-retirement","sha256":"5d9b3cb5f077a20e6818d438cc31c96e5714191fa6d913f5d9afdd17e37002fb"},
+    {"id":"github-macos13-runner-retirement","sha256":"450c3b4a7ece4216c9ec3cd86c5d2effc86d9b3648767bcfd9bc84486b84c2c2"},
+    {"id":"kubernetes-131-eol","sha256":"ee31c69ba7f0c8559119b8cf043c145d232d325a32ed9291e8f6ead56b42765e"},
+    {"id":"letsencrypt-ocsp-retirement","sha256":"311f38b31175a271ae105419b1a91892b59fad6228444c0a5f0314581fef3d55"},
+    {"id":"npm-classic-token-revocation","sha256":"10df4d7c9424c0413d0fc9001d7f298ed4cf97a097d1e1b3d5c2eee28719056f"},
+    {"id":"postgresql-13-eol","sha256":"a528ce43aeaf98341d00cc02845feb67cd5f2c25ff1c92dd1674b18c06b6c2e1"},
+    {"id":"redis-74-license-change","sha256":"ec02bc3e404fc597483fe4f177da882a1dbcfcb7625c488c01fe3001e8899bf7"},
+    {"id":"slack-history-rate-limit","sha256":"b66570d3f7b8eb6b855af8794bdccabc6ab696e6fdd7d0ea01a7232fbd467133"},
+    {"id":"ubuntu-2004-standard-support","sha256":"71aa7c01b35f336c82f8300a733d6e320c1a416b960d032ac752a625ca0032db"}
   ]
 }

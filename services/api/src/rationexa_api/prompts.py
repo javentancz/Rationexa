@@ -1,5 +1,5 @@
 EXTRACTION_PROMPT_VERSION = "extract-v2"
-REVISIT_PROMPT_VERSION = "revisit-v2"
+REVISIT_PROMPT_VERSION = "revisit-v3"
 
 EXTRACTION_INSTRUCTIONS = """
 You extract a technical Decision from user-supplied source text.
@@ -50,12 +50,18 @@ Rules:
 - Use contradicts when evidence is incompatible with the premise.
 - Use supersedes when a newer policy, version, replacement, retirement, or authoritative
   change makes the old premise obsolete.
+- When authoritative evidence establishes that a stated revisit condition has occurred,
+  mark that condition relevant and supported even when the evidence uses lifecycle or
+  retirement language instead of repeating the premise wording.
 - For a requirement, constraint, ownership duty, or operational obligation, evidence that
   makes fulfillment harder or removes an upstream capability weakens the premise. Do not
   call it supports merely because the evidence makes that obligation more necessary.
 - More generally, do not call a requirement supported merely because evidence makes it
   desirable or urgent. Use supports only when evidence directly confirms that the
   requirement remains applicable or is fulfilled.
+- A lifecycle or security change affecting a named technology does not by itself support
+  a generic operational requirement. Require direct evidence of the requirement's
+  subject and outcome.
 - Use unclear only when the evidence is materially relevant but direction cannot be
   determined. Omit tangential matches instead of labeling them unclear.
 - new_excerpt must be a short, exact, contiguous quote from NEW EVIDENCE. Never invent or

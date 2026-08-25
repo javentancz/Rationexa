@@ -81,7 +81,7 @@ def test_stage_one_vertical_slice() -> None:
         assert revisit_body["findings"]
         assert revisit_body["provider"] == "deterministic"
         assert revisit_body["model"] == "rules-v1"
-        assert revisit_body["prompt_version"] == "revisit-v2"
+        assert revisit_body["prompt_version"] == "revisit-v3"
         assert revisit_body["latency_ms"] >= 0
         assert revisit_body["input_tokens"] == 0
         assert revisit_body["output_tokens"] == 0
