@@ -1,0 +1,5 @@
+{
+  "name": "Throughput assumption",
+  "source": "Expected peak traffic is below 5000 requests per second. We chose the managed gateway because the team has limited operational capacity.",
+  "expected_kinds": ["assumption", "material_claim"]
+}

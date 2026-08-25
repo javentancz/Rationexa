@@ -1,0 +1,5 @@
+{
+  "name": "Unverified pricing claim",
+  "source": "Vendor A pricing is 40% higher than Vendor B at the representative usage level.",
+  "expected_kinds": ["material_claim"]
+}

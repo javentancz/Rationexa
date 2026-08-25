@@ -1,0 +1,5 @@
+{
+  "name": "Data residency unknown",
+  "source": "Can the service keep all customer data in Malaysia? This remains to be confirmed before approval.",
+  "expected_kinds": ["unknown"]
+}

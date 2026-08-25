@@ -1,0 +1,5 @@
+{
+  "name": "Vendor capability assumption",
+  "source": "We selected Vendor B because we assumed it does not support external users. Revisit if Vendor B introduces external-user support.",
+  "expected_kinds": ["assumption", "revisit_condition"]
+}

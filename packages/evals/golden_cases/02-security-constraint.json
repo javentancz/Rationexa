@@ -1,0 +1,5 @@
+{
+  "name": "Security hard constraint",
+  "source": "Production workloads must use SAML single sign-on. Password-only authentication is prohibited.",
+  "expected_kinds": ["hard_constraint"]
+}
