@@ -23,6 +23,8 @@ of done.
 - Repeatable evaluation harness and 12 curated source-backed cases.
 - Frozen `development-v1` manifest with content-integrity and holdout-leakage
   checks; sealed holdout collection remains external and pending.
+- Background extraction and revisit jobs with visible phases, polling,
+  cancellation, and late-result suppression.
 - Automated case-composition gate, API tests, lint, and web build checks.
 
 ## Acceptance-gate status

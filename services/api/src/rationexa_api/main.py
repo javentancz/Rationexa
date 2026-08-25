@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, HTTPException, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,10 +13,12 @@ from .db import (
     ExtractionRow,
     PremiseRow,
     RevisitRow,
+    SessionLocal,
     SourceAnchorRow,
     get_db,
     init_db,
 )
+from .jobs import job_manager
 from .prompts import EXTRACTION_PROMPT_VERSION
 from .providers import available_models, default_model_id, get_provider
 from .schemas import (
@@ -30,6 +32,7 @@ from .schemas import (
     ExtractionResult,
     ExtractionReviewRequest,
     HealthRead,
+    JobRead,
     ModelCatalogRead,
     PremiseKind,
     RevisitPremiseInput,
@@ -127,6 +130,14 @@ async def upload_artifact(file: UploadFile, db: Db) -> ArtifactRow:
 
 @app.post("/v1/decisions/extractions", response_model=ExtractionRead, status_code=status.HTTP_201_CREATED)
 def create_extraction(payload: ExtractionRequest, db: Db) -> ExtractionRead:
+    return perform_extraction(payload, db)
+
+
+def perform_extraction(
+    payload: ExtractionRequest,
+    db: Session,
+    job_id: str | None = None,
+) -> ExtractionRead | None:
     artifact = db.get(ArtifactRow, payload.artifact_id)
     if artifact is None:
         raise HTTPException(status_code=404, detail="Artifact not found")
@@ -135,6 +146,8 @@ def create_extraction(payload: ExtractionRequest, db: Db) -> ExtractionRead:
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     try:
+        if job_id:
+            job_manager.update(job_id, phase="Running model extraction", progress=35)
         result = provider.extract(artifact.extracted_text, artifact.filename)
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -143,6 +156,10 @@ def create_extraction(payload: ExtractionRequest, db: Db) -> ExtractionRead:
         premise.anchor = validate_anchor(premise.anchor, artifact.extracted_text)
         validated.append(premise)
     result.premises = validated
+    if job_id and job_manager.is_cancelled(job_id):
+        return None
+    if job_id:
+        job_manager.update(job_id, phase="Validating and saving premises", progress=85)
     row = ExtractionRow(
         artifact_id=artifact.id,
         provider=provider.name,
@@ -292,6 +309,15 @@ def get_decision(decision_id: str, db: Db) -> DecisionRead:
     status_code=status.HTTP_201_CREATED,
 )
 def create_revisit(decision_id: str, payload: RevisitRequest, db: Db) -> RevisitRead:
+    return perform_revisit(decision_id, payload, db)
+
+
+def perform_revisit(
+    decision_id: str,
+    payload: RevisitRequest,
+    db: Session,
+    job_id: str | None = None,
+) -> RevisitRead | None:
     decision = db.get(DecisionRow, decision_id)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
@@ -311,9 +337,15 @@ def create_revisit(decision_id: str, payload: RevisitRequest, db: Db) -> Revisit
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     try:
+        if job_id:
+            job_manager.update(job_id, phase="Comparing evidence with premises", progress=35)
         findings = provider.revisit(premises, evidence.extracted_text, decision.criticality)
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if job_id and job_manager.is_cancelled(job_id):
+        return None
+    if job_id:
+        job_manager.update(job_id, phase="Validating and saving findings", progress=85)
     row = RevisitRow(
         decision_id=decision.id,
         evidence_artifact_id=evidence.id,
@@ -323,6 +355,62 @@ def create_revisit(decision_id: str, payload: RevisitRequest, db: Db) -> Revisit
     db.commit()
     db.refresh(row)
     return revisit_read(row)
+
+
+@app.post("/v1/decisions/extractions/jobs", response_model=JobRead, status_code=status.HTTP_202_ACCEPTED)
+def create_extraction_job(payload: ExtractionRequest, db: Db) -> JobRead:
+    if db.get(ArtifactRow, payload.artifact_id) is None:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    try:
+        get_provider(settings, payload.model_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    def worker(job_id: str) -> dict | None:
+        with SessionLocal() as worker_db:
+            result = perform_extraction(payload, worker_db, job_id)
+            return result.model_dump(mode="json") if result else None
+
+    return JobRead.model_validate(job_manager.create("extraction", worker))
+
+
+@app.post(
+    "/v1/decisions/{decision_id}/revisit-jobs",
+    response_model=JobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def create_revisit_job(decision_id: str, payload: RevisitRequest, db: Db) -> JobRead:
+    if db.get(DecisionRow, decision_id) is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    try:
+        get_provider(settings, payload.model_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    def worker(job_id: str) -> dict | None:
+        with SessionLocal() as worker_db:
+            result = perform_revisit(decision_id, payload, worker_db, job_id)
+            return result.model_dump(mode="json") if result else None
+
+    return JobRead.model_validate(job_manager.create("revisit", worker))
+
+
+@app.get("/v1/jobs/{job_id}", response_model=JobRead)
+def get_job(job_id: str) -> JobRead:
+    try:
+        return JobRead.model_validate(job_manager.get(job_id))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Job not found") from exc
+
+
+@app.delete("/v1/jobs/{job_id}", response_model=JobRead)
+def cancel_job(job_id: str, response: Response) -> JobRead:
+    try:
+        job = job_manager.cancel(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Job not found") from exc
+    response.status_code = status.HTTP_202_ACCEPTED if job["status"] == "cancelled" else status.HTTP_200_OK
+    return JobRead.model_validate(job)
 
 
 def extraction_read(row: ExtractionRow) -> ExtractionRead:

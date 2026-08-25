@@ -39,6 +39,12 @@ pnpm dev:web
 
 Open `http://localhost:3000`. The default provider is local Ollama running Qwen3.5 9B, so no external API key is required. The first model download is approximately 6.6 GB.
 
+Extraction and revisit run as background jobs in the web app. The workspace
+shows queued, model, validation, and persistence phases and lets the reviewer
+cancel without keeping a browser request open. Ollama generation already in
+progress may finish after cancellation, but its late result is discarded and
+is not stored as an extraction or revisit finding.
+
 For fast tests without starting Ollama, set `AI_PROVIDER=deterministic`. To use the optional hosted adapter, set `AI_PROVIDER=openai`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
 
 ## Compare local models on real cases

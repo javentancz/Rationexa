@@ -1,3 +1,5 @@
+import time
+
 from fastapi.testclient import TestClient
 
 from rationexa_api.db import ExtractionRow, SessionLocal
@@ -93,6 +95,29 @@ def test_rejects_model_outside_server_allowlist() -> None:
 
         assert response.status_code == 422
         assert "allowlist" in response.json()["detail"]
+
+
+def test_extraction_background_job_completes() -> None:
+    with TestClient(app) as client:
+        artifact = client.post(
+            "/v1/artifacts",
+            json={"filename": "job.txt", "content": "We decided to use SQLite because it is portable."},
+        ).json()
+        created = client.post(
+            "/v1/decisions/extractions/jobs",
+            json={"artifact_id": artifact["id"]},
+        )
+
+        assert created.status_code == 202
+        job = created.json()
+        for _ in range(100):
+            job = client.get(f"/v1/jobs/{job['id']}").json()
+            if job["status"] in {"succeeded", "failed", "cancelled"}:
+                break
+            time.sleep(0.01)
+
+        assert job["status"] == "succeeded"
+        assert job["result"]["result"]["premises"]
 
 
 def test_critical_decision_rejects_unanchored_consequential_premise() -> None:

@@ -54,6 +54,7 @@ type PremiseReview = { action: ReviewAction; statement: string; kind: string };
 type DecisionDraft = { title: string; question: string; context: string; chosenOption: string; rationale: string };
 type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string };
 type ModelCatalog = { default_model_id: string; models: ModelOption[] };
+type Job = { id: string; kind: "extraction" | "revisit"; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; phase: string; progress: number; result?: unknown; error?: string };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
@@ -83,6 +84,7 @@ export default function Home() {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [selectedModelId, setSelectedModelId] = useState("");
   const [lastRevisitModel, setLastRevisitModel] = useState<string | null>(null);
+  const [activeJob, setActiveJob] = useState<Job | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,6 +130,26 @@ export default function Home() {
     setRevisitCompleted(false);
   }
 
+  async function waitForJob(created: Job): Promise<Job> {
+    let current = created;
+    setActiveJob(current);
+    while (!(["succeeded", "failed", "cancelled"] as string[]).includes(current.status)) {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      current = await responseJson(await fetch(`${api}/v1/jobs/${created.id}`));
+      setActiveJob(current);
+    }
+    if (current.status === "failed") throw new Error(current.error || "Background job failed");
+    if (current.status === "cancelled") throw new Error("Operation cancelled");
+    return current;
+  }
+
+  async function cancelActiveJob() {
+    if (!activeJob) return;
+    const cancelled = await responseJson(await fetch(`${api}/v1/jobs/${activeJob.id}`, { method: "DELETE" }));
+    setActiveJob(cancelled);
+    setBusyPhase(null);
+  }
+
   async function extract(event: FormEvent) {
     event.preventDefault();
     setBusyPhase("extract");
@@ -141,10 +163,12 @@ export default function Home() {
       } else {
         artifact = await responseJson(await fetch(`${api}/v1/artifacts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "decision-note.txt", media_type: "text/plain", content: source }) }));
       }
-      const next = await responseJson(await fetch(`${api}/v1/decisions/extractions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artifact_id: artifact.id, model_id: selectedModelId || undefined }) }));
-      initializeExtraction(next);
+      const created = await responseJson(await fetch(`${api}/v1/decisions/extractions/jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artifact_id: artifact.id, model_id: selectedModelId || undefined }) }));
+      const completed = await waitForJob(created);
+      initializeExtraction(completed.result as Extraction);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Extraction failed");
+      const message = caught instanceof Error ? caught.message : "Extraction failed";
+      if (message !== "Operation cancelled") setError(message);
     } finally {
       setBusyPhase(null);
     }
@@ -189,19 +213,22 @@ export default function Home() {
     setBusyPhase("revisit");
     setError(null);
     try {
-      const result = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/revisit-checks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "new-evidence.txt", content: evidence, model_id: selectedModelId || undefined }) }));
+      const created = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/revisit-jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "new-evidence.txt", content: evidence, model_id: selectedModelId || undefined }) }));
+      const completed = await waitForJob(created);
+      const result = completed.result as { findings: Finding[] };
       setFindings(result.findings);
       setRevisitCompleted(true);
       setLastRevisitModel(selectedModel?.label ?? selectedModelId);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Revisit failed");
+      const message = caught instanceof Error ? caught.message : "Revisit failed";
+      if (message !== "Operation cancelled") setError(message);
     } finally {
       setBusyPhase(null);
     }
   }
 
   function resetWorkspace() {
-    setExtraction(null); setDecision(null); setFindings([]); setRevisitCompleted(false); setLastRevisitModel(null); setReviews({}); setDraft(null); setSelectedPremise(null); setError(null);
+    setExtraction(null); setDecision(null); setFindings([]); setRevisitCompleted(false); setLastRevisitModel(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJob(null); setBusyPhase(null); setError(null);
   }
 
   return (
@@ -236,6 +263,8 @@ export default function Home() {
         </ol>
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
+
+        {activeJob && ["queued", "running"].includes(activeJob.status) ? <section className="job-progress" aria-live="polite"><div><strong>{activeJob.phase}</strong><span>{activeJob.progress}% · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeJob.progress}%` }} /></div><button type="button" onClick={cancelActiveJob}>Cancel</button></section> : null}
 
         {!extraction ? (
           <section className="card import-card">

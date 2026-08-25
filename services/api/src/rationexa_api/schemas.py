@@ -63,6 +63,19 @@ class ModelCatalogRead(BaseModel):
     models: list[ModelOption]
 
 
+class JobRead(BaseModel):
+    id: str
+    kind: Literal["extraction", "revisit"]
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+    phase: str
+    progress: int = Field(ge=0, le=100)
+    cancel_requested: bool
+    result: dict | None = None
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class SourceAnchor(BaseModel):
     exact_excerpt: str
     start_offset: int = Field(ge=0)
