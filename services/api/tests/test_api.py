@@ -1,9 +1,18 @@
 import time
 
 from fastapi.testclient import TestClient
-from sqlalchemy import inspect, select
+from sqlalchemy import func, inspect, select
 
-from rationexa_api.db import ExtractionRow, RevisitRow, SessionLocal, engine
+from rationexa_api.db import (
+    DecisionRow,
+    DecisionShareRow,
+    ExtractionRow,
+    PremiseRow,
+    RevisitRow,
+    SessionLocal,
+    SourceAnchorRow,
+    engine,
+)
 from rationexa_api.main import app
 
 
@@ -475,3 +484,64 @@ def test_pdf_export_returns_not_found_for_unknown_decision() -> None:
         response = client.get("/v1/decisions/missing/export/pdf")
 
     assert response.status_code == 404
+
+
+def test_delete_decision_removes_all_related_records() -> None:
+    with TestClient(app) as client:
+        decision = create_finalized_decision(
+            client,
+            source="We decided to use Vendor B because it was assumed Vendor B does not support external users.",
+            title="Deletable decision",
+            criticality="critical",
+          )
+        revisit = client.post(
+            f"/v1/decisions/{decision['id']}/revisit-checks",
+            json={"content": "Vendor B now supports external users."},
+          )
+        assert revisit.status_code == 201
+        share = client.post(f"/v1/decisions/{decision['id']}/shares", json={}).json()
+        assert share["status"] == "active"
+
+        with SessionLocal() as db:
+            premise_ids = [
+                 row.id for row in db.scalars(select(PremiseRow).where(PremiseRow.decision_id == decision["id"])).all()
+             ]
+            assert premise_ids
+            anchored = db.scalar(
+                 select(func.count()).select_from(SourceAnchorRow).where(SourceAnchorRow.premise_id.in_(premise_ids))
+              )
+            assert anchored > 0
+
+        deleted = client.delete(f"/v1/decisions/{decision['id']}")
+        assert deleted.status_code == 204
+
+        with SessionLocal() as db:
+            assert db.get(DecisionRow, decision["id"]) is None
+            remaining_premises = db.scalar(
+                 select(func.count()).select_from(PremiseRow).where(PremiseRow.decision_id == decision["id"])
+               )
+            assert remaining_premises == 0
+            remaining_revisits = db.scalar(
+                 select(func.count()).select_from(RevisitRow).where(RevisitRow.decision_id == decision["id"])
+               )
+            assert remaining_revisits == 0
+            remaining_shares = db.scalar(
+                 select(func.count())
+                   .select_from(DecisionShareRow)
+                   .where(DecisionShareRow.decision_id == decision["id"])
+               )
+            assert remaining_shares == 0
+            remaining_anchors = db.scalar(
+                 select(func.count())
+                   .select_from(SourceAnchorRow)
+                   .where(SourceAnchorRow.premise_id.in_(premise_ids))
+               )
+            assert remaining_anchors == 0
+
+        assert client.get(f"/v1/decisions/{decision['id']}").status_code == 404
+        assert client.get(f"/v1/shares/{share['token']}").status_code == 404
+
+
+def test_delete_unknown_decision_returns_not_found() -> None:
+    with TestClient(app) as client:
+        assert client.delete("/v1/decisions/missing").status_code == 404

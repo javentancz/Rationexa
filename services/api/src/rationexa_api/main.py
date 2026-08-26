@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -330,6 +330,23 @@ def get_decision(decision_id: str, db: Db) -> DecisionRead:
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     return decision_read(decision)
+
+
+@app.delete("/v1/decisions/{decision_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_decision(decision_id: str, db: Db) -> Response:
+    if db.get(DecisionRow, decision_id) is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    premise_ids = [
+        premise.id for premise in db.scalars(select(PremiseRow).where(PremiseRow.decision_id == decision_id)).all()
+     ]
+    if premise_ids:
+        db.execute(delete(SourceAnchorRow).where(SourceAnchorRow.premise_id.in_(premise_ids)))
+    db.execute(delete(PremiseRow).where(PremiseRow.decision_id == decision_id))
+    db.execute(delete(RevisitRow).where(RevisitRow.decision_id == decision_id))
+    db.execute(delete(DecisionShareRow).where(DecisionShareRow.decision_id == decision_id))
+    db.execute(delete(DecisionRow).where(DecisionRow.id == decision_id))
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.get("/v1/decisions", response_model=DecisionListRead)

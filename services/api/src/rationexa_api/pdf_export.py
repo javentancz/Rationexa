@@ -77,12 +77,16 @@ def _paragraph(pdf: DecisionPdf, text: str | None, fallback: str = "Not recorded
 
 
 def _bullet(pdf: DecisionPdf, label: str, value: str | None) -> None:
+    label_width = 42.0
+    value_width = _content(pdf) - label_width
+    top_y = pdf.get_y()
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_text_color(31, 96, 66)
-    pdf.multi_cell(_content(pdf), 5.0, f"{label}: ", new_x="LMARGIN", new_y="TOP")
+    pdf.multi_cell(label_width, 5.0, f"{label}:", new_x="LMARGIN", new_y="TOP")
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(40, 47, 42)
-    pdf.multi_cell(_content(pdf) - 38, 5.0, _pdf_text(value, "Not recorded"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_xy(pdf.l_margin + label_width, top_y)
+    pdf.multi_cell(value_width, 5.0, _pdf_text(value, "Not recorded"), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1.0)
     pdf.set_text_color(23, 32, 25)
 

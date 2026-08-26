@@ -69,8 +69,9 @@ type Finding = {
   confidence_band: string;
   explanation: string;
   missing_context_question?: string;
-  new_excerpt: string;
-  source_fallback_performed: boolean;
+   new_excerpt: string;
+   old_excerpt?: string;
+   source_fallback_performed: boolean;
   finding_type?: "premise_change" | "new_constraint";
   detection_source?: "model" | "deterministic_rules" | "deterministic_safety_net";
   human_judgment?: FindingJudgment;
@@ -144,6 +145,10 @@ export default function Home() {
   const [shares, setShares] = useState<Share[]>([]);
   const [shareBusy, setShareBusy] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [confirmingDeleteFor, setConfirmingDeleteFor] = useState<string | null>(null);
+  const [deleteTitle, setDeleteTitle] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -390,6 +395,8 @@ export default function Home() {
        setActiveRevisitId(null);
        setEvidence("");
        setLibraryQuery("");
+       setConfirmingDeleteFor(null);
+       setExpandedHistoryId(null);
        setView("workspace");
        void loadShares(decisionId).catch(() => { setShares([]); });
        window.location.hash = "workspace";
@@ -497,13 +504,43 @@ export default function Home() {
     try {
       await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/shares/${shareId}`, { method: "DELETE" }));
       await loadShares(decision.id);
-       setCopiedToken((current) => (current === token ? null : current));
+        setCopiedToken((current) => (current === token ? null : current));
+         } catch (caught) {
+       setError(caught instanceof Error ? caught.message : "Could not revoke the share link");
+         } finally {
+        setShareBusy(false);
+         }
+        }
+
+  async function deleteDecision(targetId: string) {
+    setDeleteBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`${api}/v1/decisions/${targetId}`, { method: "DELETE" });
+      if (!response.ok && response.status !== 404) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.detail ?? `Delete failed with status ${response.status}`);
+         }
+      if (view === "workspace") {
+        setDecision(null);
+        setExtraction(null);
+        setFindings([]);
+        setComparisonRuns([]);
+        setRevisitHistory([]);
+        setRevisitCompleted(false);
+        setExpandedHistoryId(null);
+        setShares([]);
+        }
+      setConfirmingDeleteFor(null);
+      setDeleteTitle(null);
+      setView("library");
+      await loadLibrary();
        } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not revoke the share link");
+      setError(caught instanceof Error ? caught.message : "Could not delete this decision");
        } finally {
-       setShareBusy(false);
+      setDeleteBusy(false);
        }
-      }
+       }
 
   const sharePanel = decision ? (
     <section className="share-panel">
@@ -556,11 +593,14 @@ export default function Home() {
             <label className="field library-filter"><span>Criticality</span><select value={libraryCriticality} onChange={(event) => setLibraryCriticality(event.target.value as "all" | Criticality)}><option value="all">All decisions</option><option value="critical">Critical</option><option value="important">Important</option><option value="routine">Routine</option></select></label>
           </div>
           <div className="library-summary"><div><strong>{library.total}</strong><span>saved decisions</span></div><p>Reopen a record to review its premises, add new evidence, or inspect previous revisit checks.</p></div>
-          {libraryLoading ? <div className="library-empty"><span className="spinner dark" /><strong>Loading decision memory…</strong></div> : library.items.length ? <div className="decision-list">{library.items.map((item) => <button type="button" className="decision-row" key={item.id} onClick={() => openDecision(item.id)}>
-            <div className="decision-row-main"><div><span className={`criticality-dot ${item.criticality}`} /> <span>{item.criticality}</span></div><h2>{item.title}</h2><p>{item.question}</p></div>
-            <div className="decision-row-stats"><div><strong>{item.premise_count}</strong><span>premises</span></div><div><strong>{item.revisit_count}</strong><span>revisits</span></div>{item.pending_revisit_count ? <div className="pending-stat"><strong>{item.pending_revisit_count}</strong><span>need review</span></div> : null}</div>
-            <div className="decision-row-date"><span>Last checked</span><strong>{formatDate(item.last_revisited_at)}</strong><small>Saved {formatDate(item.created_at)}</small></div><span className="row-arrow">→</span>
-          </button>)}</div> : <div className="library-empty"><span className="library-empty-icon">▤</span><strong>{libraryQuery || libraryCriticality !== "all" ? "No matching decisions" : "Your decision memory starts here"}</strong><p>{libraryQuery || libraryCriticality !== "all" ? "Try a broader search or remove the criticality filter." : "Finalize your first decision review and it will appear here automatically."}</p><button className="primary" onClick={resetWorkspace}>Create a decision →</button></div>}
+{libraryLoading ? <div className="library-empty"><span className="spinner dark" /><strong>Loading decision memory…</strong></div> : library.items.length ? <div className="decision-list">{library.items.map((item) => <div className="decision-card" key={item.id}>
+            <button type="button" className="decision-row" onClick={() => openDecision(item.id)}>
+              <div className="decision-row-main"><div><span className={`criticality-dot ${item.criticality}`} /> <span>{item.criticality}</span></div><h2>{item.title}</h2><p>{item.question}</p></div>
+              <div className="decision-row-stats"><div><strong>{item.premise_count}</strong><span>premises</span></div><div><strong>{item.revisit_count}</strong><span>revisits</span></div>{item.pending_revisit_count ? <div className="pending-stat"><strong>{item.pending_revisit_count}</strong><span>need review</span></div> : null}</div>
+              <div className="decision-row-date"><span>Last checked</span><strong>{formatDate(item.last_revisited_at)}</strong><small>Saved {formatDate(item.created_at)}</small></div><span className="row-arrow">→</span>
+            </button>
+            <button type="button" className="decision-row-delete" aria-label={`Delete ${item.title}`} title="Delete decision" onClick={() => { setDeleteTitle(item.title); setConfirmingDeleteFor(item.id); }}>Delete</button>
+          </div>)}</div> : <div className="library-empty"><span className="library-empty-icon">▤</span><strong>{libraryQuery || libraryCriticality !== "all" ? "No matching decisions" : "Your decision memory starts here"}</strong><p>{libraryQuery || libraryCriticality !== "all" ? "Try a broader search or remove the criticality filter." : "Finalize your first decision review and it will appear here automatically."}</p><button className="primary" onClick={resetWorkspace}>Create a decision →</button></div>}
         </section> : null}
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
@@ -620,7 +660,7 @@ export default function Home() {
               </section>
               <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Ready to finalize?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before finalizing.` : `${counts.confirm} premises will be preserved · ${counts.unknown} unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "finalize" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0 || unanchoredCritical.length > 0} onClick={reviewAndFinalize}>{busyPhase === "finalize" ? <><span className="spinner" />Saving decision…</> : "Save reviewed decision →"}</button></section>
             </> : <section className="card finalized-summary">
-              <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" disabled={pdfExportBusy} onClick={downloadPdf}>{pdfExportBusy ? "Preparing PDF…" : "Export PDF"}</button><button className="text-button" onClick={resetWorkspace}>New review</button></div></div>
+                           <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" disabled={pdfExportBusy} onClick={downloadPdf}>{pdfExportBusy ? "Preparing PDF…" : "Export PDF"}</button><button className="text-button danger" onClick={() => { setDeleteTitle(decision.title); setConfirmingDeleteFor(decision.id); }}>Delete record</button><button className="text-button" onClick={resetWorkspace}>New review</button></div></div>
               <div className="record-meta"><div><span>Chosen option</span><strong>{draft.chosenOption || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Extracted by</span><strong>{extraction.model}</strong></div></div>
               <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
                 {sharePanel}
@@ -629,7 +669,7 @@ export default function Home() {
         ) : null}
 
         {view === "workspace" && decision && !extraction ? <section className="card finalized-summary">
-          <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" disabled={pdfExportBusy} onClick={downloadPdf}>{pdfExportBusy ? "Preparing PDF…" : "Export PDF"}</button><button className="text-button" onClick={() => setView("library")}>Back to library</button></div></div>
+          <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" disabled={pdfExportBusy} onClick={downloadPdf}>{pdfExportBusy ? "Preparing PDF…" : "Export PDF"}</button><button className="text-button danger" onClick={() => { setDeleteTitle(decision.title); setConfirmingDeleteFor(decision.id); }}>Delete record</button><button className="text-button" onClick={() => setView("library")}>Back to library</button></div></div>
           <div className="record-meta"><div><span>Chosen option</span><strong>{decision.chosen_option || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Saved</span><strong>{formatDate(decision.created_at)}</strong></div></div>
            <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
              {sharePanel}
@@ -637,7 +677,21 @@ export default function Home() {
 
         {view === "workspace" && decision ? <section className="card revisit-card">
           <div className="section-heading"><div><span className="overline">Step 4 · Revisit</span><h2>What changed?</h2><p>Check one model or compare two models against the same preserved premises and evidence.</p></div><span className="decision-badge">{decision.criticality}</span></div>
-          {revisitHistory.length ? <section className="history-strip"><div className="history-heading"><div><span className="overline">Revisit history</span><h3>{revisitHistory.length} previous check{revisitHistory.length === 1 ? "" : "s"}</h3></div><span>Newest first</span></div><div className="history-list">{revisitHistory.map((run) => <article key={run.id} className="history-item"><div><strong>{run.evidence_filename || "New evidence"}</strong><span>{run.provider || "unknown"}/{run.model || "unknown"} · {formatDate(run.created_at)}</span></div><div><strong>{run.findings.length}</strong><span>findings</span></div><span className={`history-status ${run.status}`}>{run.status.replaceAll("_", " ")}</span></article>)}</div></section> : null}
+            {revisitHistory.length ? <section className="history-strip"><div className="history-heading"><div><span className="overline">Revisit history</span><h3>{revisitHistory.length} previous check{revisitHistory.length === 1 ? "" : "s"}</h3></div><span>Newest first · click a check to see its findings</span></div><div className="history-list">{revisitHistory.map((run) => {
+              const open = expandedHistoryId === run.id;
+              return <article key={run.id} className={`history-item ${open ? "open" : ""}`} onClick={() => setExpandedHistoryId(open ? null : run.id)}>
+                <div className="history-item-toggle"><span className="chev">▸</span><div><strong>{run.evidence_filename || "New evidence"}</strong><span>{run.provider || "unknown"}/{run.model || "unknown"} · {formatDate(run.created_at)}</span></div></div>
+                <div><strong>{run.findings.length}</strong><span>findings</span></div>
+                <span className={`history-status ${run.status}`}>{run.status.replaceAll("_", " ")}</span>
+                {open ? <div className="history-detail">{run.findings.length ? run.findings.map((finding, findingIndex) => <div key={`${finding.premise_id}-${findingIndex}`} className={`finding ${finding.relationship}`}>
+                    <div className="finding-status"><span>{finding.finding_type === "new_constraint" ? "new constraint" : finding.relationship}</span><small>{finding.confidence_band} confidence</small></div>
+                    <h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>
+                    {finding.old_excerpt ? <p className="history-old"><strong>Original excerpt</strong><blockquote>{finding.old_excerpt}</blockquote></p> : null}
+                    {finding.missing_context_question ? <p className="missing-context">Question: {finding.missing_context_question}</p> : null}
+                    {finding.human_judgment ? <p className="history-judgment">Reviewer: {finding.human_judgment.replaceAll("_", " ")}{finding.human_notes ? ` — ${finding.human_notes}` : ""}</p> : null}
+                   </div>) : <p className="history-empty">No material relationship was found.</p>}</div> : null}
+               </article>;
+             })}</div></section> : null}
           <div className="mode-toggle" aria-label="Revisit mode"><button type="button" className={!compareMode ? "active" : ""} aria-pressed={!compareMode} onClick={() => { setCompareMode(false); setComparisonRuns([]); }}>Single model</button><button type="button" className={compareMode ? "active" : ""} aria-pressed={compareMode} disabled={models.length < 2} onClick={() => { setCompareMode(true); setFindings([]); }}>Compare models</button></div>
           {compareMode ? <div className="compare-models"><label className="field"><span>Model A</span><select aria-label="Comparison model A" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)} disabled={busyPhase !== null}>{models.map((model) => <option key={model.id} value={model.id} disabled={model.id === comparisonModelId}>{model.label} · {model.location}</option>)}</select></label><div className="versus">VS</div><label className="field"><span>Model B</span><select aria-label="Comparison model B" value={comparisonModelId} onChange={(event) => setComparisonModelId(event.target.value)} disabled={busyPhase !== null}>{models.map((model) => <option key={model.id} value={model.id} disabled={model.id === selectedModelId}>{model.label} · {model.location}</option>)}</select></label></div> : null}
           <label className="field"><span>New evidence</span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); setFindings([]); setComparisonRuns([]); setActiveRevisitId(null); }} rows={5} /></label>
@@ -663,8 +717,16 @@ export default function Home() {
               </div>
             </article>)}
           </div> : !comparisonRuns.length && revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>{lastRevisitModel} found no material effect on the consequential premises preserved in this decision.</span>{lastRevisitProvenance ? <span>Run provenance: {lastRevisitProvenance}</span> : null}</div> : null}
-        </section> : null}
-      </main>
-    </div>
-  );
+          </section> : null}
+        </main>
+
+         {confirmingDeleteFor ? <div className="modal-backdrop" onClick={() => { setConfirmingDeleteFor(null); setDeleteTitle(null); }}>
+           <div className="confirm-modal" onClick={(event) => event.stopPropagation()}>
+             <h3>Delete this decision?</h3>
+             <p>This permanently removes <strong>{deleteTitle || "this decision"}</strong>, its preserved premises, source excerpts, revisit history, and any share links. This cannot be undone.</p>
+             <div className="modal-actions"><button className="text-button" onClick={() => { setConfirmingDeleteFor(null); setDeleteTitle(null); }} disabled={deleteBusy}>Cancel</button><button className="primary danger" disabled={deleteBusy} onClick={() => void deleteDecision(confirmingDeleteFor)}>{deleteBusy ? "Deleting…" : "Delete permanently"}</button></div>
+            </div>
+          </div> : null}
+      </div>
+    );
 }
