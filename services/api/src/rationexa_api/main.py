@@ -655,6 +655,21 @@ def revoke_share(decision_id: str, share_id: str, db: Db) -> ShareRead:
     return share_read(share, settings.public_base_url)
 
 
+@app.delete(
+    "/v1/decisions/{decision_id}/shares/{share_id}/record",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_share_record(decision_id: str, share_id: str, db: Db) -> Response:
+    share = db.get(DecisionShareRow, share_id)
+    if share is None or share.decision_id != decision_id:
+        raise HTTPException(status_code=404, detail="Shared decision link not found")
+    if share.status == "active" and not _is_expired(share):
+        raise HTTPException(status_code=409, detail="Revoke the active share link before deleting its record")
+    db.delete(share)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.get("/v1/shares/{token}", response_model=ShareDecisionRead)
 def get_shared_decisions(token: str, db: Db) -> ShareDecisionRead:
     return load_shared_decision(db, token)

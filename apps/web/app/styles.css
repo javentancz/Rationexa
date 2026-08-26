@@ -173,6 +173,11 @@ button { cursor:pointer; }
 .share-link>div { display:flex; gap:6px; }
 .share-expired { margin-left:auto; color:var(--subtle); font-size:10px; font-style:italic; }
 .share-item.revoked { opacity:.6; }
+.share-item.revoked:hover,.share-item.revoked:focus-within { opacity:.85; }
+.share-retired-actions { display:flex; align-items:center; gap:10px; margin-left:auto; }
+.share-delete { width:32px; height:32px; border-radius:8px; background:transparent; color:var(--red); opacity:.55; transition:opacity .15s,background .15s,transform .15s; }
+.share-delete:hover,.share-delete:focus-visible { background:var(--red-soft); opacity:1; transform:translateY(-1px); }
+.share-delete::after { top:auto; right:0; bottom:calc(100% + 8px); }
 .text-button.danger { color:var(--red); }
 .text-button.danger:disabled { cursor:wait; opacity:.55; }
 .revisit-card { margin-top:22px; }

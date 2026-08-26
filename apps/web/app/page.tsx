@@ -170,6 +170,8 @@ export default function Home() {
   const [confirmingDeleteFor, setConfirmingDeleteFor] = useState<string | null>(null);
   const [deleteTitle, setDeleteTitle] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [confirmingShareDelete, setConfirmingShareDelete] = useState<Share | null>(null);
+  const [shareDeleteBusy, setShareDeleteBusy] = useState(false);
   const [workflowView, setWorkflowView] = useState<WorkflowStep>(1);
 
   useEffect(() => {
@@ -486,6 +488,7 @@ export default function Home() {
 
   function resetWorkspace() {
     setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setExportBusy(false); setPdfExportBusy(false); setError(null); setShares([]); setCopiedToken(null);
+    setConfirmingShareDelete(null);
     setWorkflowView(1);
      }
 
@@ -538,6 +541,25 @@ export default function Home() {
          }
         }
 
+  async function deleteShareRecord() {
+    if (!decision || !confirmingShareDelete) return;
+    setShareDeleteBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`${api}/v1/decisions/${decision.id}/shares/${confirmingShareDelete.id}/record`, { method: "DELETE" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.detail ?? `Delete failed with status ${response.status}`);
+      }
+      setShares((current) => current.filter((share) => share.id !== confirmingShareDelete.id));
+      setConfirmingShareDelete(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not delete the share record");
+    } finally {
+      setShareDeleteBusy(false);
+    }
+  }
+
   async function deleteDecision(targetId: string) {
     setDeleteBusy(true);
     setError(null);
@@ -575,7 +597,7 @@ export default function Home() {
       <button className="primary" disabled={shareBusy} onClick={createShare}>{shareBusy ? <><span className="spinner" />Creating link…</> : "＋ Create share link"}</button>
       {shares.length ? <div className="share-list">{shares.map((share) => <div key={share.id} className={`share-item ${share.status}`}>
         <div><strong>{share.status === "active" ? "Active link" : "Revoked"}</strong><small>{formatDate(share.created_at)}{share.expires_at ? ` · expires ${formatDate(share.expires_at)}` : " · no expiry"}</small></div>
-         {share.status === "active" ? <div className="share-link"><code>{share.url}</code><div><button className="text-button" onClick={() => copyLink(share.url)}>{copiedToken === share.url ? "Copied ✓" : "Copy"}</button><button className="text-button danger" disabled={shareBusy} onClick={() => revokeShare(share.id, share.token)}>Revoke</button></div></div> : <span className="share-expired">No longer usable</span>}
+         {share.status === "active" ? <div className="share-link"><code>{share.url}</code><div><button className="text-button" onClick={() => copyLink(share.url)}>{copiedToken === share.url ? "Copied ✓" : "Copy"}</button><button className="text-button danger" disabled={shareBusy} onClick={() => revokeShare(share.id, share.token)}>Revoke</button></div></div> : <div className="share-retired-actions"><span className="share-expired">No longer usable</span><button type="button" className="share-delete icon-action" data-tooltip="Delete share record" aria-label="Delete revoked share record" onClick={() => setConfirmingShareDelete(share)}><ActionIcon name="delete" /></button></div>}
        </div>)}</div> : null}
      </section>
     ) : null;
@@ -790,6 +812,14 @@ export default function Home() {
              <div className="modal-actions"><button className="text-button" onClick={() => { setConfirmingDeleteFor(null); setDeleteTitle(null); }} disabled={deleteBusy}>Cancel</button><button className="primary danger" disabled={deleteBusy} onClick={() => void deleteDecision(confirmingDeleteFor)}>{deleteBusy ? "Deleting…" : "Delete permanently"}</button></div>
             </div>
           </div> : null}
+
+         {confirmingShareDelete ? <div className="modal-backdrop" onClick={() => { if (!shareDeleteBusy) setConfirmingShareDelete(null); }}>
+           <div className="confirm-modal" onClick={(event) => event.stopPropagation()}>
+             <h3>Delete this revoked share record?</h3>
+             <p>This removes the old link from the sharing history. The finalized decision and its revisit history will remain unchanged.</p>
+             <div className="modal-actions"><button className="text-button" onClick={() => setConfirmingShareDelete(null)} disabled={shareDeleteBusy}>Cancel</button><button className="primary danger" disabled={shareDeleteBusy} onClick={() => void deleteShareRecord()}>{shareDeleteBusy ? "Deleting…" : "Delete share record"}</button></div>
+           </div>
+         </div> : null}
       </div>
     );
 }

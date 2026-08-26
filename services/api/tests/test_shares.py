@@ -91,6 +91,25 @@ def test_share_link_round_trips_read_only_record_and_revoke() -> None:
         after_revoke = client.get(f"/v1/shares/{share['token']}")
         assert after_revoke.status_code == 404
 
+        deleted = client.delete(f"/v1/decisions/{decision['id']}/shares/{share['id']}/record")
+        assert deleted.status_code == 204
+        assert client.get(f"/v1/decisions/{decision['id']}/shares").json() == []
+
+
+def test_active_share_must_be_revoked_before_its_record_is_deleted() -> None:
+    with TestClient(app) as client:
+        decision = create_finalized_decision(
+            client,
+            source="We decided to keep the internal deployment private.",
+            title="Active share deletion guard",
+        )
+        share = _created_share(client, decision["id"])
+
+        response = client.delete(f"/v1/decisions/{decision['id']}/shares/{share['id']}/record")
+
+        assert response.status_code == 409
+        assert "Revoke the active share link" in response.json()["detail"]
+
 
 def test_expired_share_link_is_not_served() -> None:
     with TestClient(app) as client:
