@@ -16,6 +16,7 @@ dependencies = [
   "sqlalchemy>=2.0.52,<3",
   "psycopg[binary]>=3.3.4,<4",
   "pypdf>=6.16.2,<7",
+  "fpdf2>=2.8.8,<3",
   "uvicorn[standard]>=0.52.4,<1"
 ]
 

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: float = 180
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.4-mini"
+    public_base_url: str = "http://localhost:3000"
+    share_default_ttl_days: int = 30
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     @property

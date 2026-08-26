@@ -118,6 +118,20 @@ button { cursor:pointer; }
 .preserved-premises>div { border:1px solid var(--line); border-radius:8px; padding:11px 13px; }
 .preserved-premises span { color:var(--accent); font-size:9px; font-weight:800; text-transform:uppercase; }
 .preserved-premises p { margin:5px 0 0; font-size:12px; }
+.share-panel { margin-top:22px; padding-top:20px; border-top:1px solid var(--line); display:grid; gap:14px; }
+.share-note { margin:0; color:var(--muted); font-size:11px; line-height:1.5; max-width:62ch; }
+.share-list { display:grid; gap:8px; }
+.share-item { display:flex; align-items:center; gap:14px; border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:#fbfcfb; }
+.share-item>div:first-child { display:grid; gap:3px; min-width:0; }
+.share-item strong { font-size:11px; }
+.share-item small { color:var(--muted); font-size:9px; }
+.share-link { display:flex; align-items:center; gap:12px; margin-left:auto; min-width:0; }
+.share-link code { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:280px; border:1px solid var(--line); border-radius:7px; padding:5px 9px; background:var(--surface); color:var(--accent-dark); font-size:10px; }
+.share-link>div { display:flex; gap:6px; }
+.share-expired { margin-left:auto; color:var(--subtle); font-size:10px; font-style:italic; }
+.share-item.revoked { opacity:.6; }
+.text-button.danger { color:var(--red); }
+.text-button.danger:disabled { cursor:wait; opacity:.55; }
 .revisit-card { margin-top:22px; }
 .history-strip { display:grid; gap:11px; margin-bottom:20px; border:1px solid var(--line); border-radius:11px; padding:15px; background:#fafbfa; }
 .history-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; }

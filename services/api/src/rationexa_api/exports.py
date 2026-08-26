@@ -5,9 +5,9 @@ from datetime import datetime
 from .db import DecisionRow, RevisitRow
 
 
-def export_filename(title: str) -> str:
+def export_filename(title: str, extension: str = "md") -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
-    return f"{slug[:80] or 'decision'}-record.md"
+    return f"{slug[:80] or 'decision'}-record.{extension}"
 
 
 def _inline(value: object | None, fallback: str = "Not recorded") -> str:

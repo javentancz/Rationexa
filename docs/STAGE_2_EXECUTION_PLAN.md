@@ -19,15 +19,20 @@ Status: implemented.
 - Show revisit count, pending review state, and last revisit date.
 - Preserve per-run evidence filename, model provenance, findings, human
   judgments, latency, token usage, and cost.
-
 ## Milestone 2 - sharing and export
 
-Status: in progress. Markdown export is implemented; revocable share links and
-PDF export remain.
+Status: complete. Revocable share links and both Markdown and PDF export
+are implemented.
 
-- Create revocable read-only share links.
-- Export a decision record and its revisit history to Markdown first. Implemented.
-- Add PDF export only after the Markdown record is stable.
+- Create revocable read-only share links. Implemented. A link renders the
+  finalized decision, its premises, and revisit history; the owner can
+  list, copy, and revoke links at any time. Shared payloads scrub provider
+  secrets and private source artifacts, and links can expire.
+- Export a decision record and its revisit history to Markdown first.
+  Implemented.
+- Export a decision record and its revisit history to PDF. Implemented as
+  a server-side render that mirrors the Markdown structure and is gated on
+  the Markdown record being stable.
 - Never expose provider keys or private source artifacts through a share link.
 
 ## Milestone 3 - lightweight challenge

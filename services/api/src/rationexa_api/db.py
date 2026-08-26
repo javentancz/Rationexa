@@ -1,9 +1,10 @@
 from collections.abc import Generator
 from datetime import UTC, datetime
+from secrets import token_urlsafe
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, String, Text, create_engine, inspect, text
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -18,6 +19,10 @@ from .config import get_settings
 
 def new_id() -> str:
     return str(uuid4())
+
+
+def new_share_token() -> str:
+    return token_urlsafe(24)
 
 
 def now_utc() -> datetime:
@@ -116,6 +121,19 @@ class RevisitRow(Base):
     output_tokens: Mapped[int | None] = mapped_column(nullable=True)
     estimated_cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class DecisionShareRow(Base):
+    __tablename__ = "decision_shares"
+    __table_args__ = (Index("ix_decision_shares_decision_id", "decision_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    decision_id: Mapped[str] = mapped_column(ForeignKey("decisions.id"))
+    token: Mapped[str] = mapped_column(String(64), unique=True, default=new_share_token)
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 settings = get_settings()

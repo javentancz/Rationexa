@@ -85,6 +85,7 @@ type ModelCatalog = { default_model_id: string; models: ModelOption[] };
 type Job = { id: string; kind: "extraction" | "revisit"; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; phase: string; progress: number; result?: unknown; error?: string };
 type RevisitResult = { id: string; decision_id: string; status: string; findings: Finding[]; provider?: string; model?: string; prompt_version?: string; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number; evidence_filename?: string; created_at: string };
 type ComparisonRun = { modelId: string; label: string; result: RevisitResult };
+type Share = { id: string; decision_id: string; token: string; status: string; url: string | null; created_at: string; expires_at: string | null; revoked_at: string | null };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
@@ -137,8 +138,12 @@ export default function Home() {
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryCriticality, setLibraryCriticality] = useState<"all" | Criticality>("all");
   const [libraryLoading, setLibraryLoading] = useState(false);
-  const [revisitHistory, setRevisitHistory] = useState<RevisitResult[]>([]);
-  const [exportBusy, setExportBusy] = useState(false);
+   const [revisitHistory, setRevisitHistory] = useState<RevisitResult[]>([]);
+   const [exportBusy, setExportBusy] = useState(false);
+   const [pdfExportBusy, setPdfExportBusy] = useState(false);
+  const [shares, setShares] = useState<Share[]>([]);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -377,16 +382,17 @@ export default function Home() {
       ]) as [Decision, RevisitResult[]];
       setDecision(record);
       setDraft({ title: record.title, question: record.question, context: record.context, chosenOption: record.chosen_option ?? "", rationale: record.rationale });
-      setRevisitHistory(history);
-      setExtraction(null);
-      setFindings([]);
-      setComparisonRuns([]);
-      setRevisitCompleted(false);
-      setActiveRevisitId(null);
-      setEvidence("");
-      setLibraryQuery("");
-      setView("workspace");
-      window.location.hash = "workspace";
+       setRevisitHistory(history);
+       setExtraction(null);
+       setFindings([]);
+       setComparisonRuns([]);
+       setRevisitCompleted(false);
+       setActiveRevisitId(null);
+       setEvidence("");
+       setLibraryQuery("");
+       setView("workspace");
+       void loadShares(decisionId).catch(() => { setShares([]); });
+       window.location.hash = "workspace";
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not open the decision");
     }
@@ -412,19 +418,107 @@ export default function Home() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not export this decision");
-    } finally {
-      setExportBusy(false);
+       } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Could not export this decision");
+        } finally {
+        setExportBusy(false);
+        }
     }
-  }
+
+  async function downloadPdf() {
+    if (!decision) return;
+    setPdfExportBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`${api}/v1/decisions/${decision.id}/export/pdf`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.detail ?? `PDF export failed with status ${response.status}`);
+        }
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "decision-record.pdf";
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Could not export this decision as PDF");
+        } finally {
+        setPdfExportBusy(false);
+        }
+    }
 
   function resetWorkspace() {
-    setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setExportBusy(false); setError(null);
-  }
+    setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setExportBusy(false); setPdfExportBusy(false); setError(null); setShares([]); setCopiedToken(null);
+     }
 
-  return (
-    <div className="app-shell">
+  async function loadShares(decisionId: string) {
+    setShares(await responseJson(await fetch(`${api}/v1/decisions/${decisionId}/shares`)) as Share[]);
+   }
+
+  async function createShare() {
+    if (!decision) return;
+    setShareBusy(true);
+    setError(null);
+    try {
+      const created = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/shares`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+        })) as Share;
+      await loadShares(decision.id);
+      await copyLink(created.url ?? created.token);
+     } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not create a share link");
+     } finally {
+      setShareBusy(false);
+     }
+    }
+
+  async function copyLink(value: string | null) {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      window.prompt("Copy this link:", value);
+     }
+    setCopiedToken(value);
+    window.setTimeout(() => setCopiedToken((current) => (current === value ? null : current)), 2500);
+   }
+
+  async function revokeShare(shareId: string, token: string) {
+    if (!decision) return;
+    setShareBusy(true);
+    setError(null);
+    try {
+      await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/shares/${shareId}`, { method: "DELETE" }));
+      await loadShares(decision.id);
+       setCopiedToken((current) => (current === token ? null : current));
+       } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not revoke the share link");
+       } finally {
+       setShareBusy(false);
+       }
+      }
+
+  const sharePanel = decision ? (
+    <section className="share-panel">
+      <div className="section-heading compact"><div><span className="overline">Sharing</span><h2>Share a read-only record</h2></div></div>
+      <p className="share-note">A share link shows the finalized decision, its premises, and revisit history. It never includes provider keys or private source artifacts. You can revoke any link at any time.</p>
+      <button className="primary" disabled={shareBusy} onClick={createShare}>{shareBusy ? <><span className="spinner" />Creating link…</> : "＋ Create share link"}</button>
+      {shares.length ? <div className="share-list">{shares.map((share) => <div key={share.id} className={`share-item ${share.status}`}>
+        <div><strong>{share.status === "active" ? "Active link" : "Revoked"}</strong><small>{formatDate(share.created_at)}{share.expires_at ? ` · expires ${formatDate(share.expires_at)}` : " · no expiry"}</small></div>
+         {share.status === "active" ? <div className="share-link"><code>{share.url}</code><div><button className="text-button" onClick={() => copyLink(share.url)}>{copiedToken === share.url ? "Copied ✓" : "Copy"}</button><button className="text-button danger" disabled={shareBusy} onClick={() => revokeShare(share.id, share.token)}>Revoke</button></div></div> : <span className="share-expired">No longer usable</span>}
+       </div>)}</div> : null}
+     </section>
+    ) : null;
+
+   return (
+       <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">R</span><span>Rationexa</span></div>
         <button className="new-decision" onClick={resetWorkspace}>＋ New decision review</button>
@@ -526,18 +620,20 @@ export default function Home() {
               </section>
               <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Ready to finalize?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before finalizing.` : `${counts.confirm} premises will be preserved · ${counts.unknown} unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "finalize" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0 || unanchoredCritical.length > 0} onClick={reviewAndFinalize}>{busyPhase === "finalize" ? <><span className="spinner" />Saving decision…</> : "Save reviewed decision →"}</button></section>
             </> : <section className="card finalized-summary">
-              <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" onClick={resetWorkspace}>New review</button></div></div>
+              <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" disabled={pdfExportBusy} onClick={downloadPdf}>{pdfExportBusy ? "Preparing PDF…" : "Export PDF"}</button><button className="text-button" onClick={resetWorkspace}>New review</button></div></div>
               <div className="record-meta"><div><span>Chosen option</span><strong>{draft.chosenOption || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Extracted by</span><strong>{extraction.model}</strong></div></div>
               <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
-            </section>}
-          </>
+                {sharePanel}
+              </section>}
+            </>
         ) : null}
 
         {view === "workspace" && decision && !extraction ? <section className="card finalized-summary">
-          <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" onClick={() => setView("library")}>Back to library</button></div></div>
+          <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" disabled={pdfExportBusy} onClick={downloadPdf}>{pdfExportBusy ? "Preparing PDF…" : "Export PDF"}</button><button className="text-button" onClick={() => setView("library")}>Back to library</button></div></div>
           <div className="record-meta"><div><span>Chosen option</span><strong>{decision.chosen_option || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Saved</span><strong>{formatDate(decision.created_at)}</strong></div></div>
-          <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
-        </section> : null}
+           <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
+             {sharePanel}
+           </section> : null}
 
         {view === "workspace" && decision ? <section className="card revisit-card">
           <div className="section-heading"><div><span className="overline">Step 4 · Revisit</span><h2>What changed?</h2><p>Check one model or compare two models against the same preserved premises and evidence.</p></div><span className="decision-badge">{decision.criticality}</span></div>

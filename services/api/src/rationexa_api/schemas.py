@@ -257,3 +257,35 @@ class RevisitRead(BaseModel):
 class HealthRead(BaseModel):
     status: str
     service: str
+
+
+class ShareCreate(BaseModel):
+    expires_at: datetime | None = None
+
+
+class ShareRead(BaseModel):
+    id: str
+    decision_id: str
+    token: str
+    status: str
+    url: str | None
+    created_at: datetime
+    expires_at: datetime | None
+    revoked_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ShareDecisionRead(BaseModel):
+    id: str
+    title: str
+    question: str
+    context: str
+    chosen_option: str | None
+    rationale: str
+    criticality: Criticality
+    preservation_policy: str
+    status: str
+    premises: list[DecisionPremiseRead]
+    revisits: list[RevisitRead]
+    shared_at: datetime

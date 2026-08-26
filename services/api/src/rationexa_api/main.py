@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import UTC
 from time import perf_counter
 from typing import Annotated
 
@@ -12,6 +13,7 @@ from .config import get_settings
 from .db import (
     ArtifactRow,
     DecisionRow,
+    DecisionShareRow,
     ExtractionRow,
     PremiseRow,
     RevisitRow,
@@ -19,10 +21,12 @@ from .db import (
     SourceAnchorRow,
     get_db,
     init_db,
+    new_share_token,
     now_utc,
 )
 from .exports import export_filename, render_decision_markdown
 from .jobs import job_manager
+from .pdf_export import render_decision_pdf
 from .prompts import EXTRACTION_PROMPT_VERSION, REVISIT_PROMPT_VERSION
 from .providers import available_models, default_model_id, get_provider
 from .schemas import (
@@ -46,6 +50,9 @@ from .schemas import (
     RevisitPremiseInput,
     RevisitRead,
     RevisitRequest,
+    ShareCreate,
+    ShareDecisionRead,
+    ShareRead,
     SourceAnchor,
 )
 from .services import extract_artifact_text, persist_artifact, validate_anchor
@@ -411,19 +418,221 @@ def export_decision_markdown(decision_id: str, db: Db) -> Response:
         raise HTTPException(status_code=404, detail="Decision not found")
     revisits = db.scalars(
         select(RevisitRow)
-        .where(RevisitRow.decision_id == decision_id)
-        .order_by(RevisitRow.created_at.asc(), RevisitRow.id.asc())
-    ).all()
+         .where(RevisitRow.decision_id == decision_id)
+         .order_by(RevisitRow.created_at.asc(), RevisitRow.id.asc())
+        ).all()
     filename = export_filename(decision.title)
     return Response(
         content=render_decision_markdown(decision, revisits),
         media_type="text/markdown",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+       )
+
+
+@app.get("/v1/decisions/{decision_id}/export/pdf")
+def export_decision_pdf(decision_id: str, db: Db) -> Response:
+    decision = db.get(DecisionRow, decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    revisits = db.scalars(
+        select(RevisitRow)
+          .where(RevisitRow.decision_id == decision_id)
+          .order_by(RevisitRow.created_at.asc(), RevisitRow.id.asc())
+         ).all()
+    content = render_decision_pdf(decision, revisits)
+    filename = export_filename(decision.title, extension="pdf")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+
+SECRET_PLACEHOLD = "***redacted provider secret***"
+ARTIFACT_NOTICE = "Private source artifact not included in the shared record."
+_SECRET_KEYWORDS = ("api_key", "apikey", "secret", "token", "password", "authorization", "bearer", "openai", "ollama")
+
+
+def _scrub_shared_text(value: object | None) -> str | None:
+    """Scrub provider secrets and private artifact references out of shared text."""
+    if value is None:
+        return None
+    text = str(value)
+    lowered = text.lower()
+    if "storage_uri" in lowered or "artifact" in lowered and "file" in lowered:
+        return ARTIFACT_NOTICE
+    for keyword in _SECRET_KEYWORDS:
+        if keyword in lowered:
+            return SECRET_PLACEHOLD
+    return text
+
+
+def _scrub_shared_dict(data: object) -> object:
+    if isinstance(data, dict):
+        scrubbed = {}
+        for key, value in data.items():
+            if isinstance(key, str) and "artifact" in key.lower():
+                scrubbed[key] = ARTIFACT_NOTICE
+            elif isinstance(key, str) and any(secret in key.lower() for secret in _SECRET_KEYWORDS):
+                scrubbed[key] = SECRET_PLACEHOLD
+            else:
+                scrubbed[key] = _scrub_shared_dict(value)
+        return scrubbed
+    if isinstance(data, list):
+        return [_scrub_shared_dict(item) for item in data]
+    return _scrub_shared_text(data)
+
+
+def share_read(share: DecisionShareRow, base_url: str) -> ShareRead:
+    url = f"{base_url.rstrip('/')}/share/{share.token}" if share.status == "active" else None
+    return ShareRead(
+        id=share.id,
+        decision_id=share.decision_id,
+        token=share.token,
+        status=share.status,
+        url=url,
+        created_at=share.created_at,
+        expires_at=share.expires_at,
+        revoked_at=share.revoked_at,
+        )
+
+
+def shared_premise(premise: PremiseRow) -> DecisionPremiseRead:
+    anchor = None
+    if premise.anchor is not None:
+        anchor = SourceAnchor(
+            exact_excerpt=premise.anchor.exact_excerpt,
+            start_offset=premise.anchor.start_offset,
+            end_offset=premise.anchor.end_offset,
+            page_number=premise.anchor.page_number,
+        )
+    return DecisionPremiseRead(
+        id=premise.id,
+        kind=premise.kind,
+        statement=_scrub_shared_text(premise.statement) or "",
+        qualifiers=_scrub_shared_text(premise.qualifiers) or "",
+        importance=premise.importance,
+        quality_state=premise.quality_state,
+        claim_status=premise.claim_status,
+        anchor=anchor,
+        )
+
+
+def decision_share_payload(decision: DecisionRow, revisits: list[RevisitRow], shared_at) -> ShareDecisionRead:
+    revisits_for_share = [
+        RevisitRead(
+            id=revisit.id,
+            decision_id=revisit.decision_id,
+            status=revisit.status,
+            findings=_scrub_shared_dict(revisit.findings) or [],
+            provider=revisit.provider,
+            model=revisit.model,
+            prompt_version=revisit.prompt_version,
+            latency_ms=revisit.latency_ms,
+            input_tokens=revisit.input_tokens,
+            output_tokens=revisit.output_tokens,
+            estimated_cost_usd=revisit.estimated_cost_usd,
+            evidence_filename=None,
+            created_at=revisit.created_at,
+        )
+        for revisit in revisits
+       ]
+    return ShareDecisionRead(
+        id=decision.id,
+        title=decision.title,
+        question=_scrub_shared_text(decision.question) or "",
+        context=_scrub_shared_text(decision.context) or "",
+        chosen_option=_scrub_shared_text(decision.chosen_option),
+        rationale=_scrub_shared_text(decision.rationale) or "",
+        criticality=decision.criticality,
+        preservation_policy=decision.preservation_policy,
+        status=decision.status,
+        premises=[shared_premise(premise) for premise in decision.premises],
+        revisits=revisits_for_share,
+        shared_at=shared_at,
+       )
+
+
+def _is_expired(share: DecisionShareRow) -> bool:
+    if share.expires_at is None:
+        return False
+    expires_at = share.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    return expires_at < now_utc()
+
+
+def load_shared_decision(db: Session, token: str) -> ShareDecisionRead:
+    share = db.scalar(select(DecisionShareRow).where(DecisionShareRow.token == token))
+    if share is None or share.status != "active":
+        raise HTTPException(status_code=404, detail="Shared decision not found")
+    if _is_expired(share):
+        raise HTTPException(status_code=404, detail="Shared decision link has expired")
+    decision = db.get(DecisionRow, share.decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Shared decision not found")
+    revisits = db.scalars(
+        select(RevisitRow)
+        .where(RevisitRow.decision_id == decision.id)
+        .order_by(RevisitRow.created_at.asc(), RevisitRow.id.asc())
+     ).all()
+    return decision_share_payload(decision, revisits, share.created_at)
 
 
 @app.post(
-    "/v1/decisions/{decision_id}/revisit-checks",
+     "/v1/decisions/{decision_id}/shares",
+    response_model=ShareRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_share(decision_id: str, payload: ShareCreate, db: Db) -> ShareRead:
+    if db.get(DecisionRow, decision_id) is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    existing = db.scalar(
+        select(DecisionShareRow).where(
+            DecisionShareRow.decision_id == decision_id,
+            DecisionShareRow.status == "active",
+          )
+      )
+    if existing is not None:
+        return share_read(existing, settings.public_base_url)
+    share = DecisionShareRow(decision_id=decision_id, token=new_share_token(), expires_at=payload.expires_at)
+    db.add(share)
+    db.commit()
+    db.refresh(share)
+    return share_read(share, settings.public_base_url)
+
+
+@app.get("/v1/decisions/{decision_id}/shares", response_model=list[ShareRead])
+def list_shares(decision_id: str, db: Db) -> list[ShareRead]:
+    if db.get(DecisionRow, decision_id) is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    shares = db.scalars(
+        select(DecisionShareRow)
+         .where(DecisionShareRow.decision_id == decision_id)
+         .order_by(DecisionShareRow.created_at.desc())
+      ).all()
+    return [share_read(share, settings.public_base_url) for share in shares]
+
+
+@app.delete("/v1/decisions/{decision_id}/shares/{share_id}", response_model=ShareRead)
+def revoke_share(decision_id: str, share_id: str, db: Db) -> ShareRead:
+    share = db.get(DecisionShareRow, share_id)
+    if share is None or share.decision_id != decision_id:
+        raise HTTPException(status_code=404, detail="Shared decision link not found")
+    share.status = "revoked"
+    share.revoked_at = now_utc()
+    db.commit()
+    db.refresh(share)
+    return share_read(share, settings.public_base_url)
+
+
+@app.get("/v1/shares/{token}", response_model=ShareDecisionRead)
+def get_shared_decisions(token: str, db: Db) -> ShareDecisionRead:
+    return load_shared_decision(db, token)
+
+
+@app.post(
+     "/v1/decisions/{decision_id}/revisit-checks",
     response_model=RevisitRead,
     status_code=status.HTTP_201_CREATED,
 )

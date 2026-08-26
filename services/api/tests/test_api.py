@@ -433,3 +433,45 @@ def test_markdown_export_returns_not_found_for_unknown_decision() -> None:
         response = client.get("/v1/decisions/missing/export/markdown")
 
     assert response.status_code == 404
+
+
+def test_stage_two_pdf_export_returns_valid_pdf_with_reviewed_record() -> None:
+    with TestClient(app) as client:
+        decision = create_finalized_decision(
+            client,
+            source=(
+                  "We decided to use Vendor B because it was assumed Vendor B does not support external users. "
+                  "The service must support SAML. Revisit if Vendor B introduces external-user support."
+               ),
+            title="Pdf export decision",
+            criticality="critical",
+          )
+        revisit = client.post(
+            f"/v1/decisions/{decision['id']}/revisit-checks",
+            json={
+                  "filename": "vendor-release-note.txt",
+                  "content": "Vendor B now supports external users.",
+              },
+          )
+        assert revisit.status_code == 201
+        finding = revisit.json()["findings"][0]
+        judged = client.post(
+            f"/v1/revisit-checks/{revisit.json()['id']}/findings/{finding['premise_id']}/judgment",
+            json={"judgment": "worth_reviewing"},
+          )
+        assert judged.status_code == 200
+
+        response = client.get(f"/v1/decisions/{decision['id']}/export/pdf")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/pdf")
+        assert response.headers["content-disposition"] == 'attachment; filename="pdf-export-decision-record.pdf"'
+        assert response.content[:4] == b"%PDF"
+        assert len(response.content) > 100
+
+
+def test_pdf_export_returns_not_found_for_unknown_decision() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/decisions/missing/export/pdf")
+
+    assert response.status_code == 404
