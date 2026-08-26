@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, Diamond, FileDown, FileText, Library, ListChecks, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, Diamond, FileDown, FileText, Library, ListChecks, Plus, Save, Sparkles, Trash2 } from "lucide-react";
 
 type Criticality = "routine" | "important" | "critical";
 type ReviewAction = "confirm" | "unknown" | "reject";
@@ -206,6 +206,7 @@ export default function Home() {
   const [activeJobs, setActiveJobs] = useState<Job[]>([]);
   const [activeRevisitId, setActiveRevisitId] = useState<string | null>(null);
   const [judgmentBusy, setJudgmentBusy] = useState<string | null>(null);
+  const [judgmentNotes, setJudgmentNotes] = useState<Record<string, string>>({});
   const [library, setLibrary] = useState<DecisionLibrary>({ items: [], total: 0 });
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryCriticality, setLibraryCriticality] = useState<"all" | Criticality>("all");
@@ -306,6 +307,11 @@ export default function Home() {
     });
     return events.sort((first, second) => new Date(first.timestamp).getTime() - new Date(second.timestamp).getTime());
   }, [decision, revisitHistory]);
+  const findingReviewProgress = useMemo(() => {
+    const total = revisitHistory.reduce((count, run) => count + run.findings.length, 0);
+    const reviewed = revisitHistory.reduce((count, run) => count + run.findings.filter((finding) => finding.human_judgment).length, 0);
+    return { total, reviewed, pending: total - reviewed, percent: total ? Math.round((reviewed / total) * 100) : 100 };
+  }, [revisitHistory]);
   const runningJobs = activeJobs.filter((job) => ["queued", "running"].includes(job.status));
   const activeProgress = runningJobs.length ? Math.round(runningJobs.reduce((total, job) => total + job.progress, 0) / runningJobs.length) : 0;
   const disagreements = useMemo(() => {
@@ -455,18 +461,20 @@ export default function Home() {
     }
   }
 
-  async function recordFindingJudgment(premiseId: string, judgment: FindingJudgment) {
-    if (!activeRevisitId) return;
-    setJudgmentBusy(premiseId);
+  async function recordFindingJudgment(revisitId: string, premiseId: string, judgment: FindingJudgment) {
+    const reviewKey = `${revisitId}:${premiseId}`;
+    setJudgmentBusy(reviewKey);
     setError(null);
     try {
-      const updated = await responseJson(await fetch(`${api}/v1/revisit-checks/${activeRevisitId}/findings/${premiseId}/judgment`, {
+      const updated = await responseJson(await fetch(`${api}/v1/revisit-checks/${revisitId}/findings/${premiseId}/judgment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ judgment }),
+        body: JSON.stringify({ judgment, notes: judgmentNotes[reviewKey] || null }),
       })) as RevisitResult;
-      setFindings(updated.findings);
+      if (activeRevisitId === updated.id) setFindings(updated.findings);
       setRevisitHistory((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setJudgmentNotes((current) => ({ ...current, ...Object.fromEntries(updated.findings.map((finding) => [`${updated.id}:${finding.premise_id}`, finding.human_notes || ""])) }));
+      void loadLibrary();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save finding judgment");
     } finally {
@@ -681,6 +689,23 @@ export default function Home() {
        }
        }
 
+  function findingReviewControls(revisitId: string, finding: Finding) {
+    const reviewKey = `${revisitId}:${finding.premise_id}`;
+    const noteValue = judgmentNotes[reviewKey] ?? finding.human_notes ?? "";
+    const busy = judgmentBusy === reviewKey;
+    return <div className={`judgment-panel ${finding.human_judgment ? "reviewed" : "pending"}`} role="group" aria-label="Human finding review">
+      <header><span>{finding.human_judgment ? "Human review recorded" : "Human decision required"}</span>{finding.judged_at ? <time dateTime={finding.judged_at}>{formatDateTime(finding.judged_at)}</time> : null}</header>
+      <label><span>Reviewer notes <small>Optional</small></span><textarea aria-label={`Reviewer notes for ${finding.premise_statement}`} rows={2} maxLength={4000} value={noteValue} onChange={(event) => setJudgmentNotes((current) => ({ ...current, [reviewKey]: event.target.value }))} placeholder="Record why this finding matters, what was checked, or what should happen next…" /></label>
+      <div className="judgment-actions">{([
+        ["worth_reviewing", "Worth reviewing"],
+        ["not_material", "Not material"],
+        ["needs_context", "Needs context"],
+        ["false_positive", "False positive"],
+      ] as [FindingJudgment, string][]).map(([value, label]) => <button type="button" key={value} className={finding.human_judgment === value ? "active" : ""} disabled={busy} onClick={() => recordFindingJudgment(revisitId, finding.premise_id, value)}>{label}</button>)}</div>
+      {finding.human_judgment ? <button type="button" className="save-review" disabled={busy} onClick={() => recordFindingJudgment(revisitId, finding.premise_id, finding.human_judgment!)}><Save aria-hidden="true" />{busy ? "Saving…" : "Save note changes"}</button> : null}
+    </div>;
+  }
+
   const sharePanel = decision ? (
     <section className="share-panel">
       <div className="section-heading compact"><div><span className="overline">Sharing</span><h2>Share a read-only record</h2></div></div>
@@ -860,6 +885,10 @@ export default function Home() {
               {index < auditEvents.length - 1 ? <span className="audit-line" /> : null}
             </article>)}</div> : null}
           </section>
+          {findingReviewProgress.total ? <section className={`review-progress ${findingReviewProgress.pending === 0 ? "complete" : ""}`} aria-label="Human review progress">
+            <div><span className="review-progress-icon">{findingReviewProgress.pending === 0 ? <Check aria-hidden="true" /> : <ListChecks aria-hidden="true" />}</span><span><strong>{findingReviewProgress.pending === 0 ? "Human review complete" : `${findingReviewProgress.pending} finding${findingReviewProgress.pending === 1 ? "" : "s"} awaiting judgment`}</strong><small>{findingReviewProgress.reviewed} of {findingReviewProgress.total} findings reviewed</small></span></div>
+            <div className="review-progress-track"><span style={{ width: `${findingReviewProgress.percent}%` }} /></div>
+          </section> : null}
             {revisitHistory.length ? <section className="history-strip"><div className="history-heading"><div><span className="overline">Decision conversation</span><h3>{revisitHistory.length} evidence check{revisitHistory.length === 1 ? "" : "s"}</h3></div><span>Newest first · open a message for findings</span></div><div className="history-list">{revisitHistory.map((run) => {
               const open = expandedHistoryId === run.id;
               return <article key={run.id} className={`history-message ${open ? "open" : ""}`}>
@@ -874,7 +903,7 @@ export default function Home() {
                     <h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>
                     {finding.old_excerpt ? <div className="history-old"><strong>Original excerpt</strong><blockquote>{finding.old_excerpt}</blockquote></div> : null}
                     {finding.missing_context_question ? <p className="missing-context">Question: {finding.missing_context_question}</p> : null}
-                    {finding.human_judgment ? <p className="history-judgment">Reviewer: {finding.human_judgment.replaceAll("_", " ")}{finding.human_notes ? ` — ${finding.human_notes}` : ""}</p> : null}
+                    {findingReviewControls(run.id, finding)}
                    </div>) : <p className="history-empty">No material relationship was found.</p>}</div> : null}
                </article>;
              })}</div></section> : null}
@@ -884,7 +913,7 @@ export default function Home() {
             <label className="composer-input"><span className="composer-plus"><Plus aria-hidden="true" /></span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); setFindings([]); setComparisonRuns([]); setActiveRevisitId(null); }} rows={4} placeholder="Paste a new fact, policy update, incident, or source excerpt…" /></label>
             <div className="composer-footer"><span>{compareMode ? "Both models receive identical premises and evidence." : `${selectedModel?.label ?? "The selected model"} maps evidence to premises; you decide whether action is warranted.`}</span><div>{compareMode ? <span className="composer-model">{selectedModel?.label ?? "Model A"} + {comparisonModel?.label ?? "Model B"}</span> : null}<button className="primary composer-send" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || (compareMode && !comparisonModelId) || !evidence.trim()} aria-label={compareMode ? "Compare model reasoning" : "Check evidence against premises"}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing…" : "Checking…"}</> : <ArrowUp aria-hidden="true" />}</button></div></div>
           </section>
-          {comparisonRuns.length === 2 ? <div className="comparison-results"><section className={`disagreement-summary ${disagreements.length ? "has-disagreements" : ""}`}><div><span className="overline">Agreement check</span><h3>{disagreements.length ? `${disagreements.length} disagreement${disagreements.length === 1 ? "" : "s"} need review` : "Models agree on all material relationships"}</h3></div>{disagreements.length ? <div className="disagreement-list">{disagreements.map(({ premise, firstRelationship, secondRelationship }) => <div key={premise.id}><strong>{premise.statement}</strong><span>{comparisonRuns[0].label}: {firstRelationship} · {comparisonRuns[1].label}: {secondRelationship}</span></div>)}</div> : null}</section><div className="comparison-grid">{comparisonRuns.map((run) => <section className="comparison-column" key={run.modelId}><header><div><span className="overline">Model result</span><h3>{run.label}</h3></div><strong>{run.result.findings.length} finding{run.result.findings.length === 1 ? "" : "s"}</strong></header><div className="run-provenance">{provenanceLabel(run.result)}</div>{run.result.findings.length ? run.result.findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.finding_type === "new_constraint" ? "new constraint" : finding.relationship}</span><small>{finding.confidence_band} confidence</small></div>{finding.finding_type === "new_constraint" ? <div className="safety-net-badge">New constraint · human review required</div> : null}<h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote></article>) : <div className="empty-findings"><strong>No material relationship found</strong><span>This model found no effect on the preserved premises.</span></div>}</section>)}</div></div> : null}
+          {comparisonRuns.length === 2 ? <div className="comparison-results"><section className={`disagreement-summary ${disagreements.length ? "has-disagreements" : ""}`}><div><span className="overline">Agreement check</span><h3>{disagreements.length ? `${disagreements.length} disagreement${disagreements.length === 1 ? "" : "s"} need review` : "Models agree on all material relationships"}</h3></div>{disagreements.length ? <div className="disagreement-list">{disagreements.map(({ premise, firstRelationship, secondRelationship }) => <div key={premise.id}><strong>{premise.statement}</strong><span>{comparisonRuns[0].label}: {firstRelationship} · {comparisonRuns[1].label}: {secondRelationship}</span></div>)}</div> : null}</section><div className="comparison-grid">{comparisonRuns.map((run) => <section className="comparison-column" key={run.modelId}><header><div><span className="overline">Model result</span><h3>{run.label}</h3></div><strong>{run.result.findings.length} finding{run.result.findings.length === 1 ? "" : "s"}</strong></header><div className="run-provenance">{provenanceLabel(run.result)}</div>{run.result.findings.length ? run.result.findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.finding_type === "new_constraint" ? "new constraint" : finding.relationship}</span><small>{finding.confidence_band} confidence</small></div>{finding.finding_type === "new_constraint" ? <div className="safety-net-badge">New constraint · human review required</div> : null}<h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{findingReviewControls(run.result.id, finding)}</article>) : <div className="empty-findings"><strong>No material relationship found</strong><span>This model found no effect on the preserved premises.</span></div>}</section>)}</div></div> : null}
           {!comparisonRuns.length && findings.length ? <div className="findings">
             <div className="findings-heading"><h3>Review findings</h3><span>{findings.length} material relationship{findings.length === 1 ? "" : "s"} found · {lastRevisitModel}</span></div>
             {lastRevisitProvenance ? <div className="finding-provenance">Run provenance: {lastRevisitProvenance}</div> : null}
@@ -894,15 +923,7 @@ export default function Home() {
               <h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>
               {finding.source_fallback_performed ? <div className="finding-provenance">Original source anchor verified</div> : null}
               {finding.missing_context_question ? <div className="missing-context">Question: {finding.missing_context_question}</div> : null}
-              <div className="judgment-panel" aria-label="Record your judgment">
-                <span>{finding.human_judgment ? "Judgment saved" : "Does this finding deserve action?"}</span>
-                <div>{([
-                  ["worth_reviewing", "Worth reviewing"],
-                  ["not_material", "Not material"],
-                  ["needs_context", "Needs context"],
-                  ["false_positive", "False positive"],
-                ] as [FindingJudgment, string][]).map(([value, label]) => <button type="button" key={value} className={finding.human_judgment === value ? "active" : ""} disabled={judgmentBusy === finding.premise_id} onClick={() => recordFindingJudgment(finding.premise_id, value)}>{label}</button>)}</div>
-              </div>
+              {activeRevisitId ? findingReviewControls(activeRevisitId, finding) : null}
             </article>)}
           </div> : !comparisonRuns.length && revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>{lastRevisitModel} found no material effect on the consequential premises preserved in this decision.</span>{lastRevisitProvenance ? <span>Run provenance: {lastRevisitProvenance}</span> : null}</div> : null}
           </section> : null}
