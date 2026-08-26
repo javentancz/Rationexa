@@ -686,8 +686,10 @@ export default function Home() {
         <div className="sidebar-note pane-label"><strong>Persistent decision memory</strong><span>Every finalized record and evidence check remains available here.</span></div>
       </aside>
 
+      <div className="workbench-shell">
+      <button type="button" className="workflow-toggle" aria-label={workflowPaneCollapsed ? "Expand workflow" : "Collapse workflow"} aria-expanded={!workflowPaneCollapsed} onClick={() => setWorkflowPaneCollapsed((current) => !current)}><span>{workflowPaneCollapsed ? "›" : "‹"}</span></button>
       <aside className="workflow-pane">
-        <header className="workflow-pane-header"><div className="pane-label"><span className="pane-kicker">Decision workflow</span><strong>{view === "workspace" ? draft?.title || decision?.title || "New review" : "Select a decision"}</strong></div><button type="button" className="pane-collapse" aria-label={workflowPaneCollapsed ? "Expand workflow" : "Collapse workflow"} onClick={() => setWorkflowPaneCollapsed((current) => !current)}>{workflowPaneCollapsed ? "›" : "‹"}</button></header>
+        <header className="workflow-pane-header"><div className="pane-label"><span className="pane-kicker">Decision workflow</span><strong>{view === "workspace" ? draft?.title || decision?.title || "New review" : "Select a decision"}</strong></div></header>
         <ol className="workflow-steps" aria-label="Decision workflow">
           {(["Import", "Review", "Finalize", "Revisit"] as const).map((label, index) => {
             const number = (index + 1) as WorkflowStep;
@@ -862,6 +864,7 @@ export default function Home() {
           </div> : !comparisonRuns.length && revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>{lastRevisitModel} found no material effect on the consequential premises preserved in this decision.</span>{lastRevisitProvenance ? <span>Run provenance: {lastRevisitProvenance}</span> : null}</div> : null}
           </section> : null}
         </main>
+      </div>
 
          {confirmingDeleteFor ? <div className="modal-backdrop" onClick={() => { setConfirmingDeleteFor(null); setDeleteTitle(null); }}>
            <div className="confirm-modal" onClick={(event) => event.stopPropagation()}>
