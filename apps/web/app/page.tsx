@@ -523,6 +523,7 @@ export default function Home() {
        setConfirmingDeleteFor(null);
        setExpandedHistoryId(null);
        setWorkflowView(4);
+       setWorkflowPaneCollapsed(false);
        setView("workspace");
        void loadShares(decisionId).catch(() => { setShares([]); });
        window.location.hash = "workspace";
@@ -588,6 +589,7 @@ export default function Home() {
   function resetWorkspace() {
     setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setExportBusy(false); setPdfExportBusy(false); setError(null); setShares([]); setCopiedToken(null);
     setConfirmingShareDelete(null);
+    setWorkflowPaneCollapsed(false);
     setWorkflowView(1);
      }
 
@@ -730,7 +732,7 @@ export default function Home() {
    return (
        <div className={`app-shell ${libraryPaneCollapsed ? "library-collapsed" : ""} ${workflowPaneCollapsed ? "workflow-collapsed" : ""}`}>
       <aside className="sidebar library-pane">
-        <header className="pane-brand"><div className="brand" data-tooltip="Rationexa"><span className="brand-mark">R</span><span className="pane-label">Rationexa</span></div><button type="button" className="pane-collapse" data-tooltip={libraryPaneCollapsed ? "Expand sidebar" : "Collapse sidebar"} aria-label={libraryPaneCollapsed ? "Expand decision libraries" : "Collapse decision libraries"} onClick={() => setLibraryPaneCollapsed((current) => !current)}>{libraryPaneCollapsed ? <ChevronRight aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}</button></header>
+        <header className="pane-brand"><div className="brand" data-tooltip="Rationexa"><span className="brand-mark">R</span><span className="pane-label">Rationexa</span></div></header>
         <button className="new-decision" data-tooltip="New decision review" onClick={resetWorkspace}><Plus aria-hidden="true" /><span className="pane-label">New decision review</span></button>
         <div className="pane-section pane-label"><span className="pane-kicker">Decision libraries</span></div>
         <nav className="library-nav" aria-label="Decision libraries">
@@ -745,7 +747,8 @@ export default function Home() {
         </section>
       </aside>
 
-      <div className="workbench-shell">
+      <button type="button" className="library-toggle" data-tooltip={libraryPaneCollapsed ? "Show decision libraries" : "Hide decision libraries"} aria-label={libraryPaneCollapsed ? "Expand decision libraries" : "Collapse decision libraries"} aria-expanded={!libraryPaneCollapsed} onClick={() => setLibraryPaneCollapsed((current) => !current)}><span>{libraryPaneCollapsed ? <ChevronRight aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}</span></button>
+      <div className={`workbench-shell ${view === "library" ? "library-overview" : ""}`}>
       <button type="button" className="workflow-toggle" data-tooltip={workflowPaneCollapsed ? "Show decision workflow" : "Hide decision workflow"} aria-label={workflowPaneCollapsed ? "Expand workflow" : "Collapse workflow"} aria-expanded={!workflowPaneCollapsed} onClick={() => setWorkflowPaneCollapsed((current) => !current)}><span>{workflowPaneCollapsed ? <ChevronRight aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}</span></button>
       <aside className="workflow-pane">
         <header className="workflow-pane-header"><div className="pane-label"><span className="pane-kicker">Decision workflow</span><strong>{view === "workspace" ? draft?.title || decision?.title || "New review" : "Select a decision"}</strong></div></header>
@@ -763,7 +766,7 @@ export default function Home() {
       <main id="workspace" className="workspace">
         <header className="topbar">
           <div><span className="overline">{view === "library" ? "Decision memory / Library" : `Decision memory / ${workflowView === 1 ? "Import" : workflowView === 2 ? "Review" : workflowView === 3 ? "Finalize" : "Revisit"}`}</span><h1>{view === "library" ? "Decision library" : draft?.title || decision?.title || "New decision review"}</h1></div>
-          {view === "workspace" ? <ModelPicker models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} /> : <button className="primary" onClick={resetWorkspace}><Plus aria-hidden="true" />New decision</button>}
+          {view === "workspace" ? <ModelPicker models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} /> : null}
         </header>
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
@@ -771,7 +774,6 @@ export default function Home() {
         {view === "library" ? <section className="library-view">
           <div className="library-toolbar">
             <label className="library-search"><span>⌕</span><input aria-label="Search decisions" value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search title, question, context, or chosen option" /></label>
-            <label className="field library-filter"><span>Criticality</span><select value={libraryCriticality} onChange={(event) => setLibraryCriticality(event.target.value as "all" | Criticality)}><option value="all">All decisions</option><option value="critical">Critical</option><option value="important">Important</option><option value="routine">Routine</option></select></label>
           </div>
           <div className="library-summary"><div><strong>{library.total}</strong><span>saved decisions</span></div><p>Reopen a record to review its premises, add new evidence, or inspect previous revisit checks.</p></div>
 {libraryLoading ? <div className="library-empty"><span className="spinner dark" /><strong>Loading decision memory…</strong></div> : library.items.length ? <div className="decision-list">{library.items.map((item) => <div className="decision-card" key={item.id}>
