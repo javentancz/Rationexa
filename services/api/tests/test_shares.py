@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -66,6 +66,10 @@ def test_share_link_round_trips_read_only_record_and_revoke() -> None:
         share = _created_share(client, decision["id"])
         assert share["status"] == "active"
         assert share["url"] == f"http://localhost:3000/share/{share['token']}"
+        assert share["expires_at"] is not None
+        expires_at = datetime.fromisoformat(share["expires_at"])
+        assert expires_at.tzinfo is not None
+        assert timedelta(days=29) < expires_at - now_utc() <= timedelta(days=30)
 
         listed = client.get(f"/v1/decisions/{decision['id']}/shares")
         assert listed.status_code == 200
@@ -124,6 +128,8 @@ def test_shared_record_never_leaks_provider_secrets_or_private_artifacts() -> No
             row = db.get(DecisionRow, decision["id"])
             assert row is not None
             row.question = "The deployment requires OPENAI_API_KEY to remain unset in production."
+            assert row.premises and row.premises[0].anchor is not None
+            row.premises[0].anchor.exact_excerpt = "Authorization: Bearer sk-anchor-should-not-leak"
             db.commit()
 
         revisit = client.post(
@@ -162,4 +168,5 @@ def test_shared_record_never_leaks_provider_secrets_or_private_artifacts() -> No
         rendered = json.dumps(body)
 
         assert "OPENAI_API_KEY to remain unset" not in rendered
+        assert "sk-anchor-should-not-leak" not in rendered
         assert "***redacted provider secret***" in rendered

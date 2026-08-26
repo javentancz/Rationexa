@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 type Criticality = "routine" | "important" | "critical";
 type ReviewAction = "confirm" | "unknown" | "reject";
 type FindingJudgment = "worth_reviewing" | "not_material" | "needs_context" | "false_positive";
+type WorkflowStep = 1 | 2 | 3 | 4;
 
 type Premise = {
   candidate_id: string;
@@ -109,6 +110,26 @@ function formatDate(value?: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
 }
 
+function formatDateTime(value?: string) {
+  if (!value) return "Not recorded";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+type ActionIconName = "markdown" | "pdf" | "delete" | "back";
+
+function ActionIcon({ name }: { name: ActionIconName }) {
+  if (name === "delete") {
+    return <svg className="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" /></svg>;
+  }
+  if (name === "back") {
+    return <svg className="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6-6 6 6 6M5 12h15" /></svg>;
+  }
+  if (name === "pdf") {
+    return <svg className="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4" /><text x="8" y="17">PDF</text></svg>;
+  }
+  return <svg className="action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12v5m0 0-2-2m2 2 2-2" /></svg>;
+}
+
 export default function Home() {
   const [view, setView] = useState<"workspace" | "library">("workspace");
   const [source, setSource] = useState("We decided to use Vendor B because it was assumed that Vendor B does not support external users. The service must support SAML. Revisit if Vendor B introduces external-user support.");
@@ -149,6 +170,7 @@ export default function Home() {
   const [confirmingDeleteFor, setConfirmingDeleteFor] = useState<string | null>(null);
   const [deleteTitle, setDeleteTitle] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [workflowView, setWorkflowView] = useState<WorkflowStep>(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -217,6 +239,7 @@ export default function Home() {
     setComparisonRuns([]);
     setActiveRevisitId(null);
     setRevisitCompleted(false);
+    setWorkflowView(2);
   }
 
   async function waitForJobs(created: Job[]): Promise<Job[]> {
@@ -298,6 +321,7 @@ export default function Home() {
       const saved = await responseJson(await fetch(`${api}/v1/extractions/${extraction.id}/finalize`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ criticality }) })) as Decision;
       setDecision(saved);
       setRevisitHistory([]);
+      setWorkflowView(3);
       void loadLibrary();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Finalization failed");
@@ -397,6 +421,7 @@ export default function Home() {
        setLibraryQuery("");
        setConfirmingDeleteFor(null);
        setExpandedHistoryId(null);
+       setWorkflowView(4);
        setView("workspace");
        void loadShares(decisionId).catch(() => { setShares([]); });
        window.location.hash = "workspace";
@@ -461,6 +486,7 @@ export default function Home() {
 
   function resetWorkspace() {
     setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setExportBusy(false); setPdfExportBusy(false); setError(null); setShares([]); setCopiedToken(null);
+    setWorkflowView(1);
      }
 
   async function loadShares(decisionId: string) {
@@ -545,7 +571,7 @@ export default function Home() {
   const sharePanel = decision ? (
     <section className="share-panel">
       <div className="section-heading compact"><div><span className="overline">Sharing</span><h2>Share a read-only record</h2></div></div>
-      <p className="share-note">A share link shows the finalized decision, its premises, and revisit history. It never includes provider keys or private source artifacts. You can revoke any link at any time.</p>
+      <p className="share-note">A share link shows the finalized decision, its premises, and revisit history. It never includes provider keys or private source artifacts. New links expire automatically and can be revoked at any time.</p>
       <button className="primary" disabled={shareBusy} onClick={createShare}>{shareBusy ? <><span className="spinner" />Creating link…</> : "＋ Create share link"}</button>
       {shares.length ? <div className="share-list">{shares.map((share) => <div key={share.id} className={`share-item ${share.status}`}>
         <div><strong>{share.status === "active" ? "Active link" : "Revoked"}</strong><small>{formatDate(share.created_at)}{share.expires_at ? ` · expires ${formatDate(share.expires_at)}` : " · no expiry"}</small></div>
@@ -553,6 +579,15 @@ export default function Home() {
        </div>)}</div> : null}
      </section>
     ) : null;
+
+  const recordActions = decision ? (
+    <div className="record-actions" aria-label="Decision actions">
+      <button type="button" className="record-action icon-action" data-tooltip={exportBusy ? "Preparing Markdown…" : "Export Markdown"} aria-label={exportBusy ? "Preparing Markdown export" : "Export Markdown"} disabled={exportBusy} onClick={downloadMarkdown}><ActionIcon name="markdown" /></button>
+      <button type="button" className="record-action icon-action" data-tooltip={pdfExportBusy ? "Preparing PDF…" : "Export PDF"} aria-label={pdfExportBusy ? "Preparing PDF export" : "Export PDF"} disabled={pdfExportBusy} onClick={downloadPdf}><ActionIcon name="pdf" /></button>
+      <button type="button" className="record-action icon-action danger" data-tooltip="Delete record" aria-label="Delete record" onClick={() => { setDeleteTitle(decision.title); setConfirmingDeleteFor(decision.id); }}><ActionIcon name="delete" /></button>
+      <button type="button" className="record-action icon-action" data-tooltip="Back to library" aria-label="Back to library" onClick={() => setView("library")}><ActionIcon name="back" /></button>
+    </div>
+  ) : null;
 
    return (
        <div className="app-shell">
@@ -580,8 +615,13 @@ export default function Home() {
 
         {view === "workspace" ? <ol className="stepper" aria-label="Decision workflow">
           {["Import", "Review", "Finalize", "Revisit"].map((label, index) => {
-            const number = index + 1;
-            return <li key={label} className={number === stage ? "active" : number < stage ? "complete" : ""}><span>{number < stage ? "✓" : number}</span>{label}</li>;
+            const number = (index + 1) as WorkflowStep;
+            const available = number <= stage;
+            return <li key={label} className={number === workflowView ? "active" : number < stage ? "complete" : available ? "available" : ""}>
+              <button type="button" disabled={!available} aria-current={number === workflowView ? "step" : undefined} onClick={() => setWorkflowView(number)}>
+                <span>{number < stage ? "✓" : number}</span><span>{label}</span>
+              </button>
+            </li>;
           })}
         </ol> : null}
 
@@ -597,15 +637,15 @@ export default function Home() {
             <button type="button" className="decision-row" onClick={() => openDecision(item.id)}>
               <div className="decision-row-main"><div><span className={`criticality-dot ${item.criticality}`} /> <span>{item.criticality}</span></div><h2>{item.title}</h2><p>{item.question}</p></div>
               <div className="decision-row-stats"><div><strong>{item.premise_count}</strong><span>premises</span></div><div><strong>{item.revisit_count}</strong><span>revisits</span></div>{item.pending_revisit_count ? <div className="pending-stat"><strong>{item.pending_revisit_count}</strong><span>need review</span></div> : null}</div>
-              <div className="decision-row-date"><span>Last checked</span><strong>{formatDate(item.last_revisited_at)}</strong><small>Saved {formatDate(item.created_at)}</small></div><span className="row-arrow">→</span>
+              <div className="decision-row-date"><span>Last checked</span><strong>{item.last_revisited_at ? formatDateTime(item.last_revisited_at) : "Not revisited"}</strong><small>Saved {formatDateTime(item.created_at)}</small></div><span className="row-arrow">→</span>
             </button>
-            <button type="button" className="decision-row-delete" aria-label={`Delete ${item.title}`} title="Delete decision" onClick={() => { setDeleteTitle(item.title); setConfirmingDeleteFor(item.id); }}>Delete</button>
+            <button type="button" className="decision-row-delete icon-action" data-tooltip="Delete decision" aria-label={`Delete ${item.title}`} onClick={() => { setDeleteTitle(item.title); setConfirmingDeleteFor(item.id); }}><ActionIcon name="delete" /></button>
           </div>)}</div> : <div className="library-empty"><span className="library-empty-icon">▤</span><strong>{libraryQuery || libraryCriticality !== "all" ? "No matching decisions" : "Your decision memory starts here"}</strong><p>{libraryQuery || libraryCriticality !== "all" ? "Try a broader search or remove the criticality filter." : "Finalize your first decision review and it will appear here automatically."}</p><button className="primary" onClick={resetWorkspace}>Create a decision →</button></div>}
         </section> : null}
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
 
-        {view === "workspace" && !extraction && !decision ? (
+        {view === "workspace" && workflowView === 1 && !extraction && !decision ? (
           <section className="card import-card">
             <div className="section-heading"><div><span className="overline">Step 1</span><h2>Bring in a decision</h2><p>Start with a short decision note, ADR, assessment, or proposal excerpt.</p></div><span className="privacy-badge">Private · processed locally</span></div>
             <div className="source-tabs" role="tablist">
@@ -619,9 +659,24 @@ export default function Home() {
           </section>
         ) : null}
 
-        {view === "workspace" && extraction && draft ? (
+        {view === "workspace" && workflowView === 1 && decision ? <section className="card stage-snapshot">
+          <div className="snapshot-heading"><div><span className="snapshot-step">01</span><span className="overline">Import snapshot</span><h2>Original decision context</h2><p>This is the source-backed context preserved with the saved record.</p></div><button className="primary subtle-primary" type="button" onClick={() => setWorkflowView(2)}>View review →</button></div>
+          <div className="snapshot-grid">
+            <div><span>Decision</span><strong>{decision.title}</strong><p>{decision.question}</p></div>
+            <div><span>Context</span><p>{decision.context || "No additional context was recorded."}</p></div>
+            <div className="snapshot-wide"><span>Recorded rationale</span><p>{decision.rationale || "No rationale was recorded."}</p></div>
+          </div>
+          <div className="source-memory"><div><span className="overline">Preserved source excerpts</span><strong>{decision.premises.filter((premise) => premise.anchor?.exact_excerpt).length} available</strong></div>{decision.premises.map((premise, index) => premise.anchor?.exact_excerpt ? <blockquote key={premise.id}><span>P{index + 1}</span>{premise.anchor.exact_excerpt}</blockquote> : null)}</div>
+        </section> : null}
+
+        {view === "workspace" && workflowView === 2 && decision ? <section className="card stage-snapshot">
+          <div className="snapshot-heading"><div><span className="snapshot-step">02</span><span className="overline">Human review snapshot</span><h2>Premises accepted for this decision</h2><p>These are the reviewed statements that were preserved at finalization.</p></div><button className="primary subtle-primary" type="button" onClick={() => setWorkflowView(3)}>View final record →</button></div>
+          <div className="snapshot-premises">{decision.premises.map((premise, index) => <article key={premise.id}><span className="snapshot-premise-number">P{index + 1}</span><div><small>{premise.kind.replaceAll("_", " ")}</small><p>{premise.statement}</p>{premise.anchor?.exact_excerpt ? <blockquote>{premise.anchor.exact_excerpt}</blockquote> : <span className="snapshot-no-source">No preserved source excerpt</span>}</div><span className="reviewed-chip">Reviewed ✓</span></article>)}</div>
+        </section> : null}
+
+        {view === "workspace" && extraction && draft && (workflowView === 2 || workflowView === 3) ? (
           <>
-            {!decision ? <>
+            {!decision && workflowView === 2 ? <>
               <section className="review-layout">
               <div className="review-main">
                 <section className="card decision-summary">
@@ -659,43 +714,51 @@ export default function Home() {
               </aside>
               </section>
               <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Ready to finalize?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before finalizing.` : `${counts.confirm} premises will be preserved · ${counts.unknown} unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "finalize" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0 || unanchoredCritical.length > 0} onClick={reviewAndFinalize}>{busyPhase === "finalize" ? <><span className="spinner" />Saving decision…</> : "Save reviewed decision →"}</button></section>
-            </> : <section className="card finalized-summary">
-                           <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" disabled={pdfExportBusy} onClick={downloadPdf}>{pdfExportBusy ? "Preparing PDF…" : "Export PDF"}</button><button className="text-button danger" onClick={() => { setDeleteTitle(decision.title); setConfirmingDeleteFor(decision.id); }}>Delete record</button><button className="text-button" onClick={resetWorkspace}>New review</button></div></div>
+            </> : decision && workflowView === 3 ? <section className="card finalized-summary">
+                           <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div>{recordActions}</div>
               <div className="record-meta"><div><span>Chosen option</span><strong>{draft.chosenOption || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Extracted by</span><strong>{extraction.model}</strong></div></div>
               <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
                 {sharePanel}
-              </section>}
+              <div className="stage-continue"><span>The decision is saved. Revisit it whenever new evidence appears.</span><button type="button" className="primary" onClick={() => setWorkflowView(4)}>Continue to revisit →</button></div>
+              </section> : null}
             </>
         ) : null}
 
-        {view === "workspace" && decision && !extraction ? <section className="card finalized-summary">
-          <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div><div className="record-actions"><button className="text-button" disabled={exportBusy} onClick={downloadMarkdown}>{exportBusy ? "Preparing export…" : "Export Markdown"}</button><button className="text-button" disabled={pdfExportBusy} onClick={downloadPdf}>{pdfExportBusy ? "Preparing PDF…" : "Export PDF"}</button><button className="text-button danger" onClick={() => { setDeleteTitle(decision.title); setConfirmingDeleteFor(decision.id); }}>Delete record</button><button className="text-button" onClick={() => setView("library")}>Back to library</button></div></div>
-          <div className="record-meta"><div><span>Chosen option</span><strong>{decision.chosen_option || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Saved</span><strong>{formatDate(decision.created_at)}</strong></div></div>
+        {view === "workspace" && workflowView === 3 && decision && !extraction ? <section className="card finalized-summary">
+          <div className="finalized-heading"><div className="finalized-check">✓</div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div>{recordActions}</div>
+          <div className="record-meta"><div><span>Chosen option</span><strong>{decision.chosen_option || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Saved</span><strong>{formatDateTime(decision.created_at)}</strong></div></div>
            <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
              {sharePanel}
+             <div className="stage-continue"><span>The decision is saved. Revisit it whenever new evidence appears.</span><button type="button" className="primary" onClick={() => setWorkflowView(4)}>Continue to revisit →</button></div>
            </section> : null}
 
-        {view === "workspace" && decision ? <section className="card revisit-card">
+        {view === "workspace" && workflowView === 4 && decision ? <section className="card revisit-card">
           <div className="section-heading"><div><span className="overline">Step 4 · Revisit</span><h2>What changed?</h2><p>Check one model or compare two models against the same preserved premises and evidence.</p></div><span className="decision-badge">{decision.criticality}</span></div>
-            {revisitHistory.length ? <section className="history-strip"><div className="history-heading"><div><span className="overline">Revisit history</span><h3>{revisitHistory.length} previous check{revisitHistory.length === 1 ? "" : "s"}</h3></div><span>Newest first · click a check to see its findings</span></div><div className="history-list">{revisitHistory.map((run) => {
+            {revisitHistory.length ? <section className="history-strip"><div className="history-heading"><div><span className="overline">Decision conversation</span><h3>{revisitHistory.length} evidence check{revisitHistory.length === 1 ? "" : "s"}</h3></div><span>Newest first · open a message for findings</span></div><div className="history-list">{revisitHistory.map((run) => {
               const open = expandedHistoryId === run.id;
-              return <article key={run.id} className={`history-item ${open ? "open" : ""}`} onClick={() => setExpandedHistoryId(open ? null : run.id)}>
-                <div className="history-item-toggle"><span className="chev">▸</span><div><strong>{run.evidence_filename || "New evidence"}</strong><span>{run.provider || "unknown"}/{run.model || "unknown"} · {formatDate(run.created_at)}</span></div></div>
-                <div><strong>{run.findings.length}</strong><span>findings</span></div>
-                <span className={`history-status ${run.status}`}>{run.status.replaceAll("_", " ")}</span>
+              return <article key={run.id} className={`history-message ${open ? "open" : ""}`}>
+                <button type="button" className="history-message-toggle" aria-expanded={open} onClick={() => setExpandedHistoryId(open ? null : run.id)}>
+                  <span className="history-avatar" aria-hidden="true">↻</span>
+                  <span className="history-bubble">
+                    <span className="history-message-copy"><small>Evidence update</small><strong>{run.evidence_filename || "New evidence"}</strong><span className="history-model">Model · {run.provider || "unknown"} / {run.model || "unknown"}</span><time dateTime={run.created_at}>{formatDateTime(run.created_at)}</time></span>
+                    <span className="history-message-result"><span><strong>{run.findings.length}</strong><small>finding{run.findings.length === 1 ? "" : "s"}</small></span><span className={`history-status ${run.status}`}>{run.status.replaceAll("_", " ")}</span><span className="chev">⌄</span></span>
+                  </span>
+                </button>
                 {open ? <div className="history-detail">{run.findings.length ? run.findings.map((finding, findingIndex) => <div key={`${finding.premise_id}-${findingIndex}`} className={`finding ${finding.relationship}`}>
                     <div className="finding-status"><span>{finding.finding_type === "new_constraint" ? "new constraint" : finding.relationship}</span><small>{finding.confidence_band} confidence</small></div>
                     <h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>
-                    {finding.old_excerpt ? <p className="history-old"><strong>Original excerpt</strong><blockquote>{finding.old_excerpt}</blockquote></p> : null}
+                    {finding.old_excerpt ? <div className="history-old"><strong>Original excerpt</strong><blockquote>{finding.old_excerpt}</blockquote></div> : null}
                     {finding.missing_context_question ? <p className="missing-context">Question: {finding.missing_context_question}</p> : null}
                     {finding.human_judgment ? <p className="history-judgment">Reviewer: {finding.human_judgment.replaceAll("_", " ")}{finding.human_notes ? ` — ${finding.human_notes}` : ""}</p> : null}
                    </div>) : <p className="history-empty">No material relationship was found.</p>}</div> : null}
                </article>;
              })}</div></section> : null}
-          <div className="mode-toggle" aria-label="Revisit mode"><button type="button" className={!compareMode ? "active" : ""} aria-pressed={!compareMode} onClick={() => { setCompareMode(false); setComparisonRuns([]); }}>Single model</button><button type="button" className={compareMode ? "active" : ""} aria-pressed={compareMode} disabled={models.length < 2} onClick={() => { setCompareMode(true); setFindings([]); }}>Compare models</button></div>
-          {compareMode ? <div className="compare-models"><label className="field"><span>Model A</span><select aria-label="Comparison model A" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)} disabled={busyPhase !== null}>{models.map((model) => <option key={model.id} value={model.id} disabled={model.id === comparisonModelId}>{model.label} · {model.location}</option>)}</select></label><div className="versus">VS</div><label className="field"><span>Model B</span><select aria-label="Comparison model B" value={comparisonModelId} onChange={(event) => setComparisonModelId(event.target.value)} disabled={busyPhase !== null}>{models.map((model) => <option key={model.id} value={model.id} disabled={model.id === selectedModelId}>{model.label} · {model.location}</option>)}</select></label></div> : null}
-          <label className="field"><span>New evidence</span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); setFindings([]); setComparisonRuns([]); setActiveRevisitId(null); }} rows={5} /></label>
-          <div className="form-footer"><span>{compareMode ? "Both models receive identical premises and evidence." : "This check flags relationships; it does not overturn the decision."}</span><button className="primary" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || (compareMode && !comparisonModelId) || !evidence.trim()}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing models…" : `Checking with ${selectedModel?.label ?? "model"}…`}</> : compareMode ? "Compare model reasoning →" : "Check against premises →"}</button></div>
+          <section className={`revisit-composer ${busyPhase === "revisit" ? "is-busy" : ""}`} aria-busy={busyPhase === "revisit"}>
+            <div className="composer-heading"><div><span className="overline">New message</span><h3>Add evidence to the decision</h3></div><div className="mode-toggle" aria-label="Revisit mode"><button type="button" className={!compareMode ? "active" : ""} aria-pressed={!compareMode} onClick={() => { setCompareMode(false); setComparisonRuns([]); }}>Single model</button><button type="button" className={compareMode ? "active" : ""} aria-pressed={compareMode} disabled={models.length < 2} onClick={() => { setCompareMode(true); setFindings([]); }}>Compare models</button></div></div>
+            {compareMode ? <div className="compare-models"><label className="field"><span>Model A</span><select aria-label="Comparison model A" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)} disabled={busyPhase !== null}>{models.map((model) => <option key={model.id} value={model.id} disabled={model.id === comparisonModelId}>{model.label} · {model.location}</option>)}</select></label><div className="versus">VS</div><label className="field"><span>Model B</span><select aria-label="Comparison model B" value={comparisonModelId} onChange={(event) => setComparisonModelId(event.target.value)} disabled={busyPhase !== null}>{models.map((model) => <option key={model.id} value={model.id} disabled={model.id === selectedModelId}>{model.label} · {model.location}</option>)}</select></label></div> : null}
+            <label className="composer-input"><span className="composer-plus" aria-hidden="true">＋</span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); setFindings([]); setComparisonRuns([]); setActiveRevisitId(null); }} rows={4} placeholder="Paste a new fact, policy update, incident, or source excerpt…" /></label>
+            <div className="composer-footer"><span>{compareMode ? "Both models receive identical premises and evidence." : "AI maps evidence to premises; you decide whether action is warranted."}</span><div><span className="composer-model">{compareMode ? `${selectedModel?.label ?? "Model A"} + ${comparisonModel?.label ?? "Model B"}` : selectedModel?.label ?? "Choose a model"}</span><button className="primary composer-send" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || (compareMode && !comparisonModelId) || !evidence.trim()} aria-label={compareMode ? "Compare model reasoning" : "Check evidence against premises"}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing…" : "Checking…"}</> : "↑"}</button></div></div>
+          </section>
           {comparisonRuns.length === 2 ? <div className="comparison-results"><section className={`disagreement-summary ${disagreements.length ? "has-disagreements" : ""}`}><div><span className="overline">Agreement check</span><h3>{disagreements.length ? `${disagreements.length} disagreement${disagreements.length === 1 ? "" : "s"} need review` : "Models agree on all material relationships"}</h3></div>{disagreements.length ? <div className="disagreement-list">{disagreements.map(({ premise, firstRelationship, secondRelationship }) => <div key={premise.id}><strong>{premise.statement}</strong><span>{comparisonRuns[0].label}: {firstRelationship} · {comparisonRuns[1].label}: {secondRelationship}</span></div>)}</div> : null}</section><div className="comparison-grid">{comparisonRuns.map((run) => <section className="comparison-column" key={run.modelId}><header><div><span className="overline">Model result</span><h3>{run.label}</h3></div><strong>{run.result.findings.length} finding{run.result.findings.length === 1 ? "" : "s"}</strong></header><div className="run-provenance">{provenanceLabel(run.result)}</div>{run.result.findings.length ? run.result.findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.finding_type === "new_constraint" ? "new constraint" : finding.relationship}</span><small>{finding.confidence_band} confidence</small></div>{finding.finding_type === "new_constraint" ? <div className="safety-net-badge">New constraint · human review required</div> : null}<h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote></article>) : <div className="empty-findings"><strong>No material relationship found</strong><span>This model found no effect on the preserved premises.</span></div>}</section>)}</div></div> : null}
           {!comparisonRuns.length && findings.length ? <div className="findings">
             <div className="findings-heading"><h3>Review findings</h3><span>{findings.length} material relationship{findings.length === 1 ? "" : "s"} found · {lastRevisitModel}</span></div>

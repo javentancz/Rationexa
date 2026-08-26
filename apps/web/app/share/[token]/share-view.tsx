@@ -56,6 +56,11 @@ function formatDate(value?: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
 }
 
+function formatDateTime(value?: string) {
+  if (!value) return "Not recorded";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
 export function ShareView({ token }: { token: string }) {
   const [record, setRecord] = useState<SharedDecision | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -149,7 +154,7 @@ export function ShareView({ token }: { token: string }) {
               <div className="share-revisit-list">
                 {record.revisits.map((revisit, index) => (
                     <article key={revisit.id} className="share-revisit">
-                      <header><strong>Revisit {index + 1} · {formatDate(revisit.created_at)}</strong><span className={`history-status ${revisit.status}`}>{revisit.status.replaceAll("_", " ")}</span></header>
+                      <header><strong>Revisit {index + 1} · {formatDateTime(revisit.created_at)}</strong><span className={`history-status ${revisit.status}`}>{revisit.status.replaceAll("_", " ")}</span></header>
                       <p className="share-revisit-meta">{revisit.provider || "unknown"} / {revisit.model || "unknown"} · {revisit.prompt_version || "unknown prompt"}</p>
                       {revisit.findings.length ? revisit.findings.map((finding, findingIndex) => (
                           <div key={`${finding.premise_id}-${findingIndex}`} className={`finding ${finding.relationship}`}>
@@ -157,7 +162,7 @@ export function ShareView({ token }: { token: string }) {
                             <h3>{finding.premise_statement}</h3>
                             <p>{finding.explanation}</p>
                             <blockquote>{finding.new_excerpt}</blockquote>
-                            {finding.old_excerpt ? <p className="share-old"><strong>Original excerpt</strong><blockquote>{finding.old_excerpt}</blockquote></p> : null}
+                            {finding.old_excerpt ? <div className="share-old"><strong>Original excerpt</strong><blockquote>{finding.old_excerpt}</blockquote></div> : null}
                             {finding.missing_context_question ? <p className="missing-context">Question: {finding.missing_context_question}</p> : null}
                             {finding.human_judgment ? <p className="share-judgment">Reviewer judgment: {finding.human_judgment.replaceAll("_", " ")}{finding.human_notes ? ` — ${finding.human_notes}` : ""}</p> : null}
                           </div>

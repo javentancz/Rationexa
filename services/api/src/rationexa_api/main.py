@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from datetime import UTC
+from datetime import UTC, datetime, timedelta
 from time import perf_counter
 from typing import Annotated
 
@@ -86,6 +86,12 @@ app.add_middleware(
 )
 
 Db = Annotated[Session, Depends(get_db)]
+
+
+def as_utc(value: datetime | None) -> datetime | None:
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=UTC)
 
 
 @app.get("/healthz", response_model=HealthRead)
@@ -409,8 +415,8 @@ def list_decisions(
                 premise_count=premises,
                 revisit_count=revisits,
                 pending_revisit_count=pending,
-                last_revisited_at=last_revisited,
-                created_at=decision.created_at,
+                last_revisited_at=as_utc(last_revisited),
+                created_at=as_utc(decision.created_at),
             )
             for decision, premises, revisits, pending, last_revisited in rows
         ],
@@ -508,9 +514,9 @@ def share_read(share: DecisionShareRow, base_url: str) -> ShareRead:
         token=share.token,
         status=share.status,
         url=url,
-        created_at=share.created_at,
-        expires_at=share.expires_at,
-        revoked_at=share.revoked_at,
+        created_at=as_utc(share.created_at),
+        expires_at=as_utc(share.expires_at),
+        revoked_at=as_utc(share.revoked_at),
         )
 
 
@@ -518,7 +524,7 @@ def shared_premise(premise: PremiseRow) -> DecisionPremiseRead:
     anchor = None
     if premise.anchor is not None:
         anchor = SourceAnchor(
-            exact_excerpt=premise.anchor.exact_excerpt,
+            exact_excerpt=_scrub_shared_text(premise.anchor.exact_excerpt) or "",
             start_offset=premise.anchor.start_offset,
             end_offset=premise.anchor.end_offset,
             page_number=premise.anchor.page_number,
@@ -550,13 +556,13 @@ def decision_share_payload(decision: DecisionRow, revisits: list[RevisitRow], sh
             output_tokens=revisit.output_tokens,
             estimated_cost_usd=revisit.estimated_cost_usd,
             evidence_filename=None,
-            created_at=revisit.created_at,
+            created_at=as_utc(revisit.created_at),
         )
         for revisit in revisits
        ]
     return ShareDecisionRead(
         id=decision.id,
-        title=decision.title,
+        title=_scrub_shared_text(decision.title) or "",
         question=_scrub_shared_text(decision.question) or "",
         context=_scrub_shared_text(decision.context) or "",
         chosen_option=_scrub_shared_text(decision.chosen_option),
@@ -566,7 +572,7 @@ def decision_share_payload(decision: DecisionRow, revisits: list[RevisitRow], sh
         status=decision.status,
         premises=[shared_premise(premise) for premise in decision.premises],
         revisits=revisits_for_share,
-        shared_at=shared_at,
+        shared_at=as_utc(shared_at),
        )
 
 
@@ -609,10 +615,16 @@ def create_share(decision_id: str, payload: ShareCreate, db: Db) -> ShareRead:
             DecisionShareRow.decision_id == decision_id,
             DecisionShareRow.status == "active",
           )
-      )
+    )
     if existing is not None:
+        if existing.expires_at is None:
+            existing.expires_at = now_utc() + timedelta(days=settings.share_default_ttl_days)
+            db.add(existing)
+            db.commit()
+            db.refresh(existing)
         return share_read(existing, settings.public_base_url)
-    share = DecisionShareRow(decision_id=decision_id, token=new_share_token(), expires_at=payload.expires_at)
+    expires_at = payload.expires_at or now_utc() + timedelta(days=settings.share_default_ttl_days)
+    share = DecisionShareRow(decision_id=decision_id, token=new_share_token(), expires_at=expires_at)
     db.add(share)
     db.commit()
     db.refresh(share)
@@ -807,7 +819,7 @@ def extraction_read(row: ExtractionRow) -> ExtractionRead:
         model=row.model,
         prompt_version=row.prompt_version,
         result=ExtractionResult.model_validate(row.output),
-        created_at=row.created_at,
+        created_at=as_utc(row.created_at),
     )
 
 
@@ -845,7 +857,7 @@ def decision_read(row: DecisionRow) -> DecisionRead:
         preservation_policy=row.preservation_policy,
         status=row.status,
         premises=premises,
-        created_at=row.created_at,
+        created_at=as_utc(row.created_at),
     )
 
 
@@ -863,5 +875,5 @@ def revisit_read(row: RevisitRow) -> RevisitRead:
         output_tokens=row.output_tokens,
         estimated_cost_usd=row.estimated_cost_usd,
         evidence_filename=row.evidence_filename,
-        created_at=row.created_at,
+        created_at=as_utc(row.created_at),
     )
