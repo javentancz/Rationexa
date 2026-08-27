@@ -46,6 +46,7 @@ type Decision = {
   status: string;
   created_at: string;
   premises: Array<{ id: string; kind: string; statement: string; anchor?: { exact_excerpt: string } }>;
+  challenge?: DecisionChallenge | null;
 };
 
 type DecisionListItem = {
@@ -85,11 +86,29 @@ type PremiseReview = { action: ReviewAction; statement: string; kind: string };
 type DecisionDraft = { title: string; question: string; context: string; chosenOption: string; rationale: string };
 type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string };
 type ModelCatalog = { default_model_id: string; models: ModelOption[] };
-type Job = { id: string; kind: "extraction" | "revisit"; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; phase: string; progress: number; result?: unknown; error?: string };
+type ChallengePoint = { premise_id: string; premise_statement: string; source_excerpt?: string; prompt: string; explanation: string };
+type DecisionChallenge = {
+  status: "draft" | "confirmed";
+  weakest_assumption: ChallengePoint;
+  missing_evidence: ChallengePoint;
+  strongest_counterargument: ChallengePoint;
+  reversal_condition: ChallengePoint;
+  provider: string;
+  model: string;
+  prompt_version: string;
+  latency_ms?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  estimated_cost_usd?: number;
+  generated_at: string;
+  confirmed_at?: string;
+  reviewer_notes?: string;
+};
+type Job = { id: string; kind: "extraction" | "revisit" | "challenge"; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; phase: string; progress: number; result?: unknown; error?: string };
 type RevisitResult = { id: string; decision_id: string; status: string; findings: Finding[]; provider?: string; model?: string; prompt_version?: string; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number; evidence_filename?: string; created_at: string };
 type ComparisonRun = { modelId: string; label: string; result: RevisitResult };
 type Share = { id: string; decision_id: string; token: string; status: string; url: string | null; created_at: string; expires_at: string | null; revoked_at: string | null };
-type AuditEvent = { id: string; kind: "decision" | "evidence" | "judgment"; title: string; detail: string; timestamp: string };
+type AuditEvent = { id: string; kind: "decision" | "challenge" | "evidence" | "judgment"; title: string; detail: string; timestamp: string };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
@@ -193,7 +212,7 @@ export default function Home() {
   const [draft, setDraft] = useState<DecisionDraft | null>(null);
   const [criticality, setCriticality] = useState<Criticality>("important");
   const [selectedPremise, setSelectedPremise] = useState<string | null>(null);
-  const [busyPhase, setBusyPhase] = useState<"extract" | "finalize" | "revisit" | null>(null);
+  const [busyPhase, setBusyPhase] = useState<"extract" | "finalize" | "revisit" | "challenge" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [selectedModelId, setSelectedModelId] = useState("");
@@ -227,6 +246,9 @@ export default function Home() {
   const [libraryPaneCollapsed, setLibraryPaneCollapsed] = useState(false);
   const [workflowPaneCollapsed, setWorkflowPaneCollapsed] = useState(false);
   const [auditExpanded, setAuditExpanded] = useState(true);
+  const [challenge, setChallenge] = useState<DecisionChallenge | null>(null);
+  const [challengeNotes, setChallengeNotes] = useState("");
+  const [challengeConfirmBusy, setChallengeConfirmBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -286,6 +308,15 @@ export default function Home() {
       detail: `${decision.premises.length} human-reviewed premise${decision.premises.length === 1 ? "" : "s"} preserved · ${decision.criticality} criticality`,
       timestamp: decision.created_at,
     }];
+    if (challenge?.status === "confirmed" && challenge.confirmed_at) {
+      events.push({
+        id: `challenge-${decision.id}`,
+        kind: "challenge",
+        title: "Challenge brief confirmed",
+        detail: challenge.reviewer_notes || `Reviewed with ${challenge.provider}/${challenge.model}`,
+        timestamp: challenge.confirmed_at,
+      });
+    }
     revisitHistory.forEach((run) => {
       events.push({
         id: `evidence-${run.id}`,
@@ -306,7 +337,7 @@ export default function Home() {
       });
     });
     return events.sort((first, second) => new Date(first.timestamp).getTime() - new Date(second.timestamp).getTime());
-  }, [decision, revisitHistory]);
+  }, [challenge, decision, revisitHistory]);
   const findingReviewProgress = useMemo(() => {
     const total = revisitHistory.reduce((count, run) => count + run.findings.length, 0);
     const reviewed = revisitHistory.reduce((count, run) => count + run.findings.filter((finding) => finding.human_judgment).length, 0);
@@ -338,6 +369,8 @@ export default function Home() {
     setComparisonRuns([]);
     setActiveRevisitId(null);
     setRevisitCompleted(false);
+    setChallenge(null);
+    setChallengeNotes("");
     setWorkflowView(2);
   }
 
@@ -419,6 +452,7 @@ export default function Home() {
       setExtraction(reviewed);
       const saved = await responseJson(await fetch(`${api}/v1/extractions/${extraction.id}/finalize`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ criticality }) })) as Decision;
       setDecision(saved);
+      setChallenge(saved.challenge ?? null);
       setRevisitHistory([]);
       setWorkflowView(3);
       void loadLibrary();
@@ -458,6 +492,48 @@ export default function Home() {
       if (message !== "Operation cancelled") setError(message);
     } finally {
       setBusyPhase(null);
+    }
+  }
+
+  async function generateChallenge() {
+    if (!decision) return;
+    setBusyPhase("challenge");
+    setError(null);
+    try {
+      const created = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/challenge-jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model_id: selectedModelId || undefined }),
+      })) as Job;
+      const completed = await waitForJob(created);
+      const next = completed.result as DecisionChallenge;
+      setChallenge(next);
+      setDecision((current) => current ? { ...current, challenge: next } : current);
+      setChallengeNotes("");
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Challenge generation failed";
+      if (message !== "Operation cancelled") setError(message);
+    } finally {
+      setBusyPhase(null);
+    }
+  }
+
+  async function confirmChallenge() {
+    if (!decision || !challenge) return;
+    setChallengeConfirmBusy(true);
+    setError(null);
+    try {
+      const confirmed = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/challenge/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: challengeNotes || null }),
+      })) as DecisionChallenge;
+      setChallenge(confirmed);
+      setDecision((current) => current ? { ...current, challenge: confirmed } : current);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not confirm the challenge brief");
+    } finally {
+      setChallengeConfirmBusy(false);
     }
   }
 
@@ -511,6 +587,8 @@ export default function Home() {
         fetch(`${api}/v1/decisions/${decisionId}/revisit-checks`).then(responseJson),
       ]) as [Decision, RevisitResult[]];
       setDecision(record);
+      setChallenge(record.challenge ?? null);
+      setChallengeNotes(record.challenge?.reviewer_notes ?? "");
       setDraft({ title: record.title, question: record.question, context: record.context, chosenOption: record.chosen_option ?? "", rationale: record.rationale });
        setRevisitHistory(history);
        setExtraction(null);
@@ -589,6 +667,8 @@ export default function Home() {
   function resetWorkspace() {
     setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setExportBusy(false); setPdfExportBusy(false); setError(null); setShares([]); setCopiedToken(null);
     setConfirmingShareDelete(null);
+    setChallenge(null);
+    setChallengeNotes("");
     setWorkflowPaneCollapsed(false);
     setWorkflowView(1);
      }
@@ -707,6 +787,28 @@ export default function Home() {
       {finding.human_judgment ? <button type="button" className="save-review" disabled={busy} onClick={() => recordFindingJudgment(revisitId, finding.premise_id, finding.human_judgment!)}><Save aria-hidden="true" />{busy ? "Saving…" : "Save note changes"}</button> : null}
     </div>;
   }
+
+  const challengePanel = decision ? (
+    <section className={`challenge-panel ${challenge?.status ?? "empty"}`}>
+      <header className="challenge-heading">
+        <div><span className="overline">Lightweight challenge</span><h2>Pressure-test the decision</h2><p>Surface the questions most likely to reveal a weak premise. AI proposes; a human confirms.</p></div>
+        <span className={`challenge-status ${challenge?.status ?? "empty"}`}>{challenge?.status === "confirmed" ? <><Check aria-hidden="true" />Human confirmed</> : challenge ? "Human confirmation required" : "Not generated"}</span>
+      </header>
+      {challenge ? <>
+        <div className="challenge-grid">{([
+          ["weakest_assumption", "Weakest assumption"],
+          ["missing_evidence", "Missing evidence"],
+          ["strongest_counterargument", "Strongest counterargument"],
+          ["reversal_condition", "Reversal condition"],
+        ] as [keyof Pick<DecisionChallenge, "weakest_assumption" | "missing_evidence" | "strongest_counterargument" | "reversal_condition">, string][]).map(([key, label]) => {
+          const point = challenge[key];
+          return <article key={key}><span>{label}</span><h3>{point.prompt}</h3><p>{point.explanation}</p><div><small>Grounded in preserved premise</small><blockquote>{point.source_excerpt || point.premise_statement}</blockquote></div></article>;
+        })}</div>
+        <div className="challenge-provenance"><span>{challenge.provider}/{challenge.model} · {challenge.prompt_version} · {challenge.latency_ms ?? 0} ms</span><span>Generated {formatDateTime(challenge.generated_at)}</span></div>
+        {challenge.status === "draft" ? <div className="challenge-confirm"><label><span>Reviewer notes <small>Optional</small></span><textarea rows={2} maxLength={4000} value={challengeNotes} onChange={(event) => setChallengeNotes(event.target.value)} placeholder="Record what you verified, what remains open, or why these challenge prompts are useful…" /></label><div><p>Confirming records that a person reviewed the prompts. It does not approve or reverse the decision.</p><button type="button" className="primary" disabled={challengeConfirmBusy} onClick={confirmChallenge}>{challengeConfirmBusy ? "Saving confirmation…" : <><Check aria-hidden="true" />Confirm reviewed challenge</>}</button></div></div> : <div className="challenge-confirmed"><Check aria-hidden="true" /><div><strong>Reviewed by a human {challenge.confirmed_at ? `· ${formatDateTime(challenge.confirmed_at)}` : ""}</strong>{challenge.reviewer_notes ? <p>{challenge.reviewer_notes}</p> : <p>No reviewer note was added.</p>}</div></div>}
+      </> : <div className="challenge-empty"><span><Sparkles aria-hidden="true" /></span><div><strong>Generate four source-grounded challenge prompts</strong><p>The selected model will inspect only the preserved premises. It will not browse, change the decision, or run a multi-agent debate.</p></div><button type="button" className="primary" disabled={busyPhase !== null || !selectedModelId} onClick={generateChallenge}>{busyPhase === "challenge" ? <><span className="spinner" />Generating challenge…</> : <><Sparkles aria-hidden="true" />Generate challenge brief</>}</button></div>}
+    </section>
+  ) : null;
 
   const sharePanel = decision ? (
     <section className="share-panel">
@@ -861,6 +963,7 @@ export default function Home() {
                            <div className="finalized-heading"><div className="finalized-check"><Check aria-hidden="true" /></div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div>{recordActions}</div>
               <div className="record-meta"><div><span>Chosen option</span><strong>{draft.chosenOption || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Extracted by</span><strong>{extraction.model}</strong></div></div>
               <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
+                {challengePanel}
                 {sharePanel}
               <div className="stage-continue"><span>The decision is saved. Revisit it whenever new evidence appears.</span><button type="button" className="primary" onClick={() => setWorkflowView(4)}>Continue to revisit →</button></div>
               </section> : null}
@@ -871,6 +974,7 @@ export default function Home() {
           <div className="finalized-heading"><div className="finalized-check"><Check aria-hidden="true" /></div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div>{recordActions}</div>
           <div className="record-meta"><div><span>Chosen option</span><strong>{decision.chosen_option || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Saved</span><strong>{formatDateTime(decision.created_at)}</strong></div></div>
            <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
+             {challengePanel}
              {sharePanel}
              <div className="stage-continue"><span>The decision is saved. Revisit it whenever new evidence appears.</span><button type="button" className="primary" onClick={() => setWorkflowView(4)}>Continue to revisit →</button></div>
            </section> : null}
@@ -883,7 +987,7 @@ export default function Home() {
             </button>
             {auditExpanded ? <div className="audit-timeline">{auditEvents.map((event, index) => <article className={`audit-event ${event.kind}`} key={event.id}>
               <span className="audit-marker">{event.kind === "decision" ? "✓" : event.kind === "evidence" ? "•" : "●"}</span>
-              <div><small>{event.kind === "decision" ? "Human-reviewed record" : event.kind === "evidence" ? "Evidence check" : "Reviewer judgment"}</small><strong>{event.title}</strong><p>{event.detail}</p><time dateTime={event.timestamp}>{formatDateTime(event.timestamp)}</time></div>
+              <div><small>{event.kind === "decision" ? "Human-reviewed record" : event.kind === "challenge" ? "Challenge review" : event.kind === "evidence" ? "Evidence check" : "Reviewer judgment"}</small><strong>{event.title}</strong><p>{event.detail}</p><time dateTime={event.timestamp}>{formatDateTime(event.timestamp)}</time></div>
               {index < auditEvents.length - 1 ? <span className="audit-line" /> : null}
             </article>)}</div> : null}
           </section>

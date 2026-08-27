@@ -27,12 +27,16 @@ from .db import (
 from .exports import export_filename, render_decision_markdown
 from .jobs import job_manager
 from .pdf_export import render_decision_pdf
-from .prompts import EXTRACTION_PROMPT_VERSION, REVISIT_PROMPT_VERSION
+from .prompts import CHALLENGE_PROMPT_VERSION, EXTRACTION_PROMPT_VERSION, REVISIT_PROMPT_VERSION
 from .providers import available_models, default_model_id, get_provider
 from .schemas import (
     ArtifactCreate,
     ArtifactRead,
+    ChallengePoint,
     Criticality,
+    DecisionChallengeConfirmRequest,
+    DecisionChallengeRead,
+    DecisionChallengeRequest,
     DecisionFinalizeRequest,
     DecisionListItem,
     DecisionListRead,
@@ -336,6 +340,109 @@ def get_decision(decision_id: str, db: Db) -> DecisionRead:
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     return decision_read(decision)
+
+
+def perform_challenge(
+    decision_id: str,
+    payload: DecisionChallengeRequest,
+    db: Session,
+    job_id: str | None = None,
+) -> DecisionChallengeRead | None:
+    decision = db.get(DecisionRow, decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    premises = [
+        RevisitPremiseInput(
+            premise_id=premise.id,
+            kind=PremiseKind(premise.kind),
+            statement=premise.statement,
+            old_excerpt=premise.anchor.exact_excerpt if premise.anchor else None,
+        )
+        for premise in decision.premises
+    ]
+    try:
+        provider = get_provider(settings, payload.model_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    try:
+        if job_id:
+            job_manager.update(job_id, phase="Challenging preserved premises", progress=35)
+        started_at = perf_counter()
+        suggestions = provider.challenge(premises)
+        latency_ms = max(0, round((perf_counter() - started_at) * 1000))
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if job_id and job_manager.is_cancelled(job_id):
+        return None
+    if job_id:
+        job_manager.update(job_id, phase="Validating source grounding", progress=85)
+
+    premise_by_id = {premise.id: premise for premise in decision.premises}
+
+    def point(suggestion) -> ChallengePoint:
+        premise = premise_by_id[suggestion.premise_id]
+        return ChallengePoint(
+            premise_id=premise.id,
+            premise_statement=premise.statement,
+            source_excerpt=premise.anchor.exact_excerpt if premise.anchor else None,
+            prompt=suggestion.prompt,
+            explanation=suggestion.explanation,
+        )
+
+    challenge = DecisionChallengeRead(
+        status="draft",
+        weakest_assumption=point(suggestions.weakest_assumption),
+        missing_evidence=point(suggestions.missing_evidence),
+        strongest_counterargument=point(suggestions.strongest_counterargument),
+        reversal_condition=point(suggestions.reversal_condition),
+        provider=provider.name,
+        model=provider.model,
+        prompt_version=CHALLENGE_PROMPT_VERSION,
+        latency_ms=latency_ms,
+        input_tokens=provider.last_usage.get("input_tokens"),
+        output_tokens=provider.last_usage.get("output_tokens"),
+        estimated_cost_usd=provider.last_usage.get("estimated_cost_usd"),
+        generated_at=now_utc(),
+    )
+    decision.challenge = challenge.model_dump(mode="json")
+    db.commit()
+    db.refresh(decision)
+    return challenge
+
+
+@app.post("/v1/decisions/{decision_id}/challenge", response_model=DecisionChallengeRead)
+def create_decision_challenge(
+    decision_id: str,
+    payload: DecisionChallengeRequest,
+    db: Db,
+) -> DecisionChallengeRead:
+    challenge = perform_challenge(decision_id, payload, db)
+    assert challenge is not None
+    return challenge
+
+
+@app.post("/v1/decisions/{decision_id}/challenge/confirm", response_model=DecisionChallengeRead)
+def confirm_decision_challenge(
+    decision_id: str,
+    payload: DecisionChallengeConfirmRequest,
+    db: Db,
+) -> DecisionChallengeRead:
+    decision = db.get(DecisionRow, decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    if decision.challenge is None:
+        raise HTTPException(status_code=409, detail="Generate a challenge brief before confirming it")
+    challenge = DecisionChallengeRead.model_validate(decision.challenge).model_copy(
+        update={
+            "status": "confirmed",
+            "confirmed_at": now_utc(),
+            "reviewer_notes": payload.notes.strip() if payload.notes and payload.notes.strip() else None,
+        }
+    )
+    decision.challenge = challenge.model_dump(mode="json")
+    db.commit()
+    db.refresh(decision)
+    return challenge
 
 
 @app.delete("/v1/decisions/{decision_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -807,6 +914,27 @@ def create_revisit_job(decision_id: str, payload: RevisitRequest, db: Db) -> Job
     return JobRead.model_validate(job_manager.create("revisit", worker))
 
 
+@app.post(
+    "/v1/decisions/{decision_id}/challenge-jobs",
+    response_model=JobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def create_challenge_job(decision_id: str, payload: DecisionChallengeRequest, db: Db) -> JobRead:
+    if db.get(DecisionRow, decision_id) is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    try:
+        get_provider(settings, payload.model_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    def worker(job_id: str) -> dict | None:
+        with SessionLocal() as worker_db:
+            result = perform_challenge(decision_id, payload, worker_db, job_id)
+            return result.model_dump(mode="json") if result else None
+
+    return JobRead.model_validate(job_manager.create("challenge", worker))
+
+
 @app.get("/v1/jobs/{job_id}", response_model=JobRead)
 def get_job(job_id: str) -> JobRead:
     try:
@@ -872,6 +1000,7 @@ def decision_read(row: DecisionRow) -> DecisionRead:
         preservation_policy=row.preservation_policy,
         status=row.status,
         premises=premises,
+        challenge=DecisionChallengeRead.model_validate(row.challenge) if row.challenge else None,
         created_at=as_utc(row.created_at),
     )
 

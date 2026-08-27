@@ -145,6 +145,50 @@ def test_stage_one_vertical_slice() -> None:
         assert all(finding["judged_at"] for finding in judged_body["findings"])
 
 
+def test_stage_two_challenge_is_source_grounded_and_requires_confirmation() -> None:
+    source = (
+        "We decided to use Vendor B because we assumed its external-user limitation would remain. "
+        "The service must support SAML. "
+        "Revisit if Vendor B introduces external-user support."
+    )
+    with TestClient(app) as client:
+        decision = create_finalized_decision(
+            client,
+            source=source,
+            title="Challenge-ready vendor decision",
+        )
+        created = client.post(
+            f"/v1/decisions/{decision['id']}/challenge",
+            json={"model_id": "deterministic/rules-v1"},
+        )
+
+        assert created.status_code == 200
+        challenge = created.json()
+        assert challenge["status"] == "draft"
+        assert challenge["provider"] == "deterministic"
+        assert challenge["prompt_version"] == "challenge-v1"
+        for field in (
+            "weakest_assumption",
+            "missing_evidence",
+            "strongest_counterargument",
+            "reversal_condition",
+        ):
+            assert challenge[field]["premise_id"]
+            assert challenge[field]["source_excerpt"] in source
+
+        reopened = client.get(f"/v1/decisions/{decision['id']}").json()
+        assert reopened["challenge"]["status"] == "draft"
+
+        confirmed = client.post(
+            f"/v1/decisions/{decision['id']}/challenge/confirm",
+            json={"notes": "Reviewed against the preserved source."},
+        )
+        assert confirmed.status_code == 200
+        assert confirmed.json()["status"] == "confirmed"
+        assert confirmed.json()["confirmed_at"]
+        assert confirmed.json()["reviewer_notes"] == "Reviewed against the preserved source."
+
+
 def test_revisit_provenance_columns_exist() -> None:
     with TestClient(app):
         columns = {column["name"] for column in inspect(engine).get_columns("revisit_checks")}
@@ -159,6 +203,8 @@ def test_revisit_provenance_columns_exist() -> None:
         "output_tokens",
         "estimated_cost_usd",
     } <= columns
+    decision_columns = {column["name"] for column in inspect(engine).get_columns("decisions")}
+    assert "challenge" in decision_columns
 
 
 def test_rejects_model_outside_server_allowlist() -> None:

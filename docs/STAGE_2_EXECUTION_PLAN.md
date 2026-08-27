@@ -48,10 +48,17 @@ are implemented.
 
 ## Milestone 3 - lightweight challenge
 
+Status: implemented for finalized decisions.
+
 - Propose the weakest assumption, missing evidence, strongest counterargument,
-  and reversal condition.
-- Require source-grounded explanations and human confirmation.
-- Do not add multi-agent debate.
+  and reversal condition. Implemented as a cancellable background model job.
+- Require source-grounded explanations and human confirmation. Every challenge
+  point maps to a preserved premise and exact stored excerpt; the draft remains
+  visibly unconfirmed until a reviewer records confirmation and optional notes.
+- Persist model, provider, prompt version, latency, token, cost, generation time,
+  confirmation time, and reviewer notes with the decision.
+- Do not add multi-agent debate. The selected configured model produces one
+  challenge brief and cannot reverse the decision.
 
 ## Milestone 4 - hosted repeat-use foundation
 

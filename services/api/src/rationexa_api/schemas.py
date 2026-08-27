@@ -66,7 +66,7 @@ class ModelCatalogRead(BaseModel):
 
 class JobRead(BaseModel):
     id: str
-    kind: Literal["extraction", "revisit"]
+    kind: Literal["extraction", "revisit", "challenge"]
     status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
     phase: str
     progress: int = Field(ge=0, le=100)
@@ -155,6 +155,53 @@ class DecisionPremiseRead(BaseModel):
     anchor: SourceAnchor | None
 
 
+class ChallengeSuggestion(BaseModel):
+    premise_id: str
+    prompt: str = Field(min_length=1)
+    explanation: str = Field(min_length=1)
+
+
+class ChallengeSuggestionBatch(BaseModel):
+    weakest_assumption: ChallengeSuggestion
+    missing_evidence: ChallengeSuggestion
+    strongest_counterargument: ChallengeSuggestion
+    reversal_condition: ChallengeSuggestion
+
+
+class ChallengePoint(BaseModel):
+    premise_id: str
+    premise_statement: str
+    source_excerpt: str | None = None
+    prompt: str
+    explanation: str
+
+
+class DecisionChallengeRead(BaseModel):
+    status: Literal["draft", "confirmed"]
+    weakest_assumption: ChallengePoint
+    missing_evidence: ChallengePoint
+    strongest_counterargument: ChallengePoint
+    reversal_condition: ChallengePoint
+    provider: str
+    model: str
+    prompt_version: str
+    latency_ms: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    estimated_cost_usd: float | None = None
+    generated_at: datetime
+    confirmed_at: datetime | None = None
+    reviewer_notes: str | None = None
+
+
+class DecisionChallengeRequest(BaseModel):
+    model_id: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+class DecisionChallengeConfirmRequest(BaseModel):
+    notes: str | None = Field(default=None, max_length=4000)
+
+
 class DecisionRead(BaseModel):
     id: str
     title: str
@@ -166,6 +213,7 @@ class DecisionRead(BaseModel):
     preservation_policy: str
     status: str
     premises: list[DecisionPremiseRead]
+    challenge: DecisionChallengeRead | None = None
     created_at: datetime
 
 

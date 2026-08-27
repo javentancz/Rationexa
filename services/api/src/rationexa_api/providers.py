@@ -8,9 +8,11 @@ import httpx
 from openai import OpenAI
 
 from .config import Settings
-from .prompts import EXTRACTION_INSTRUCTIONS, REVISIT_INSTRUCTIONS
+from .prompts import CHALLENGE_INSTRUCTIONS, EXTRACTION_INSTRUCTIONS, REVISIT_INSTRUCTIONS
 from .schemas import (
     CandidatePremise,
+    ChallengeSuggestion,
+    ChallengeSuggestionBatch,
     Criticality,
     ExtractionResult,
     ModelOption,
@@ -39,6 +41,10 @@ class ExtractionProvider(ABC):
         new_evidence: str,
         criticality: str,
     ) -> list[RevisitFinding]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def challenge(self, premises: list[RevisitPremiseInput]) -> ChallengeSuggestionBatch:
         raise NotImplementedError
 
 
@@ -146,6 +152,54 @@ class DeterministicProvider(ExtractionProvider):
             if finding:
                 findings.append(finding)
         return _apply_deterministic_safety_net(findings, premises, new_evidence, criticality)
+
+    def challenge(self, premises: list[RevisitPremiseInput]) -> ChallengeSuggestionBatch:
+        self.last_usage = {"input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0.0}
+        if not premises:
+            raise ValueError("A decision needs at least one preserved premise before it can be challenged")
+
+        def first_of(*kinds: PremiseKind) -> RevisitPremiseInput:
+            return next((premise for premise in premises if premise.kind in kinds), premises[0])
+
+        weakest = first_of(PremiseKind.ASSUMPTION, PremiseKind.UNKNOWN, PremiseKind.MATERIAL_CLAIM)
+        missing = first_of(PremiseKind.UNKNOWN, PremiseKind.MATERIAL_CLAIM, PremiseKind.ASSUMPTION)
+        counter = first_of(PremiseKind.ASSUMPTION, PremiseKind.MATERIAL_CLAIM, PremiseKind.HARD_CONSTRAINT)
+        reversal = first_of(PremiseKind.REVISIT_CONDITION, PremiseKind.ASSUMPTION, PremiseKind.MATERIAL_CLAIM)
+
+        return ChallengeSuggestionBatch(
+            weakest_assumption=ChallengeSuggestion(
+                premise_id=weakest.premise_id,
+                prompt=f"How certain are we that this premise still holds: {weakest.statement}",
+                explanation="This premise carries uncertainty and may materially affect the recorded rationale.",
+            ),
+            missing_evidence=ChallengeSuggestion(
+                premise_id=missing.premise_id,
+                prompt=f"What current, authoritative evidence would verify this premise: {missing.statement}",
+                explanation="A human reviewer should identify evidence that can confirm or limit this premise.",
+            ),
+            strongest_counterargument=ChallengeSuggestion(
+                premise_id=counter.premise_id,
+                prompt=f"What if this preserved premise is no longer true: {counter.statement}",
+                explanation=(
+                    "Testing the opposite case exposes whether the decision depends too heavily on one premise."
+                ),
+            ),
+            reversal_condition=ChallengeSuggestion(
+                premise_id=reversal.premise_id,
+                prompt=(
+                    f"Should the decision be revisited when this trigger occurs: {reversal.statement}"
+                    if reversal.kind == PremiseKind.REVISIT_CONDITION
+                    else (
+                        "What evidence would justify reconsidering the decision because this premise no longer holds: "
+                        f"{reversal.statement}"
+                    )
+                ),
+                explanation=(
+                    "The reviewer must define the evidence threshold for reconsideration; "
+                    "this does not reverse the decision automatically."
+                ),
+            ),
+        )
 
     @staticmethod
     def _classify(sentence: str) -> PremiseKind | None:
@@ -257,6 +311,19 @@ class OpenAIResponsesProvider(ExtractionProvider):
             raise ValueError("The model did not return valid revisit findings")
         return _validated_findings(response.output_parsed, premises, new_evidence, criticality)
 
+    def challenge(self, premises: list[RevisitPremiseInput]) -> ChallengeSuggestionBatch:
+        response = self.client.responses.parse(
+            model=self.model,
+            store=False,
+            instructions=CHALLENGE_INSTRUCTIONS,
+            input=_challenge_input(premises),
+            text_format=ChallengeSuggestionBatch,
+        )
+        self._capture_usage(response)
+        if response.output_parsed is None:
+            raise ValueError("The model did not return a valid challenge brief")
+        return _validated_challenge(response.output_parsed, premises)
+
     def _capture_usage(self, response: object) -> None:
         usage = getattr(response, "usage", None)
         self.last_usage = {
@@ -298,6 +365,14 @@ class OllamaProvider(ExtractionProvider):
         )
         batch = RevisitAssessmentBatch.model_validate_json(content)
         return _validated_findings(batch, premises, new_evidence, criticality)
+
+    def challenge(self, premises: list[RevisitPremiseInput]) -> ChallengeSuggestionBatch:
+        content = self._structured_chat(
+            CHALLENGE_INSTRUCTIONS,
+            _challenge_input(premises),
+            ChallengeSuggestionBatch.model_json_schema(),
+        )
+        return _validated_challenge(ChallengeSuggestionBatch.model_validate_json(content), premises)
 
     def _structured_chat(self, instructions: str, user_input: str, schema: dict) -> str:
         try:
@@ -344,6 +419,27 @@ class OllamaProvider(ExtractionProvider):
 def _revisit_input(premises: list[RevisitPremiseInput], new_evidence: str) -> str:
     premise_data = [premise.model_dump(mode="json", exclude={"old_excerpt"}) for premise in premises]
     return f"PRESERVED PREMISES\n{json.dumps(premise_data, indent=2)}\n\nNEW EVIDENCE\n{new_evidence}"
+
+
+def _challenge_input(premises: list[RevisitPremiseInput]) -> str:
+    premise_data = [premise.model_dump(mode="json", exclude={"old_excerpt"}) for premise in premises]
+    return f"PRESERVED PREMISES\n{json.dumps(premise_data, indent=2)}"
+
+
+def _validated_challenge(
+    batch: ChallengeSuggestionBatch,
+    premises: list[RevisitPremiseInput],
+) -> ChallengeSuggestionBatch:
+    premise_ids = {premise.premise_id for premise in premises}
+    for suggestion in (
+        batch.weakest_assumption,
+        batch.missing_evidence,
+        batch.strongest_counterargument,
+        batch.reversal_condition,
+    ):
+        if suggestion.premise_id not in premise_ids:
+            raise ValueError("Challenge output referenced a premise that is not preserved with this decision")
+    return batch
 
 
 def _normalize_extraction(result: ExtractionResult, source_text: str | None = None) -> ExtractionResult:

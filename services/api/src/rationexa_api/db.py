@@ -73,6 +73,7 @@ class DecisionRow(Base):
     criticality: Mapped[str] = mapped_column(String(20), default="important")
     preservation_policy: Mapped[str] = mapped_column(String(30), default="key_excerpts")
     status: Mapped[str] = mapped_column(String(30), default="decision_ready")
+    challenge: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     premises: Mapped[list[PremiseRow]] = relationship(cascade="all, delete-orphan")
 
@@ -145,6 +146,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _add_missing_revisit_provenance_columns()
+    _add_missing_decision_challenge_column()
 
 
 def _add_missing_revisit_provenance_columns() -> None:
@@ -164,6 +166,14 @@ def _add_missing_revisit_provenance_columns() -> None:
         for name, sql_type in column_definitions.items():
             if name not in existing:
                 connection.execute(text(f"ALTER TABLE revisit_checks ADD COLUMN {name} {sql_type}"))
+
+
+def _add_missing_decision_challenge_column() -> None:
+    """Add the Stage 2 challenge brief to databases created before this milestone."""
+    existing = {column["name"] for column in inspect(engine).get_columns("decisions")}
+    if "challenge" not in existing:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE decisions ADD COLUMN challenge JSON"))
 
 
 def get_db() -> Generator[Session]:
