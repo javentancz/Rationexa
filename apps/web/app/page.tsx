@@ -1,8 +1,14 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AccountPanel } from "./account-panel";
 import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleDollarSign, Clock3, Cpu, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Settings, Sparkles, Trash2, UserRound } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ConfirmDialog, Disclosure, Hint } from "./ui";
+import { apiResponse as req, responseJson } from "./api";
+import { ModelPicker, type ModelOption } from "./model-picker";
+import { FinalizeConfirmation } from "./finalize-stage";
 
 type Criticality = "routine" | "important" | "critical";
 type ReviewAction = "confirm" | "unknown" | "reject";
@@ -86,7 +92,6 @@ type Finding = {
 
 type PremiseReview = { action: ReviewAction; statement: string; kind: string };
 type DecisionDraft = { title: string; question: string; context: string; chosenOption: string; rationale: string };
-type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string };
 type ModelCatalog = { default_model_id: string; models: ModelOption[] };
 type ChallengePoint = { premise_id: string; premise_statement: string; source_excerpt?: string; prompt: string; explanation: string };
 type DecisionChallenge = {
@@ -115,22 +120,8 @@ type UsageRun = { id: string; kind: "extraction" | "revisit" | "challenge"; prov
 type UsageModel = { provider: string; model: string; location: "local" | "hosted" | "unknown"; run_count: number; total_tokens: number; known_cost_usd: number; unpriced_run_count: number; average_latency_ms?: number };
 type UsageSummary = { total_runs: number; extraction_runs: number; revisit_runs: number; challenge_runs: number; local_runs: number; hosted_runs: number; unknown_location_runs: number; total_tokens: number; tokenized_run_count: number; known_cost_usd: number; unpriced_run_count: number; models: UsageModel[]; recent_runs: UsageRun[] };
 
-const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
 const premiseKinds = ["requirement", "hard_constraint", "soft_constraint", "fact", "assumption", "unknown", "material_claim", "revisit_condition"];
-
-async function responseJson(response: Response) {
-  if (response.ok) return response.json();
-  const payload = await response.json().catch(() => null);
-  throw new Error(payload?.detail ?? `Request failed with status ${response.status}`);
-}
-
-async function req(path: string, options: RequestInit = {}): Promise<Response> {
-  const token = typeof window !== "undefined" ? window.localStorage.getItem("rationexa-session-token") : null;
-  const headers = new Headers(options.headers);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(`${api}${path}`, { ...options, headers });
-}
 
 function provenanceLabel(result: RevisitResult) {
   const tokens = (result.input_tokens ?? 0) + (result.output_tokens ?? 0);
@@ -168,58 +159,12 @@ function LibraryNavIcon({ value }: { value: "all" | Criticality }) {
   return <Library aria-hidden="true" />;
 }
 
-type ModelPickerProps = {
-  models: ModelOption[];
-  selectedId: string;
-  recommendedId: string;
-  onSelect: (modelId: string) => void;
-  disabled?: boolean;
-  excludeId?: string;
-  compact?: boolean;
-  label?: string;
-};
-
-function ModelPicker({ models, selectedId, recommendedId, onSelect, disabled = false, excludeId, compact = false, label = "Model for next AI step" }: ModelPickerProps) {
-  const [open, setOpen] = useState(false);
-  const selected = models.find((model) => model.id === selectedId);
-  const recommended = models.find((model) => model.id === recommendedId);
-  const localModels = models.filter((model) => model.location === "local");
-  const hostedModels = models.filter((model) => model.location === "hosted");
-
-  function choose(modelId: string) {
-    onSelect(modelId);
-    setOpen(false);
-  }
-
-  const modelOption = (model: ModelOption, recommendedOption = false) => {
-    const unavailable = model.id === excludeId;
-    return <button type="button" role="option" aria-selected={model.id === selectedId} className={`model-option ${model.id === selectedId ? "selected" : ""}`} disabled={unavailable} onClick={() => choose(model.id)} key={`${recommendedOption ? "recommended" : "model"}-${model.id}`}>
-      <span className="model-avatar">{model.label.slice(0, 1).toUpperCase()}</span>
-      <span className="model-option-copy"><span><strong>{model.label}</strong>{recommendedOption ? <em>Recommended</em> : null}</span><small>{model.best_for}</small><span className="model-option-meta">{model.location === "local" ? "Private local runtime" : `${model.provider} hosted API`}</span></span>
-      <span className="model-check">{model.id === selectedId ? <Check aria-hidden="true" /> : null}</span>
-    </button>;
-  };
-
-  return <div className={`model-picker ${compact ? "compact" : ""} ${open ? "open" : ""}`}>
-    <button type="button" className="model-trigger" aria-haspopup="listbox" aria-expanded={open} disabled={disabled || !models.length} onClick={() => setOpen((current) => !current)}>
-      <span className="model-trigger-icon"><Sparkles aria-hidden="true" /></span><span><small>{label}</small><strong>{selected?.label ?? "Loading models…"}</strong></span><span className="model-location">{selected?.location ?? ""}</span><span className="model-chevron"><ChevronDown aria-hidden="true" /></span>
-    </button>
-    {open ? <><button type="button" className="model-picker-scrim" aria-label="Close model menu" onClick={() => setOpen(false)} /><section className="model-menu" role="listbox" aria-label="Available AI models">
-      <header><div><span className="overline">AI runtime</span><h3>Choose a model</h3></div><button type="button" aria-label="Close model menu" onClick={() => setOpen(false)}>×</button></header>
-      {recommended ? <div className="model-group"><span>Recommended for this workspace</span>{modelOption(recommended, true)}</div> : null}
-      {localModels.length ? <div className="model-group"><span>Local models</span>{localModels.map((model) => modelOption(model))}</div> : null}
-      {hostedModels.length ? <div className="model-group"><span>Hosted models</span>{hostedModels.map((model) => modelOption(model))}</div> : null}
-      <footer><span className="runtime-dot" />Only configured and available models are shown.</footer>
-    </section></> : null}
-  </div>;
-}
-
 export default function Home() {
   const [view, setView] = useState<"workspace" | "library" | "usage" | "settings">("workspace");
-  const [source, setSource] = useState("We decided to use Vendor B because it was assumed that Vendor B does not support external users. The service must support SAML. Revisit if Vendor B introduces external-user support.");
+  const [source, setSource] = useState("");
   const [sourceMode, setSourceMode] = useState<"paste" | "file">("paste");
   const [file, setFile] = useState<File | null>(null);
-  const [evidence, setEvidence] = useState("Vendor B now supports external users and continues to support SAML for enterprise tenants.");
+  const [evidence, setEvidence] = useState("");
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
@@ -228,7 +173,7 @@ export default function Home() {
   const [draft, setDraft] = useState<DecisionDraft | null>(null);
   const [criticality, setCriticality] = useState<Criticality>("important");
   const [selectedPremise, setSelectedPremise] = useState<string | null>(null);
-  const [busyPhase, setBusyPhase] = useState<"extract" | "finalize" | "revisit" | "challenge" | null>(null);
+  const [busyPhase, setBusyPhase] = useState<"extract" | "review" | "finalize" | "revisit" | "challenge" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [selectedModelId, setSelectedModelId] = useState("");
@@ -262,33 +207,74 @@ export default function Home() {
   const [libraryPaneCollapsed, setLibraryPaneCollapsed] = useState(false);
   const [libraryPanePeeking, setLibraryPanePeeking] = useState(false);
   const [workflowPaneCollapsed, setWorkflowPaneCollapsed] = useState(false);
-  const [auditExpanded, setAuditExpanded] = useState(true);
   const [challenge, setChallenge] = useState<DecisionChallenge | null>(null);
   const [challengeNotes, setChallengeNotes] = useState("");
   const [challengeConfirmBusy, setChallengeConfirmBusy] = useState(false);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [personalWorkspace, setPersonalWorkspace] = useState<PersonalWorkspace | null>(null);
+  const [confirmingNewDecision, setConfirmingNewDecision] = useState(false);
+  const restoredSession = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
+  const bootstrapQuery = useQuery({
+    queryKey: ["workspace-bootstrap"],
+    queryFn: async () => Promise.all([
       req(`/v1/models`).then(responseJson) as Promise<ModelCatalog>,
       req(`/v1/workspace`).then(responseJson) as Promise<PersonalWorkspace>,
-    ])
-      .then(([catalog, workspace]) => {
-        if (cancelled) return;
-        setModels(catalog.models);
-        setPersonalWorkspace(workspace);
-        setRecommendedModelId(catalog.default_model_id);
-        setSelectedModelId((current) => current || catalog.default_model_id);
-        setComparisonModelId((current) => current || catalog.models.find((model) => model.id !== catalog.default_model_id)?.id || "");
-      })
-      .catch((caught) => {
-        if (!cancelled) setError(caught instanceof Error ? caught.message : "Could not load model options");
-      });
-    return () => { cancelled = true; };
+    ]),
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (bootstrapQuery.error) setError(bootstrapQuery.error instanceof Error ? bootstrapQuery.error.message : "Could not load workspace");
+    if (!bootstrapQuery.data) return;
+    const [catalog, workspace] = bootstrapQuery.data;
+    setModels(catalog.models);
+    setPersonalWorkspace(workspace);
+    setRecommendedModelId(catalog.default_model_id);
+    setSelectedModelId((current) => current || catalog.default_model_id);
+    setComparisonModelId((current) => current || catalog.models.find((model) => model.id !== catalog.default_model_id)?.id || "");
+  }, [bootstrapQuery.data, bootstrapQuery.error]);
+
+  useEffect(() => {
+    if (restoredSession.current) return;
+    restoredSession.current = true;
+    try {
+      const saved = window.localStorage.getItem("rationexa-workspace-draft-v1");
+      if (!saved) return;
+      const state = JSON.parse(saved) as { source?: string; evidence?: string; sourceMode?: "paste" | "file"; workflowView?: WorkflowStep; selectedModelId?: string; decisionId?: string; extraction?: Extraction; draft?: DecisionDraft; reviews?: Record<string, PremiseReview>; criticality?: Criticality; selectedPremise?: string };
+      setSource(state.source ?? "");
+      setEvidence(state.evidence ?? "");
+      setSourceMode(state.sourceMode ?? "paste");
+      if (state.selectedModelId) setSelectedModelId(state.selectedModelId);
+      if (state.decisionId) void openDecision(state.decisionId, state.workflowView ?? 4);
+      else if (state.extraction && state.draft) {
+        setExtraction(state.extraction);
+        setDraft(state.draft);
+        setReviews(state.reviews ?? {});
+        setCriticality(state.criticality ?? state.extraction.result.suggested_criticality);
+        setSelectedPremise(state.selectedPremise ?? state.extraction.result.premises[0]?.candidate_id ?? null);
+        setWorkflowView(state.workflowView === 3 ? 3 : 2);
+        toast.info("Unfinished review restored");
+      }
+    } catch {
+      window.localStorage.removeItem("rationexa-workspace-draft-v1");
+    }
   }, []);
+
+  useEffect(() => {
+    if (!restoredSession.current) return;
+    const state = { source, evidence, sourceMode, workflowView, selectedModelId, decisionId: decision?.id, extraction: decision ? undefined : extraction, draft: decision ? undefined : draft, reviews: decision ? undefined : reviews, criticality, selectedPremise };
+    window.localStorage.setItem("rationexa-workspace-draft-v1", JSON.stringify(state));
+  }, [criticality, decision, draft, evidence, extraction, reviews, selectedModelId, selectedPremise, source, sourceMode, workflowView]);
+
+  useEffect(() => {
+    const hasUnsavedWork = !decision && Boolean(source.trim() || evidence.trim() || extraction || draft);
+    if (!hasUnsavedWork) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [decision, draft, evidence, extraction, source]);
 
   useEffect(() => {
     if (!compareMode || !selectedModelId) return;
@@ -384,7 +370,6 @@ export default function Home() {
     });
   }, [comparisonRuns, decision]);
   const stage = decision ? 4 : extraction ? 2 : 1;
-
   function initializeExtraction(next: Extraction) {
     setExtraction(next);
     setDraft({ title: next.result.title, question: next.result.decision_question, context: next.result.context ?? "", chosenOption: next.result.chosen_option ?? "", rationale: next.result.rationale ?? "" });
@@ -459,9 +444,9 @@ export default function Home() {
     setDraft((current) => current ? { ...current, [field]: value } : current);
   }
 
-  async function reviewAndFinalize() {
+  async function saveReview() {
     if (!extraction || !draft) return;
-    setBusyPhase("finalize");
+    setBusyPhase("review");
     setError(null);
     try {
       const reviewed = await responseJson(await req(`/v1/extractions/${extraction.id}/review`, {
@@ -477,11 +462,26 @@ export default function Home() {
         }),
       }));
       setExtraction(reviewed);
+      setWorkflowView(3);
+      toast.success("Review saved", { description: "Check the summary before finalizing the decision." });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save the review");
+    } finally {
+      setBusyPhase(null);
+    }
+  }
+
+  async function finalizeDecision() {
+    if (!extraction) return;
+    setBusyPhase("finalize");
+    setError(null);
+    try {
       const saved = await responseJson(await req(`/v1/extractions/${extraction.id}/finalize`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ criticality }) })) as Decision;
       setDecision(saved);
       setChallenge(saved.challenge ?? null);
       setRevisitHistory([]);
       setWorkflowView(3);
+      toast.success("Decision finalized", { description: "The reviewed record is now available in the library." });
       void loadLibrary();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Finalization failed");
@@ -513,6 +513,8 @@ export default function Home() {
         setLastRevisitProvenance(provenanceLabel(result));
       }
       await loadRevisitHistory(decision.id);
+      setEvidence("");
+      toast.success(compareMode ? "Comparison complete" : "Evidence check complete", { description: `${runs.reduce((total, run) => total + run.result.findings.length, 0)} finding(s) ready for human review.` });
       void loadLibrary();
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Revisit failed";
@@ -537,6 +539,7 @@ export default function Home() {
       setChallenge(next);
       setDecision((current) => current ? { ...current, challenge: next } : current);
       setChallengeNotes("");
+      toast.success("Challenge brief ready", { description: "Human confirmation is still required." });
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Challenge generation failed";
       if (message !== "Operation cancelled") setError(message);
@@ -557,6 +560,7 @@ export default function Home() {
       })) as DecisionChallenge;
       setChallenge(confirmed);
       setDecision((current) => current ? { ...current, challenge: confirmed } : current);
+      toast.success("Challenge review confirmed");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not confirm the challenge brief");
     } finally {
@@ -577,6 +581,7 @@ export default function Home() {
       if (activeRevisitId === updated.id) setFindings(updated.findings);
       setRevisitHistory((current) => current.map((item) => item.id === updated.id ? updated : item));
       setJudgmentNotes((current) => ({ ...current, ...Object.fromEntries(updated.findings.map((finding) => [`${updated.id}:${finding.premise_id}`, finding.human_notes || ""])) }));
+      toast.success("Judgment saved");
       void loadLibrary();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save finding judgment");
@@ -618,7 +623,7 @@ export default function Home() {
     setRevisitHistory(history);
   }
 
-  async function openDecision(decisionId: string) {
+  async function openDecision(decisionId: string, targetStep: WorkflowStep = 4) {
     setError(null);
     try {
       const [record, history] = await Promise.all([
@@ -639,7 +644,7 @@ export default function Home() {
        setLibraryQuery("");
        setConfirmingDeleteFor(null);
        setExpandedHistoryId(null);
-       setWorkflowView(4);
+      setWorkflowView(targetStep);
        setWorkflowPaneCollapsed(false);
        setView("workspace");
        void loadShares(decisionId).catch(() => { setShares([]); });
@@ -669,6 +674,7 @@ export default function Home() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+      toast.success("Markdown export ready");
        } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Could not export this decision");
         } finally {
@@ -696,6 +702,7 @@ export default function Home() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+      toast.success("PDF export ready");
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Could not export this decision as PDF");
         } finally {
@@ -712,6 +719,12 @@ export default function Home() {
     setWorkflowView(1);
      }
 
+  function requestNewDecision() {
+    const hasUnsavedWork = !decision && Boolean(source.trim() || evidence.trim() || extraction || draft);
+    if (hasUnsavedWork) setConfirmingNewDecision(true);
+    else resetWorkspace();
+  }
+
   async function loadShares(decisionId: string) {
     setShares(await responseJson(await req(`/v1/decisions/${decisionId}/shares`)) as Share[]);
    }
@@ -727,7 +740,8 @@ export default function Home() {
         body: JSON.stringify({}),
         })) as Share;
       await loadShares(decision.id);
-      await copyLink(created.url ?? created.token);
+      await copyLink(created.url ?? created.token, false);
+      toast.success("Share link created", { description: "Copied to the clipboard." });
      } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not create a share link");
      } finally {
@@ -735,7 +749,7 @@ export default function Home() {
      }
     }
 
-  async function copyLink(value: string | null) {
+  async function copyLink(value: string | null, notify = true) {
     if (!value) return;
     try {
       await navigator.clipboard.writeText(value);
@@ -743,6 +757,7 @@ export default function Home() {
       window.prompt("Copy this link:", value);
      }
     setCopiedToken(value);
+    if (notify) toast.success("Link copied");
     window.setTimeout(() => setCopiedToken((current) => (current === value ? null : current)), 2500);
    }
 
@@ -754,6 +769,7 @@ export default function Home() {
       await responseJson(await req(`/v1/decisions/${decision.id}/shares/${shareId}`, { method: "DELETE" }));
       await loadShares(decision.id);
         setCopiedToken((current) => (current === token ? null : current));
+        toast.success("Share link revoked");
          } catch (caught) {
        setError(caught instanceof Error ? caught.message : "Could not revoke the share link");
          } finally {
@@ -773,6 +789,7 @@ export default function Home() {
       }
       setShares((current) => current.filter((share) => share.id !== confirmingShareDelete.id));
       setConfirmingShareDelete(null);
+      toast.success("Share record deleted");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not delete the share record");
     } finally {
@@ -845,7 +862,7 @@ export default function Home() {
         })}</div>
         <div className="challenge-provenance"><span>{challenge.provider}/{challenge.model} · {challenge.prompt_version} · {challenge.latency_ms ?? 0} ms</span><span>Generated {formatDateTime(challenge.generated_at)}</span></div>
         {challenge.status === "draft" ? <div className="challenge-confirm"><label><span>Reviewer notes <small>Optional</small></span><textarea rows={2} maxLength={4000} value={challengeNotes} onChange={(event) => setChallengeNotes(event.target.value)} placeholder="Record what you verified, what remains open, or why these challenge prompts are useful…" /></label><div><p>Confirming records that a person reviewed the prompts. It does not approve or reverse the decision.</p><button type="button" className="primary" disabled={challengeConfirmBusy} onClick={confirmChallenge}>{challengeConfirmBusy ? "Saving confirmation…" : <><Check aria-hidden="true" />Confirm reviewed challenge</>}</button></div></div> : <div className="challenge-confirmed"><Check aria-hidden="true" /><div><strong>Reviewed by a human {challenge.confirmed_at ? `· ${formatDateTime(challenge.confirmed_at)}` : ""}</strong>{challenge.reviewer_notes ? <p>{challenge.reviewer_notes}</p> : <p>No reviewer note was added.</p>}</div></div>}
-      </> : <div className="challenge-empty"><span><Sparkles aria-hidden="true" /></span><div><strong>Generate four source-grounded challenge prompts</strong><p>The selected model will inspect only the preserved premises. It will not browse, change the decision, or run a multi-agent debate.</p></div><button type="button" className="primary" disabled={busyPhase !== null || !selectedModelId} onClick={generateChallenge}>{busyPhase === "challenge" ? <><span className="spinner" />Generating challenge…</> : <><Sparkles aria-hidden="true" />Generate challenge brief</>}</button></div>}
+      </> : <div className="challenge-empty"><span><Sparkles aria-hidden="true" /></span><div><strong>Generate four source-grounded challenge prompts</strong><p>The selected model will inspect only the preserved premises. It will not browse, change the decision, or run a multi-agent debate.</p></div><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Challenge model" /><button type="button" className="primary" disabled={busyPhase !== null || !selectedModelId} onClick={generateChallenge}>{busyPhase === "challenge" ? <><span className="spinner" />Generating challenge…</> : <><Sparkles aria-hidden="true" />Generate challenge brief</>}</button></div>}
     </section>
   ) : null;
 
@@ -856,17 +873,17 @@ export default function Home() {
       <button className="primary" disabled={shareBusy} onClick={createShare}>{shareBusy ? <><span className="spinner" />Creating link…</> : <><Plus aria-hidden="true" />Create share link</>}</button>
       {shares.length ? <div className="share-list">{shares.map((share) => <div key={share.id} className={`share-item ${share.status}`}>
         <div><strong>{share.status === "active" ? "Active link" : "Revoked"}</strong><small>{formatDate(share.created_at)}{share.expires_at ? ` · expires ${formatDate(share.expires_at)}` : " · no expiry"}</small></div>
-         {share.status === "active" ? <div className="share-link"><code>{share.url}</code><div><button className="text-button" onClick={() => copyLink(share.url)}>{copiedToken === share.url ? "Copied ✓" : "Copy"}</button><button className="text-button danger" disabled={shareBusy} onClick={() => revokeShare(share.id, share.token)}>Revoke</button></div></div> : <div className="share-retired-actions"><span className="share-expired">No longer usable</span><button type="button" className="share-delete icon-action" data-tooltip="Delete share record" aria-label="Delete revoked share record" onClick={() => setConfirmingShareDelete(share)}><ActionIcon name="delete" /></button></div>}
+         {share.status === "active" ? <div className="share-link"><code>{share.url}</code><div><button className="text-button" onClick={() => copyLink(share.url)}>{copiedToken === share.url ? "Copied ✓" : "Copy"}</button><button className="text-button danger" disabled={shareBusy} onClick={() => revokeShare(share.id, share.token)}>Revoke</button></div></div> : <div className="share-retired-actions"><span className="share-expired">No longer usable</span><Hint label="Delete share record" side="left"><button type="button" className="share-delete icon-action" aria-label="Delete revoked share record" onClick={() => setConfirmingShareDelete(share)}><ActionIcon name="delete" /></button></Hint></div>}
        </div>)}</div> : null}
      </section>
     ) : null;
 
   const recordActions = decision ? (
     <div className="record-actions" aria-label="Decision actions">
-      <button type="button" className="record-action icon-action" data-tooltip={exportBusy ? "Preparing Markdown…" : "Export Markdown"} aria-label={exportBusy ? "Preparing Markdown export" : "Export Markdown"} disabled={exportBusy} onClick={downloadMarkdown}><ActionIcon name="markdown" /></button>
-      <button type="button" className="record-action icon-action" data-tooltip={pdfExportBusy ? "Preparing PDF…" : "Export PDF"} aria-label={pdfExportBusy ? "Preparing PDF export" : "Export PDF"} disabled={pdfExportBusy} onClick={downloadPdf}><ActionIcon name="pdf" /></button>
-      <button type="button" className="record-action icon-action danger" data-tooltip="Delete record" aria-label="Delete record" onClick={() => { setDeleteTitle(decision.title); setConfirmingDeleteFor(decision.id); }}><ActionIcon name="delete" /></button>
-      <button type="button" className="record-action icon-action" data-tooltip="Back to library" aria-label="Back to library" onClick={() => setView("library")}><ActionIcon name="back" /></button>
+      <Hint label={exportBusy ? "Preparing Markdown…" : "Export Markdown"}><button type="button" className="record-action icon-action" aria-label={exportBusy ? "Preparing Markdown export" : "Export Markdown"} disabled={exportBusy} onClick={downloadMarkdown}><ActionIcon name="markdown" /></button></Hint>
+      <Hint label={pdfExportBusy ? "Preparing PDF…" : "Export PDF"}><button type="button" className="record-action icon-action" aria-label={pdfExportBusy ? "Preparing PDF export" : "Export PDF"} disabled={pdfExportBusy} onClick={downloadPdf}><ActionIcon name="pdf" /></button></Hint>
+      <Hint label="Delete record"><button type="button" className="record-action icon-action danger" aria-label="Delete record" onClick={() => { setDeleteTitle(decision.title); setConfirmingDeleteFor(decision.id); }}><ActionIcon name="delete" /></button></Hint>
+      <Hint label="Back to library"><button type="button" className="record-action icon-action" aria-label="Back to library" onClick={() => setView("library")}><ActionIcon name="back" /></button></Hint>
     </div>
   ) : null;
 
@@ -875,7 +892,7 @@ export default function Home() {
       {libraryPaneCollapsed ? <button type="button" className="library-hover-zone" aria-label="Reveal decision libraries" onMouseEnter={() => setLibraryPanePeeking(true)} onFocus={() => setLibraryPanePeeking(true)} onClick={() => { setLibraryPaneCollapsed(false); setLibraryPanePeeking(false); }} /> : null}
       <aside className="sidebar library-pane" onMouseLeave={() => { if (libraryPaneCollapsed) setLibraryPanePeeking(false); }}>
         <header className="pane-brand"><div className="brand"><span className="brand-mark">R</span><span className="pane-label">Rationexa</span></div><button type="button" className="library-panel-toggle" data-tooltip={libraryPaneCollapsed ? "Keep panel open" : "Collapse panel"} aria-label={libraryPaneCollapsed ? "Keep decision libraries open" : "Collapse decision libraries"} aria-expanded={!libraryPaneCollapsed} onClick={() => { setLibraryPaneCollapsed(!libraryPaneCollapsed); setLibraryPanePeeking(false); }}>{libraryPaneCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}</button></header>
-        <button className="new-decision" data-tooltip="New decision review" onClick={resetWorkspace}><Plus aria-hidden="true" /><span className="pane-label">New decision review</span></button>
+        <Hint label="New decision review"><button className="new-decision" onClick={requestNewDecision}><Plus aria-hidden="true" /><span className="pane-label">New decision review</span></button></Hint>
         <div className="pane-section pane-label"><span className="pane-kicker">Decision libraries</span></div>
         <nav className="library-nav" aria-label="Decision libraries">
           {(["all", "critical", "important", "routine"] as ("all" | Criticality)[]).map((value) => {
@@ -913,7 +930,6 @@ export default function Home() {
       <main id="workspace" className="workspace">
         <header className="topbar">
           <div><span className="overline">{view === "library" ? "Decision memory / Library" : view === "usage" ? "Workspace / Usage" : `Decision memory / ${workflowView === 1 ? "Import" : workflowView === 2 ? "Review" : workflowView === 3 ? "Finalize" : "Revisit"}`}</span><h1>{view === "library" ? "Decision library" : view === "usage" ? "Usage & cost" : draft?.title || decision?.title || "New decision review"}</h1></div>
-          {view === "workspace" ? <ModelPicker models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} /> : null}
         </header>
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
@@ -963,7 +979,7 @@ export default function Home() {
             </div>
             <form onSubmit={extract}>
               {sourceMode === "paste" ? <label className="field"><span>Decision source</span><textarea aria-label="Decision source" value={source} onChange={(event) => setSource(event.target.value)} rows={10} placeholder="Paste the source material here…" /></label> : <label className="upload-zone"><input aria-label="Decision file" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /><span className="upload-icon">⇧</span><strong>{file ? file.name : "Choose a PDF, Markdown, or text file"}</strong><small>Maximum file size: 10 MB</small></label>}
-              <div className="form-footer"><span>{selectedModel?.label ?? "The selected model"} will suggest structure. You remain the reviewer.</span><button className="primary" disabled={busyPhase === "extract" || !selectedModelId || (sourceMode === "paste" ? !source.trim() : !file)}>{busyPhase === "extract" ? <><span className="spinner" />Extracting with {selectedModel?.label ?? "model"}…</> : "Extract decision →"}</button></div>
+              <div className="form-footer model-action-footer"><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Extraction model" /><span>{selectedModel?.label ?? "The selected model"} will suggest structure. You remain the reviewer.</span><button className="primary" disabled={busyPhase === "extract" || !selectedModelId || (sourceMode === "paste" ? !source.trim() : !file)}>{busyPhase === "extract" ? <><span className="spinner" />Extracting with {selectedModel?.label ?? "model"}…</> : "Extract decision →"}</button></div>
             </form>
           </section>
         ) : null}
@@ -989,7 +1005,7 @@ export default function Home() {
               <section className="review-layout">
               <div className="review-main">
                 <section className="card decision-summary">
-                  <div className="section-heading compact"><div><span className="overline">Decision record · {extraction.model}</span><h2>Review the extracted decision</h2></div><button className="text-button" onClick={resetWorkspace}>Start over</button></div>
+                  <div className="section-heading compact"><div><span className="overline">Decision record · {extraction.model}</span><h2>Review the extracted decision</h2></div><button className="text-button" onClick={requestNewDecision}>Start over</button></div>
                   <div className="field-grid">
                     <label className="field full"><span>Decision title</span><input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
                     <label className="field full"><span>Decision question</span><input value={draft.question} onChange={(event) => updateDraft("question", event.target.value)} /></label>
@@ -1022,8 +1038,8 @@ export default function Home() {
                 <div className="source-help"><strong>Why this matters</strong><p>Compare the extracted statement with the exact source before confirming it.</p></div>
               </aside>
               </section>
-              <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Ready to finalize?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before finalizing.` : `${counts.confirm} premises will be preserved · ${counts.unknown} unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "finalize" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0 || unanchoredCritical.length > 0} onClick={reviewAndFinalize}>{busyPhase === "finalize" ? <><span className="spinner" />Saving decision…</> : "Save reviewed decision →"}</button></section>
-            </> : decision && workflowView === 3 ? <section className="card finalized-summary">
+              <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Review complete?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before continuing.` : `${counts.confirm} premises confirmed · ${counts.unknown} preserved as unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "review" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0 || unanchoredCritical.length > 0} onClick={saveReview}>{busyPhase === "review" ? <><span className="spinner" />Saving review…</> : "Continue to finalize →"}</button></section>
+            </> : !decision && workflowView === 3 ? <FinalizeConfirmation title={draft.title} question={draft.question} chosenOption={draft.chosenOption} rationale={draft.rationale} criticality={criticality} counts={counts} premises={premises} reviews={reviews} busy={busyPhase === "finalize"} onBack={() => setWorkflowView(2)} onFinalize={finalizeDecision} /> : decision && workflowView === 3 ? <section className="card finalized-summary">
                            <div className="finalized-heading"><div className="finalized-check"><Check aria-hidden="true" /></div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div>{recordActions}</div>
               <div className="record-meta"><div><span>Chosen option</span><strong>{draft.chosenOption || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Extracted by</span><strong>{extraction.model}</strong></div></div>
               <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
@@ -1045,21 +1061,13 @@ export default function Home() {
 
         {view === "workspace" && workflowView === 4 && decision ? <section className="card revisit-card">
           <div className="section-heading"><div><span className="overline">Step 4 · Revisit</span><h2>What changed?</h2><p>Check one model or compare two models against the same preserved premises and evidence.</p></div><span className="decision-badge">{decision.criticality}</span></div>
-          <section className={`audit-panel ${auditExpanded ? "expanded" : ""}`}>
-            <button type="button" className="audit-toggle" aria-expanded={auditExpanded} onClick={() => setAuditExpanded((current) => !current)}>
-              <span className="audit-icon"><ListChecks aria-hidden="true" /></span><span><small>Stage 2 trust record</small><strong>Decision audit trail</strong><em>{auditEvents.length} recorded event{auditEvents.length === 1 ? "" : "s"}</em></span><span className="audit-chevron"><ChevronDown aria-hidden="true" /></span>
-            </button>
-            {auditExpanded ? <div className="audit-timeline">{auditEvents.map((event, index) => <article className={`audit-event ${event.kind}`} key={event.id}>
-              <span className="audit-marker">{event.kind === "decision" ? "✓" : event.kind === "evidence" ? "•" : "●"}</span>
-              <div><small>{event.kind === "decision" ? "Human-reviewed record" : event.kind === "challenge" ? "Challenge review" : event.kind === "evidence" ? "Evidence check" : "Reviewer judgment"}</small><strong>{event.title}</strong><p>{event.detail}</p><time dateTime={event.timestamp}>{formatDateTime(event.timestamp)}</time></div>
-              {index < auditEvents.length - 1 ? <span className="audit-line" /> : null}
-            </article>)}</div> : null}
-          </section>
           {findingReviewProgress.total ? <section className={`review-progress ${findingReviewProgress.pending === 0 ? "complete" : ""}`} aria-label="Human review progress">
             <div><span className="review-progress-icon">{findingReviewProgress.pending === 0 ? <Check aria-hidden="true" /> : <ListChecks aria-hidden="true" />}</span><span><strong>{findingReviewProgress.pending === 0 ? "Human review complete" : `${findingReviewProgress.pending} finding${findingReviewProgress.pending === 1 ? "" : "s"} awaiting judgment`}</strong><small>{findingReviewProgress.reviewed} of {findingReviewProgress.total} findings reviewed</small></span></div>
             <div className="review-progress-track"><span style={{ width: `${findingReviewProgress.percent}%` }} /></div>
           </section> : null}
-            {revisitHistory.length ? <section className="history-strip"><div className="history-heading"><div><span className="overline">Decision conversation</span><h3>{revisitHistory.length} evidence check{revisitHistory.length === 1 ? "" : "s"}</h3></div><span>Newest first · open a message for findings</span></div><div className="history-list">{revisitHistory.map((run) => {
+            <section className="history-strip"><div className="history-heading"><div><span className="overline">Decision conversation</span><h3>{revisitHistory.length + 1} message{revisitHistory.length ? "s" : ""}</h3></div><span>Oldest first · open an evidence message for findings</span></div><div className="history-list conversation-timeline">
+              <article className="history-message decision-origin"><div className="history-bubble"><span className="history-message-copy"><small>Decision created</small><strong>{decision.title}</strong><span>{decision.question}</span><time dateTime={decision.created_at}>{formatDateTime(decision.created_at)}</time></span><span className="history-message-result"><span className="history-status confirmed">Human reviewed</span></span></div></article>
+              {[...revisitHistory].reverse().map((run) => {
               const open = expandedHistoryId === run.id;
               return <article key={run.id} className={`history-message ${open ? "open" : ""}`}>
                 <button type="button" className="history-message-toggle" aria-expanded={open} onClick={() => setExpandedHistoryId(open ? null : run.id)}>
@@ -1076,12 +1084,12 @@ export default function Home() {
                     {findingReviewControls(run.id, finding)}
                    </div>) : <p className="history-empty">No material relationship was found.</p>}</div> : null}
                </article>;
-             })}</div></section> : null}
+             })}</div></section>
           <section className={`revisit-composer ${busyPhase === "revisit" ? "is-busy" : ""}`} aria-busy={busyPhase === "revisit"}>
             <div className="composer-heading"><div><span className="overline">New message</span><h3>Add evidence to the decision</h3></div><div className="mode-toggle" aria-label="Revisit mode"><button type="button" className={!compareMode ? "active" : ""} aria-pressed={!compareMode} onClick={() => { setCompareMode(false); setComparisonRuns([]); }}>Single model</button><button type="button" className={compareMode ? "active" : ""} aria-pressed={compareMode} disabled={models.length < 2} onClick={() => { setCompareMode(true); setFindings([]); }}>Compare models</button></div></div>
             {compareMode ? <div className="compare-models"><div><span className="compare-label">Model A</span><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} excludeId={comparisonModelId} disabled={busyPhase !== null} label="First model" /></div><div className="versus">VS</div><div><span className="compare-label">Model B</span><ModelPicker compact models={models} selectedId={comparisonModelId} recommendedId={recommendedModelId} onSelect={setComparisonModelId} excludeId={selectedModelId} disabled={busyPhase !== null} label="Second model" /></div></div> : null}
             <label className="composer-input"><span className="composer-plus"><Plus aria-hidden="true" /></span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); setFindings([]); setComparisonRuns([]); setActiveRevisitId(null); }} rows={4} placeholder="Paste a new fact, policy update, incident, or source excerpt…" /></label>
-            <div className="composer-footer"><span>{compareMode ? "Both models receive identical premises and evidence." : `${selectedModel?.label ?? "The selected model"} maps evidence to premises; you decide whether action is warranted.`}</span><div>{compareMode ? <span className="composer-model">{selectedModel?.label ?? "Model A"} + {comparisonModel?.label ?? "Model B"}</span> : null}<button className="primary composer-send" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || (compareMode && !comparisonModelId) || !evidence.trim()} aria-label={compareMode ? "Compare model reasoning" : "Check evidence against premises"}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing…" : "Checking…"}</> : <ArrowUp aria-hidden="true" />}</button></div></div>
+            <div className="composer-footer"><span>{compareMode ? "Both models receive identical premises and evidence." : "AI maps evidence to premises; you decide whether action is warranted."}</span><div>{compareMode ? <span className="composer-model">{selectedModel?.label ?? "Model A"} + {comparisonModel?.label ?? "Model B"}</span> : <ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Evidence model" />}<button className="primary composer-send" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || (compareMode && !comparisonModelId) || !evidence.trim()} aria-label={compareMode ? "Compare model reasoning" : "Check evidence against premises"}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing…" : "Checking…"}</> : <ArrowUp aria-hidden="true" />}</button></div></div>
           </section>
           {comparisonRuns.length === 2 ? <div className="comparison-results"><section className={`disagreement-summary ${disagreements.length ? "has-disagreements" : ""}`}><div><span className="overline">Agreement check</span><h3>{disagreements.length ? `${disagreements.length} disagreement${disagreements.length === 1 ? "" : "s"} need review` : "Models agree on all material relationships"}</h3></div>{disagreements.length ? <div className="disagreement-list">{disagreements.map(({ premise, firstRelationship, secondRelationship }) => <div key={premise.id}><strong>{premise.statement}</strong><span>{comparisonRuns[0].label}: {firstRelationship} · {comparisonRuns[1].label}: {secondRelationship}</span></div>)}</div> : null}</section><div className="comparison-grid">{comparisonRuns.map((run) => <section className="comparison-column" key={run.modelId}><header><div><span className="overline">Model result</span><h3>{run.label}</h3></div><strong>{run.result.findings.length} finding{run.result.findings.length === 1 ? "" : "s"}</strong></header><div className="run-provenance">{provenanceLabel(run.result)}</div>{run.result.findings.length ? run.result.findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.finding_type === "new_constraint" ? "new constraint" : finding.relationship}</span><small>{finding.confidence_band} confidence</small></div>{finding.finding_type === "new_constraint" ? <div className="safety-net-badge">New constraint · human review required</div> : null}<h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{findingReviewControls(run.result.id, finding)}</article>) : <div className="empty-findings"><strong>No material relationship found</strong><span>This model found no effect on the preserved premises.</span></div>}</section>)}</div></div> : null}
           {!comparisonRuns.length && findings.length ? <div className="findings">
@@ -1096,25 +1104,21 @@ export default function Home() {
               {activeRevisitId ? findingReviewControls(activeRevisitId, finding) : null}
             </article>)}
           </div> : !comparisonRuns.length && revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>{lastRevisitModel} found no material effect on the consequential premises preserved in this decision.</span>{lastRevisitProvenance ? <span>Run provenance: {lastRevisitProvenance}</span> : null}</div> : null}
+          <section className="conversation-drawers" aria-label="Decision details">
+            <Disclosure title="Audit trail" summary={`${auditEvents.length} recorded events`}>
+              <div className="audit-timeline">{auditEvents.map((event, index) => <article className={`audit-event ${event.kind}`} key={event.id}><span className="audit-marker">{event.kind === "decision" ? "✓" : event.kind === "evidence" ? "•" : "●"}</span><div><small>{event.kind === "decision" ? "Human-reviewed record" : event.kind === "challenge" ? "Challenge review" : event.kind === "evidence" ? "Evidence check" : "Reviewer judgment"}</small><strong>{event.title}</strong><p>{event.detail}</p><time dateTime={event.timestamp}>{formatDateTime(event.timestamp)}</time></div>{index < auditEvents.length - 1 ? <span className="audit-line" /> : null}</article>)}</div>
+            </Disclosure>
+            <Disclosure title="Challenge brief" summary={challenge?.status === "confirmed" ? "Human confirmed" : challenge ? "Needs confirmation" : "Not generated"}>{challengePanel}</Disclosure>
+            <Disclosure title="Sharing" summary={`${shares.filter((share) => share.status === "active").length} active links`}>{sharePanel}</Disclosure>
+            <Disclosure title="Run provenance" summary={`${revisitHistory.length} evidence runs`}><div className="provenance-list">{revisitHistory.map((run) => <div key={run.id}><strong>{formatDateTime(run.created_at)}</strong><span>{provenanceLabel(run)}</span></div>)}</div></Disclosure>
+          </section>
           </section> : null}
         </main>
       </div>
 
-         {confirmingDeleteFor ? <div className="modal-backdrop" onClick={() => { setConfirmingDeleteFor(null); setDeleteTitle(null); }}>
-           <div className="confirm-modal" onClick={(event) => event.stopPropagation()}>
-             <h3>Delete this decision?</h3>
-             <p>This permanently removes <strong>{deleteTitle || "this decision"}</strong>, its preserved premises, source excerpts, revisit history, and any share links. This cannot be undone.</p>
-             <div className="modal-actions"><button className="text-button" onClick={() => { setConfirmingDeleteFor(null); setDeleteTitle(null); }} disabled={deleteBusy}>Cancel</button><button className="primary danger" disabled={deleteBusy} onClick={() => void deleteDecision(confirmingDeleteFor)}>{deleteBusy ? "Deleting…" : "Delete permanently"}</button></div>
-            </div>
-          </div> : null}
-
-         {confirmingShareDelete ? <div className="modal-backdrop" onClick={() => { if (!shareDeleteBusy) setConfirmingShareDelete(null); }}>
-           <div className="confirm-modal" onClick={(event) => event.stopPropagation()}>
-             <h3>Delete this revoked share record?</h3>
-             <p>This removes the old link from the sharing history. The finalized decision and its revisit history will remain unchanged.</p>
-             <div className="modal-actions"><button className="text-button" onClick={() => setConfirmingShareDelete(null)} disabled={shareDeleteBusy}>Cancel</button><button className="primary danger" disabled={shareDeleteBusy} onClick={() => void deleteShareRecord()}>{shareDeleteBusy ? "Deleting…" : "Delete share record"}</button></div>
-           </div>
-         </div> : null}
+         <ConfirmDialog open={Boolean(confirmingDeleteFor)} title="Delete this decision?" description={`This permanently removes ${deleteTitle || "this decision"}, its premises, source excerpts, revisit history, and share links. This cannot be undone.`} confirmLabel="Delete permanently" busyLabel="Deleting…" busy={deleteBusy} onOpenChange={(open) => { if (!open) { setConfirmingDeleteFor(null); setDeleteTitle(null); } }} onConfirm={() => { if (confirmingDeleteFor) void deleteDecision(confirmingDeleteFor); }} />
+         <ConfirmDialog open={Boolean(confirmingShareDelete)} title="Delete this revoked share record?" description="This removes the old link from sharing history. The decision and its revisit history remain unchanged." confirmLabel="Delete share record" busyLabel="Deleting…" busy={shareDeleteBusy} onOpenChange={(open) => { if (!open) setConfirmingShareDelete(null); }} onConfirm={() => void deleteShareRecord()} />
+         <ConfirmDialog open={confirmingNewDecision} title="Start a new decision?" description="Your unfinished import or review draft is saved locally, but starting over will clear it from this workspace." confirmLabel="Start new decision" busyLabel="Starting…" onOpenChange={setConfirmingNewDecision} onConfirm={() => { setConfirmingNewDecision(false); window.localStorage.removeItem("rationexa-workspace-draft-v1"); resetWorkspace(); setSource(""); setEvidence(""); }} />
       </div>
     );
 }

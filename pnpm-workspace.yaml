@@ -1,6 +1,9 @@
 packages:
   - apps/*
 
+allowBuilds:
+  esbuild: true
+
 overrides:
   caniuse-lite: 1.0.30001809
 

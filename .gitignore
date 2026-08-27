@@ -6,6 +6,7 @@
 __pycache__/
 node_modules/
 .next/
+storybook-static/
 dist/
 coverage/
 *.log

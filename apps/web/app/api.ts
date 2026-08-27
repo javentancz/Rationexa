@@ -25,16 +25,16 @@ async function responseJson(response: Response) {
 }
 
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<unknown> {
+  const response = await apiResponse(path, options);
+  if (response.status === 204) return undefined;
+  return responseJson(response);
+}
+
+export async function apiResponse(path: string, options: RequestInit = {}): Promise<Response> {
   const token = getSessionToken();
   const headers = new Headers(options.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return apiFetchRaw(path, { ...options, headers });
-}
-
-async function apiFetchRaw(path: string, options: RequestInit): Promise<unknown> {
-  const response = await fetch(`${api}${path}`, options);
-  if (response.status === 204) return undefined;
-  return response.json();
+  return fetch(`${api}${path}`, { ...options, headers });
 }
 
 export async function login(email: string, password: string): Promise<{ session_token: string }> {
