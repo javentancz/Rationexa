@@ -56,6 +56,10 @@ class ExtractionRow(Base):
     provider: Mapped[str] = mapped_column(String(80))
     model: Mapped[str] = mapped_column(String(120))
     prompt_version: Mapped[str] = mapped_column(String(40), default="extract-v1")
+    latency_ms: Mapped[int | None] = mapped_column(nullable=True)
+    input_tokens: Mapped[int | None] = mapped_column(nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(nullable=True)
+    estimated_cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     output: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
@@ -145,8 +149,24 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    _add_missing_extraction_provenance_columns()
     _add_missing_revisit_provenance_columns()
     _add_missing_decision_challenge_column()
+
+
+def _add_missing_extraction_provenance_columns() -> None:
+    """Preserve usage provenance for extraction runs created after the Stage 2 upgrade."""
+    existing = {column["name"] for column in inspect(engine).get_columns("extractions")}
+    column_definitions = {
+        "latency_ms": "INTEGER",
+        "input_tokens": "INTEGER",
+        "output_tokens": "INTEGER",
+        "estimated_cost_usd": "FLOAT",
+    }
+    with engine.begin() as connection:
+        for name, sql_type in column_definitions.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE extractions ADD COLUMN {name} {sql_type}"))
 
 
 def _add_missing_revisit_provenance_columns() -> None:

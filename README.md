@@ -4,7 +4,7 @@ Rationexa is a human-in-the-loop technical decision memory and review project. I
 
 ## Current status
 
-The Stage 1 prototype is complete with production accuracy validation explicitly deferred. Stage 2 is underway. The current slice adds a persistent Decision Library, search, reopening, revisit history, and a lightweight challenge brief for finalized decisions so the product can support repeat use rather than one disposable review session. Each challenge proposes a weakest assumption, missing evidence, strongest counterargument, and reversal condition grounded in preserved premises; it remains an AI draft until a human confirms it. Records can be exported to Markdown or PDF and shared through revocable, expiring read-only links (`/share/[token]`); past revisit checks expand to show their findings and judgments, and decisions can be deleted. Every shared payload is scrubbed of provider keys and private source artifacts.
+The Stage 1 prototype is complete with production accuracy validation explicitly deferred. Stage 2 is underway. The current build adds persistent decision memory, revisit history, source-grounded challenge briefs, exports, and revocable expiring share links. A workspace usage view reports extraction, revisit, and challenge runs by model with latency, token, runtime-location, and known-cost provenance; unavailable pricing stays visibly unpriced instead of being treated as free. AI findings and challenges remain drafts until a human reviews them, and shared payloads scrub provider keys and private source artifacts.
 
 See [Stage 1 readiness](docs/STAGE_1_READINESS.md) for the deferred validation boundaries and [the Stage 2 execution plan](docs/STAGE_2_EXECUTION_PLAN.md) for the active product milestones.
 

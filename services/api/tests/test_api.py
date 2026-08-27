@@ -77,6 +77,10 @@ def test_stage_one_vertical_slice() -> None:
         assert extraction.status_code == 201
         extraction_body = extraction.json()
         assert extraction_body["result"]["premises"]
+        assert extraction_body["latency_ms"] >= 0
+        assert extraction_body["input_tokens"] == 0
+        assert extraction_body["output_tokens"] == 0
+        assert extraction_body["estimated_cost_usd"] == 0.0
         assert all(
             premise["anchor"]["exact_excerpt"] in source
             for premise in extraction_body["result"]["premises"]
@@ -205,6 +209,42 @@ def test_revisit_provenance_columns_exist() -> None:
     } <= columns
     decision_columns = {column["name"] for column in inspect(engine).get_columns("decisions")}
     assert "challenge" in decision_columns
+    extraction_columns = {column["name"] for column in inspect(engine).get_columns("extractions")}
+    assert {"latency_ms", "input_tokens", "output_tokens", "estimated_cost_usd"} <= extraction_columns
+
+
+def test_stage_two_usage_summary_distinguishes_known_and_unpriced_runs() -> None:
+    source = (
+        "We decided to use the internal service because we assume it remains available. "
+        "Revisit if the service is retired."
+    )
+    with TestClient(app) as client:
+        decision = create_finalized_decision(client, source=source, title="Usage summary decision")
+        challenge = client.post(
+            f"/v1/decisions/{decision['id']}/challenge",
+            json={"model_id": "deterministic/rules-v1"},
+        )
+        assert challenge.status_code == 200
+        revisit = client.post(
+            f"/v1/decisions/{decision['id']}/revisit-checks",
+            json={"content": "The internal service remains available."},
+        )
+        assert revisit.status_code == 201
+
+        response = client.get("/v1/usage")
+        assert response.status_code == 200
+        usage = response.json()
+        assert usage["total_runs"] >= 3
+        assert usage["extraction_runs"] >= 1
+        assert usage["revisit_runs"] >= 1
+        assert usage["challenge_runs"] >= 1
+        assert usage["local_runs"] >= 3
+        assert usage["known_cost_usd"] == 0.0
+        assert any(
+            run["decision_id"] == decision["id"] and run["kind"] == "challenge"
+            for run in usage["recent_runs"]
+        )
+        assert any(model["provider"] == "deterministic" for model in usage["models"])
 
 
 def test_rejects_model_outside_server_allowlist() -> None:

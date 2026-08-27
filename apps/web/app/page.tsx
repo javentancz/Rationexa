@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, Diamond, FileDown, FileText, Library, ListChecks, Plus, Save, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleDollarSign, Clock3, Cpu, Diamond, FileDown, FileText, Library, ListChecks, Plus, Save, Sparkles, Trash2 } from "lucide-react";
 
 type Criticality = "routine" | "important" | "critical";
 type ReviewAction = "confirm" | "unknown" | "reject";
@@ -109,6 +109,9 @@ type RevisitResult = { id: string; decision_id: string; status: string; findings
 type ComparisonRun = { modelId: string; label: string; result: RevisitResult };
 type Share = { id: string; decision_id: string; token: string; status: string; url: string | null; created_at: string; expires_at: string | null; revoked_at: string | null };
 type AuditEvent = { id: string; kind: "decision" | "challenge" | "evidence" | "judgment"; title: string; detail: string; timestamp: string };
+type UsageRun = { id: string; kind: "extraction" | "revisit" | "challenge"; provider: string; model: string; prompt_version: string; location: "local" | "hosted" | "unknown"; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number; created_at: string; decision_id?: string };
+type UsageModel = { provider: string; model: string; location: "local" | "hosted" | "unknown"; run_count: number; total_tokens: number; known_cost_usd: number; unpriced_run_count: number; average_latency_ms?: number };
+type UsageSummary = { total_runs: number; extraction_runs: number; revisit_runs: number; challenge_runs: number; local_runs: number; hosted_runs: number; unknown_location_runs: number; total_tokens: number; tokenized_run_count: number; known_cost_usd: number; unpriced_run_count: number; models: UsageModel[]; recent_runs: UsageRun[] };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
@@ -134,6 +137,10 @@ function formatDate(value?: string) {
 function formatDateTime(value?: string) {
   if (!value) return "Not recorded";
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat().format(value);
 }
 
 type ActionIconName = "markdown" | "pdf" | "delete" | "back";
@@ -199,7 +206,7 @@ function ModelPicker({ models, selectedId, recommendedId, onSelect, disabled = f
 }
 
 export default function Home() {
-  const [view, setView] = useState<"workspace" | "library">("workspace");
+  const [view, setView] = useState<"workspace" | "library" | "usage">("workspace");
   const [source, setSource] = useState("We decided to use Vendor B because it was assumed that Vendor B does not support external users. The service must support SAML. Revisit if Vendor B introduces external-user support.");
   const [sourceMode, setSourceMode] = useState<"paste" | "file">("paste");
   const [file, setFile] = useState<File | null>(null);
@@ -249,6 +256,8 @@ export default function Home() {
   const [challenge, setChallenge] = useState<DecisionChallenge | null>(null);
   const [challengeNotes, setChallengeNotes] = useState("");
   const [challengeConfirmBusy, setChallengeConfirmBusy] = useState(false);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -281,6 +290,10 @@ export default function Home() {
     }, 180);
     return () => window.clearTimeout(timer);
   }, [libraryQuery, libraryCriticality]);
+
+  useEffect(() => {
+    if (view === "usage") void loadUsage();
+  }, [view]);
 
   const premises = extraction?.result.premises ?? [];
   const counts = useMemo(() => {
@@ -574,6 +587,18 @@ export default function Home() {
     }
   }
 
+  async function loadUsage() {
+    setUsageLoading(true);
+    setError(null);
+    try {
+      setUsage(await responseJson(await fetch(`${api}/v1/usage`)) as UsageSummary);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not load workspace usage");
+    } finally {
+      setUsageLoading(false);
+    }
+  }
+
   async function loadRevisitHistory(decisionId: string) {
     const history = await responseJson(await fetch(`${api}/v1/decisions/${decisionId}/revisit-checks`)) as RevisitResult[];
     setRevisitHistory(history);
@@ -840,8 +865,9 @@ export default function Home() {
         <nav className="library-nav" aria-label="Decision libraries">
           {(["all", "critical", "important", "routine"] as ("all" | Criticality)[]).map((value) => {
             const label = value === "all" ? "All decisions" : value[0].toUpperCase() + value.slice(1);
-            return <button type="button" key={value} className={`nav-item ${libraryCriticality === value ? "active" : ""}`} data-tooltip={label} aria-label={label} onClick={() => { setLibraryCriticality(value); setView("library"); }}><span className="nav-icon"><LibraryNavIcon value={value} /></span><span className="pane-label">{label}</span>{value === "all" && libraryCriticality === "all" ? <small className="pane-label">{library.total}</small> : null}</button>;
+            return <button type="button" key={value} className={`nav-item ${view === "library" && libraryCriticality === value ? "active" : ""}`} data-tooltip={label} aria-label={label} onClick={() => { setLibraryCriticality(value); setView("library"); }}><span className="nav-icon"><LibraryNavIcon value={value} /></span><span className="pane-label">{label}</span>{value === "all" && libraryCriticality === "all" ? <small className="pane-label">{library.total}</small> : null}</button>;
           })}
+          <button type="button" className={`nav-item usage-nav ${view === "usage" ? "active" : ""}`} data-tooltip="Usage and cost" aria-label="Usage and cost" onClick={() => setView("usage")}><span className="nav-icon"><ChartNoAxesColumn aria-hidden="true" /></span><span className="pane-label">Usage &amp; cost</span></button>
         </nav>
         <section className="decision-conversations pane-label" aria-label="Saved decisions">
           <div className="pane-section-heading"><span>Decision conversations</span>{libraryLoading ? <span className="spinner dark" /> : null}</div>
@@ -850,7 +876,7 @@ export default function Home() {
       </aside>
 
       <button type="button" className="library-toggle" data-tooltip={libraryPaneCollapsed ? "Show decision libraries" : "Hide decision libraries"} aria-label={libraryPaneCollapsed ? "Expand decision libraries" : "Collapse decision libraries"} aria-expanded={!libraryPaneCollapsed} onClick={() => setLibraryPaneCollapsed((current) => !current)}><span>{libraryPaneCollapsed ? <ChevronRight aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}</span></button>
-      <div className={`workbench-shell ${view === "library" ? "library-overview" : ""}`}>
+      <div className={`workbench-shell ${view !== "workspace" ? "library-overview" : ""}`}>
       <button type="button" className="workflow-toggle" data-tooltip={workflowPaneCollapsed ? "Show decision workflow" : "Hide decision workflow"} aria-label={workflowPaneCollapsed ? "Expand workflow" : "Collapse workflow"} aria-expanded={!workflowPaneCollapsed} onClick={() => setWorkflowPaneCollapsed((current) => !current)}><span>{workflowPaneCollapsed ? <ChevronRight aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}</span></button>
       <aside className="workflow-pane">
         <header className="workflow-pane-header"><div className="pane-label"><span className="pane-kicker">Decision workflow</span><strong>{view === "workspace" ? draft?.title || decision?.title || "New review" : "Select a decision"}</strong></div></header>
@@ -867,7 +893,7 @@ export default function Home() {
 
       <main id="workspace" className="workspace">
         <header className="topbar">
-          <div><span className="overline">{view === "library" ? "Decision memory / Library" : `Decision memory / ${workflowView === 1 ? "Import" : workflowView === 2 ? "Review" : workflowView === 3 ? "Finalize" : "Revisit"}`}</span><h1>{view === "library" ? "Decision library" : draft?.title || decision?.title || "New decision review"}</h1></div>
+          <div><span className="overline">{view === "library" ? "Decision memory / Library" : view === "usage" ? "Workspace / Usage" : `Decision memory / ${workflowView === 1 ? "Import" : workflowView === 2 ? "Review" : workflowView === 3 ? "Finalize" : "Revisit"}`}</span><h1>{view === "library" ? "Decision library" : view === "usage" ? "Usage & cost" : draft?.title || decision?.title || "New decision review"}</h1></div>
           {view === "workspace" ? <ModelPicker models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} /> : null}
         </header>
 
@@ -886,6 +912,23 @@ export default function Home() {
             </button>
             <button type="button" className="decision-row-delete icon-action" data-tooltip="Delete decision" aria-label={`Delete ${item.title}`} onClick={() => { setDeleteTitle(item.title); setConfirmingDeleteFor(item.id); }}><ActionIcon name="delete" /></button>
           </div>)}</div> : <div className="library-empty"><span className="library-empty-icon"><Library aria-hidden="true" /></span><strong>{libraryQuery || libraryCriticality !== "all" ? "No matching decisions" : "Your decision memory starts here"}</strong><p>{libraryQuery || libraryCriticality !== "all" ? "Try a broader search or remove the criticality filter." : "Finalize your first decision review and it will appear here automatically."}</p><button className="primary" onClick={resetWorkspace}>Create a decision →</button></div>}
+        </section> : null}
+
+        {view === "usage" ? <section className="usage-view">
+          <div className="usage-intro"><span className="usage-intro-icon"><ChartNoAxesColumn aria-hidden="true" /></span><div><strong>Workspace AI activity</strong><p>Usage is calculated from persisted extraction, revisit, and challenge provenance. Known cost excludes runs whose provider did not report a price.</p></div><button type="button" className="text-button" disabled={usageLoading} onClick={loadUsage}>{usageLoading ? "Refreshing…" : "Refresh usage"}</button></div>
+          {usageLoading && !usage ? <div className="library-empty"><span className="spinner dark" /><strong>Calculating workspace usage…</strong></div> : usage ? <>
+            <div className="usage-summary-grid">
+              <article><span><Cpu aria-hidden="true" />AI runs</span><strong>{formatNumber(usage.total_runs)}</strong><p>{usage.extraction_runs} extraction · {usage.revisit_runs} revisit · {usage.challenge_runs} challenge</p></article>
+              <article><span><CircleDollarSign aria-hidden="true" />Known estimated cost</span><strong>${usage.known_cost_usd.toFixed(4)}</strong><p>{usage.unpriced_run_count ? `${usage.unpriced_run_count} run${usage.unpriced_run_count === 1 ? " is" : "s are"} not included because pricing was unavailable` : "Every recorded run includes a cost estimate"}</p></article>
+              <article><span><ChartNoAxesColumn aria-hidden="true" />Recorded tokens</span><strong>{formatNumber(usage.total_tokens)}</strong><p>Token counts available for {usage.tokenized_run_count} of {usage.total_runs} runs</p></article>
+              <article><span><Clock3 aria-hidden="true" />Runtime location</span><strong>{usage.local_runs} local</strong><p>{usage.hosted_runs} hosted · {usage.unknown_location_runs} unknown · based on provider provenance</p></article>
+            </div>
+            <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Model breakdown</span><h2>Runs by model</h2></div><span>Known cost never estimates missing provider prices</span></div>{usage.models.length ? <div className="usage-models">{usage.models.map((model) => {
+              const maxRuns = Math.max(...usage.models.map((item) => item.run_count), 1);
+              return <article key={`${model.provider}/${model.model}`}><div className="usage-model-name"><span>{model.model.slice(0, 1).toUpperCase()}</span><div><strong>{model.model}</strong><small>{model.provider} · {model.location}</small></div></div><div className="usage-model-meter"><span style={{ width: `${Math.max(8, Math.round((model.run_count / maxRuns) * 100))}%` }} /></div><div className="usage-model-stats"><span><strong>{model.run_count}</strong> runs</span><span><strong>{formatNumber(model.total_tokens)}</strong> tokens</span><span><strong>{model.average_latency_ms == null ? "—" : `${formatNumber(model.average_latency_ms)} ms`}</strong> avg latency</span><span><strong>${model.known_cost_usd.toFixed(4)}</strong> known cost{model.unpriced_run_count ? ` · ${model.unpriced_run_count} unpriced` : ""}</span></div></article>;
+            })}</div> : <div className="library-empty"><strong>No AI usage recorded yet</strong><p>Complete an extraction, revisit, or challenge to create the first usage record.</p></div>}</section>
+            <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Recent activity</span><h2>Latest model runs</h2></div><span>Newest first</span></div>{usage.recent_runs.length ? <div className="usage-runs">{usage.recent_runs.map((run) => <button type="button" key={`${run.kind}-${run.id}`} disabled={!run.decision_id} onClick={() => run.decision_id && openDecision(run.decision_id)}><span className={`usage-kind ${run.kind}`}>{run.kind}</span><span className="usage-run-model"><strong>{run.model}</strong><small>{run.provider} · {run.prompt_version}</small></span><span><strong>{formatNumber((run.input_tokens ?? 0) + (run.output_tokens ?? 0))}</strong><small>tokens</small></span><span><strong>{run.latency_ms == null ? "—" : `${formatNumber(run.latency_ms)} ms`}</strong><small>latency</small></span><span><strong>{run.estimated_cost_usd == null ? "Unavailable" : `$${run.estimated_cost_usd.toFixed(4)}`}</strong><small>cost</small></span><time dateTime={run.created_at}>{formatDateTime(run.created_at)}</time></button>)}</div> : null}</section>
+          </> : null}
         </section> : null}
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}

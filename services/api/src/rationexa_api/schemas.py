@@ -119,6 +119,10 @@ class ExtractionRead(BaseModel):
     provider: str
     model: str
     prompt_version: str
+    latency_ms: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    estimated_cost_usd: float | None = None
     result: ExtractionResult
     created_at: datetime
 
@@ -234,6 +238,48 @@ class DecisionListItem(BaseModel):
 class DecisionListRead(BaseModel):
     items: list[DecisionListItem]
     total: int
+
+
+class UsageRunRead(BaseModel):
+    id: str
+    kind: Literal["extraction", "revisit", "challenge"]
+    provider: str
+    model: str
+    prompt_version: str
+    location: Literal["local", "hosted", "unknown"]
+    latency_ms: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    estimated_cost_usd: float | None = None
+    created_at: datetime
+    decision_id: str | None = None
+
+
+class UsageModelRead(BaseModel):
+    provider: str
+    model: str
+    location: Literal["local", "hosted", "unknown"]
+    run_count: int
+    total_tokens: int
+    known_cost_usd: float
+    unpriced_run_count: int
+    average_latency_ms: int | None = None
+
+
+class UsageSummaryRead(BaseModel):
+    total_runs: int
+    extraction_runs: int
+    revisit_runs: int
+    challenge_runs: int
+    local_runs: int
+    hosted_runs: int
+    unknown_location_runs: int
+    total_tokens: int
+    tokenized_run_count: int
+    known_cost_usd: float
+    unpriced_run_count: int
+    models: list[UsageModelRead]
+    recent_runs: list[UsageRunRead]
 
 
 class RevisitRequest(BaseModel):

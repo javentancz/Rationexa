@@ -1,6 +1,6 @@
 # Rationexa Stage 2 execution plan
 
-Updated: 2026-08-26
+Updated: 2026-08-27
 
 ## Objective
 
@@ -62,10 +62,16 @@ Status: implemented for finalized decisions.
 
 ## Milestone 4 - hosted repeat-use foundation
 
+Status: in progress. Workspace usage and cost visibility is implemented; user
+identity and managed secret storage remain.
+
 - Add personal accounts and one personal workspace.
 - Store BYOK configuration through a secrets provider, never in application
   logs or decision records.
-- Add basic usage and cost visibility.
+- Add basic usage and cost visibility. Implemented across extraction, revisit,
+  and challenge runs with per-model totals, runtime location, latency, token
+  usage, and recent-run provenance. Missing historical or provider pricing is
+  explicitly reported as unavailable instead of being treated as zero cost.
 - Add team sharing only after individual repeat use is observed.
 
 ## Deferred

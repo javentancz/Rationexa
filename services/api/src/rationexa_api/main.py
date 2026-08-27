@@ -58,6 +58,9 @@ from .schemas import (
     ShareDecisionRead,
     ShareRead,
     SourceAnchor,
+    UsageModelRead,
+    UsageRunRead,
+    UsageSummaryRead,
 )
 from .services import extract_artifact_text, persist_artifact, validate_anchor
 
@@ -108,6 +111,111 @@ def list_models() -> ModelCatalogRead:
     return ModelCatalogRead(
         default_model_id=default_model_id(settings),
         models=available_models(settings),
+    )
+
+
+def _provider_location(provider: str) -> str:
+    if provider in {"ollama", "deterministic"}:
+        return "local"
+    if provider == "unknown":
+        return "unknown"
+    return "hosted"
+
+
+@app.get("/v1/usage", response_model=UsageSummaryRead)
+def usage_summary(db: Db) -> UsageSummaryRead:
+    decision_by_extraction = dict(db.execute(select(DecisionRow.extraction_id, DecisionRow.id)).all())
+    runs: list[UsageRunRead] = []
+    for extraction in db.scalars(select(ExtractionRow)).all():
+        runs.append(
+            UsageRunRead(
+                id=extraction.id,
+                kind="extraction",
+                provider=extraction.provider,
+                model=extraction.model,
+                prompt_version=extraction.prompt_version,
+                location=_provider_location(extraction.provider),
+                latency_ms=extraction.latency_ms,
+                input_tokens=extraction.input_tokens,
+                output_tokens=extraction.output_tokens,
+                estimated_cost_usd=extraction.estimated_cost_usd,
+                created_at=as_utc(extraction.created_at),
+                decision_id=decision_by_extraction.get(extraction.id),
+            )
+        )
+    for revisit in db.scalars(select(RevisitRow)).all():
+        runs.append(
+            UsageRunRead(
+                id=revisit.id,
+                kind="revisit",
+                provider=revisit.provider or "unknown",
+                model=revisit.model or "unknown",
+                prompt_version=revisit.prompt_version or "unknown",
+                location=_provider_location(revisit.provider or "unknown"),
+                latency_ms=revisit.latency_ms,
+                input_tokens=revisit.input_tokens,
+                output_tokens=revisit.output_tokens,
+                estimated_cost_usd=revisit.estimated_cost_usd,
+                created_at=as_utc(revisit.created_at),
+                decision_id=revisit.decision_id,
+            )
+        )
+    for decision in db.scalars(select(DecisionRow).where(DecisionRow.challenge.is_not(None))).all():
+        challenge = DecisionChallengeRead.model_validate(decision.challenge)
+        runs.append(
+            UsageRunRead(
+                id=f"challenge-{decision.id}",
+                kind="challenge",
+                provider=challenge.provider,
+                model=challenge.model,
+                prompt_version=challenge.prompt_version,
+                location=_provider_location(challenge.provider),
+                latency_ms=challenge.latency_ms,
+                input_tokens=challenge.input_tokens,
+                output_tokens=challenge.output_tokens,
+                estimated_cost_usd=challenge.estimated_cost_usd,
+                created_at=challenge.generated_at,
+                decision_id=decision.id,
+            )
+        )
+
+    grouped: dict[tuple[str, str, str], list[UsageRunRead]] = {}
+    for run in runs:
+        grouped.setdefault((run.provider, run.model, run.location), []).append(run)
+    models = []
+    for (provider, model, location), model_runs in grouped.items():
+        latencies = [run.latency_ms for run in model_runs if run.latency_ms is not None]
+        models.append(
+            UsageModelRead(
+                provider=provider,
+                model=model,
+                location=location,
+                run_count=len(model_runs),
+                total_tokens=sum((run.input_tokens or 0) + (run.output_tokens or 0) for run in model_runs),
+                known_cost_usd=round(
+                    sum(run.estimated_cost_usd for run in model_runs if run.estimated_cost_usd is not None),
+                    8,
+                ),
+                unpriced_run_count=sum(run.estimated_cost_usd is None for run in model_runs),
+                average_latency_ms=round(sum(latencies) / len(latencies)) if latencies else None,
+            )
+        )
+    models.sort(key=lambda item: (-item.run_count, item.provider, item.model))
+    runs.sort(key=lambda run: run.created_at, reverse=True)
+    return UsageSummaryRead(
+        total_runs=len(runs),
+        extraction_runs=sum(run.kind == "extraction" for run in runs),
+        revisit_runs=sum(run.kind == "revisit" for run in runs),
+        challenge_runs=sum(run.kind == "challenge" for run in runs),
+        local_runs=sum(run.location == "local" for run in runs),
+        hosted_runs=sum(run.location == "hosted" for run in runs),
+        unknown_location_runs=sum(run.location == "unknown" for run in runs),
+        total_tokens=sum((run.input_tokens or 0) + (run.output_tokens or 0) for run in runs),
+        tokenized_run_count=sum(run.input_tokens is not None or run.output_tokens is not None for run in runs),
+        known_cost_usd=round(sum(run.estimated_cost_usd for run in runs if run.estimated_cost_usd is not None), 8),
+        unpriced_run_count=sum(run.estimated_cost_usd is None for run in runs),
+        models=models,
+        recent_runs=runs[:20],
     )
 
 
@@ -181,7 +289,9 @@ def perform_extraction(
     try:
         if job_id:
             job_manager.update(job_id, phase="Running model extraction", progress=35)
+        started_at = perf_counter()
         result = provider.extract(artifact.extracted_text, artifact.filename)
+        latency_ms = max(0, round((perf_counter() - started_at) * 1000))
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     validated = []
@@ -198,6 +308,10 @@ def perform_extraction(
         provider=provider.name,
         model=provider.model,
         prompt_version=EXTRACTION_PROMPT_VERSION,
+        latency_ms=latency_ms,
+        input_tokens=provider.last_usage.get("input_tokens"),
+        output_tokens=provider.last_usage.get("output_tokens"),
+        estimated_cost_usd=provider.last_usage.get("estimated_cost_usd"),
         output=result.model_dump(mode="json"),
     )
     db.add(row)
@@ -961,6 +1075,10 @@ def extraction_read(row: ExtractionRow) -> ExtractionRead:
         provider=row.provider,
         model=row.model,
         prompt_version=row.prompt_version,
+        latency_ms=row.latency_ms,
+        input_tokens=row.input_tokens,
+        output_tokens=row.output_tokens,
+        estimated_cost_usd=row.estimated_cost_usd,
         result=ExtractionResult.model_validate(row.output),
         created_at=as_utc(row.created_at),
     )
