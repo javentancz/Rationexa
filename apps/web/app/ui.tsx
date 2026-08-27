@@ -4,12 +4,24 @@ import { AlertDialog, Collapsible, Tooltip } from "radix-ui";
 import { ChevronDown } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 
-export function Hint({ label, children, side = "right" }: { label: string; children: ReactElement; side?: "top" | "right" | "bottom" | "left" }) {
+export function Hint({
+  label,
+  children,
+  side = "right",
+  disabled = false,
+}: {
+  label: string;
+  children: ReactElement;
+  side?: "top" | "right" | "bottom" | "left";
+  disabled?: boolean;
+}) {
+  if (disabled) return children;
+
   return (
     <Tooltip.Root>
       <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Content className="radix-tooltip" side={side} sideOffset={8} collisionPadding={12}>
+        <Tooltip.Content className="radix-tooltip" side={side} sideOffset={10} collisionPadding={16}>
           {label}<Tooltip.Arrow className="radix-tooltip-arrow" />
         </Tooltip.Content>
       </Tooltip.Portal>
