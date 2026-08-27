@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleDollarSign, Clock3, Cpu, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Sparkles, Trash2, UserRound } from "lucide-react";
+import { AccountPanel } from "./account-panel";
+import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleDollarSign, Clock3, Cpu, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Settings, Sparkles, Trash2, UserRound } from "lucide-react";
 
 type Criticality = "routine" | "important" | "critical";
 type ReviewAction = "confirm" | "unknown" | "reject";
@@ -124,6 +125,13 @@ async function responseJson(response: Response) {
   throw new Error(payload?.detail ?? `Request failed with status ${response.status}`);
 }
 
+async function req(path: string, options: RequestInit = {}): Promise<Response> {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("rationexa-session-token") : null;
+  const headers = new Headers(options.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(`${api}${path}`, { ...options, headers });
+}
+
 function provenanceLabel(result: RevisitResult) {
   const tokens = (result.input_tokens ?? 0) + (result.output_tokens ?? 0);
   const cost = result.estimated_cost_usd == null ? "cost pending" : `$${result.estimated_cost_usd.toFixed(4)}`;
@@ -207,7 +215,7 @@ function ModelPicker({ models, selectedId, recommendedId, onSelect, disabled = f
 }
 
 export default function Home() {
-  const [view, setView] = useState<"workspace" | "library" | "usage">("workspace");
+  const [view, setView] = useState<"workspace" | "library" | "usage" | "settings">("workspace");
   const [source, setSource] = useState("We decided to use Vendor B because it was assumed that Vendor B does not support external users. The service must support SAML. Revisit if Vendor B introduces external-user support.");
   const [sourceMode, setSourceMode] = useState<"paste" | "file">("paste");
   const [file, setFile] = useState<File | null>(null);
@@ -265,8 +273,8 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch(`${api}/v1/models`).then(responseJson) as Promise<ModelCatalog>,
-      fetch(`${api}/v1/workspace`).then(responseJson) as Promise<PersonalWorkspace>,
+      req(`/v1/models`).then(responseJson) as Promise<ModelCatalog>,
+      req(`/v1/workspace`).then(responseJson) as Promise<PersonalWorkspace>,
     ])
       .then(([catalog, workspace]) => {
         if (cancelled) return;
@@ -398,7 +406,7 @@ export default function Home() {
     setActiveJobs(current);
     while (current.some((job) => !(["succeeded", "failed", "cancelled"] as string[]).includes(job.status))) {
       await new Promise((resolve) => setTimeout(resolve, 700));
-      current = await Promise.all(created.map(async (job) => responseJson(await fetch(`${api}/v1/jobs/${job.id}`))));
+      current = await Promise.all(created.map(async (job) => responseJson(await req(`/v1/jobs/${job.id}`))));
       setActiveJobs(current);
     }
     const failed = current.find((job) => job.status === "failed");
@@ -414,7 +422,7 @@ export default function Home() {
   async function cancelActiveJobs() {
     const running = activeJobs.filter((job) => ["queued", "running"].includes(job.status));
     if (!running.length) return;
-    const cancelled = await Promise.all(running.map(async (job) => responseJson(await fetch(`${api}/v1/jobs/${job.id}`, { method: "DELETE" }))));
+    const cancelled = await Promise.all(running.map(async (job) => responseJson(await req(`/v1/jobs/${job.id}`, { method: "DELETE" }))));
     setActiveJobs(cancelled);
     setBusyPhase(null);
   }
@@ -428,11 +436,11 @@ export default function Home() {
       if (sourceMode === "file" && file) {
         const body = new FormData();
         body.append("file", file);
-        artifact = await responseJson(await fetch(`${api}/v1/artifacts/upload`, { method: "POST", body }));
+        artifact = await responseJson(await req(`/v1/artifacts/upload`, { method: "POST", body }));
       } else {
-        artifact = await responseJson(await fetch(`${api}/v1/artifacts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "decision-note.txt", media_type: "text/plain", content: source }) }));
+        artifact = await responseJson(await req(`/v1/artifacts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "decision-note.txt", media_type: "text/plain", content: source }) }));
       }
-      const created = await responseJson(await fetch(`${api}/v1/decisions/extractions/jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artifact_id: artifact.id, model_id: selectedModelId || undefined }) }));
+      const created = await responseJson(await req(`/v1/decisions/extractions/jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artifact_id: artifact.id, model_id: selectedModelId || undefined }) }));
       const completed = await waitForJob(created);
       initializeExtraction(completed.result as Extraction);
     } catch (caught) {
@@ -456,7 +464,7 @@ export default function Home() {
     setBusyPhase("finalize");
     setError(null);
     try {
-      const reviewed = await responseJson(await fetch(`${api}/v1/extractions/${extraction.id}/review`, {
+      const reviewed = await responseJson(await req(`/v1/extractions/${extraction.id}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -469,7 +477,7 @@ export default function Home() {
         }),
       }));
       setExtraction(reviewed);
-      const saved = await responseJson(await fetch(`${api}/v1/extractions/${extraction.id}/finalize`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ criticality }) })) as Decision;
+      const saved = await responseJson(await req(`/v1/extractions/${extraction.id}/finalize`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ criticality }) })) as Decision;
       setDecision(saved);
       setChallenge(saved.challenge ?? null);
       setRevisitHistory([]);
@@ -489,7 +497,7 @@ export default function Home() {
     try {
       const modelIds = compareMode ? [selectedModelId, comparisonModelId] : [selectedModelId];
       if (new Set(modelIds).size !== modelIds.length) throw new Error("Choose two different models to compare");
-      const created = await Promise.all(modelIds.map(async (modelId) => responseJson(await fetch(`${api}/v1/decisions/${decision.id}/revisit-jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "new-evidence.txt", content: evidence, model_id: modelId }) }))));
+      const created = await Promise.all(modelIds.map(async (modelId) => responseJson(await req(`/v1/decisions/${decision.id}/revisit-jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: "new-evidence.txt", content: evidence, model_id: modelId }) }))));
       const completed = await waitForJobs(created);
       const runs = completed.map((job, index) => ({ modelId: modelIds[index], label: models.find((model) => model.id === modelIds[index])?.label ?? modelIds[index], result: job.result as RevisitResult }));
       setRevisitCompleted(true);
@@ -519,7 +527,7 @@ export default function Home() {
     setBusyPhase("challenge");
     setError(null);
     try {
-      const created = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/challenge-jobs`, {
+      const created = await responseJson(await req(`/v1/decisions/${decision.id}/challenge-jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_id: selectedModelId || undefined }),
@@ -542,7 +550,7 @@ export default function Home() {
     setChallengeConfirmBusy(true);
     setError(null);
     try {
-      const confirmed = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/challenge/confirm`, {
+      const confirmed = await responseJson(await req(`/v1/decisions/${decision.id}/challenge/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notes: challengeNotes || null }),
@@ -561,7 +569,7 @@ export default function Home() {
     setJudgmentBusy(reviewKey);
     setError(null);
     try {
-      const updated = await responseJson(await fetch(`${api}/v1/revisit-checks/${revisitId}/findings/${premiseId}/judgment`, {
+      const updated = await responseJson(await req(`/v1/revisit-checks/${revisitId}/findings/${premiseId}/judgment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ judgment, notes: judgmentNotes[reviewKey] || null }),
@@ -585,7 +593,7 @@ export default function Home() {
       if (libraryQuery.trim()) params.set("q", libraryQuery.trim());
       if (libraryCriticality !== "all") params.set("criticality", libraryCriticality);
       const query = params.size ? `?${params.toString()}` : "";
-      setLibrary(await responseJson(await fetch(`${api}/v1/decisions${query}`)) as DecisionLibrary);
+      setLibrary(await responseJson(await req(`/v1/decisions${query}`)) as DecisionLibrary);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load the decision library");
     } finally {
@@ -597,7 +605,7 @@ export default function Home() {
     setUsageLoading(true);
     setError(null);
     try {
-      setUsage(await responseJson(await fetch(`${api}/v1/usage`)) as UsageSummary);
+      setUsage(await responseJson(await req(`/v1/usage`)) as UsageSummary);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load workspace usage");
     } finally {
@@ -606,7 +614,7 @@ export default function Home() {
   }
 
   async function loadRevisitHistory(decisionId: string) {
-    const history = await responseJson(await fetch(`${api}/v1/decisions/${decisionId}/revisit-checks`)) as RevisitResult[];
+    const history = await responseJson(await req(`/v1/decisions/${decisionId}/revisit-checks`)) as RevisitResult[];
     setRevisitHistory(history);
   }
 
@@ -614,8 +622,8 @@ export default function Home() {
     setError(null);
     try {
       const [record, history] = await Promise.all([
-        fetch(`${api}/v1/decisions/${decisionId}`).then(responseJson),
-        fetch(`${api}/v1/decisions/${decisionId}/revisit-checks`).then(responseJson),
+        req(`/v1/decisions/${decisionId}`).then(responseJson),
+        req(`/v1/decisions/${decisionId}/revisit-checks`).then(responseJson),
       ]) as [Decision, RevisitResult[]];
       setDecision(record);
       setChallenge(record.challenge ?? null);
@@ -646,7 +654,7 @@ export default function Home() {
     setExportBusy(true);
     setError(null);
     try {
-      const response = await fetch(`${api}/v1/decisions/${decision.id}/export/markdown`);
+      const response = await req(`/v1/decisions/${decision.id}/export/markdown`);
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.detail ?? `Export failed with status ${response.status}`);
@@ -673,7 +681,7 @@ export default function Home() {
     setPdfExportBusy(true);
     setError(null);
     try {
-      const response = await fetch(`${api}/v1/decisions/${decision.id}/export/pdf`);
+      const response = await req(`/v1/decisions/${decision.id}/export/pdf`);
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.detail ?? `PDF export failed with status ${response.status}`);
@@ -705,7 +713,7 @@ export default function Home() {
      }
 
   async function loadShares(decisionId: string) {
-    setShares(await responseJson(await fetch(`${api}/v1/decisions/${decisionId}/shares`)) as Share[]);
+    setShares(await responseJson(await req(`/v1/decisions/${decisionId}/shares`)) as Share[]);
    }
 
   async function createShare() {
@@ -713,7 +721,7 @@ export default function Home() {
     setShareBusy(true);
     setError(null);
     try {
-      const created = await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/shares`, {
+      const created = await responseJson(await req(`/v1/decisions/${decision.id}/shares`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
@@ -743,7 +751,7 @@ export default function Home() {
     setShareBusy(true);
     setError(null);
     try {
-      await responseJson(await fetch(`${api}/v1/decisions/${decision.id}/shares/${shareId}`, { method: "DELETE" }));
+      await responseJson(await req(`/v1/decisions/${decision.id}/shares/${shareId}`, { method: "DELETE" }));
       await loadShares(decision.id);
         setCopiedToken((current) => (current === token ? null : current));
          } catch (caught) {
@@ -758,7 +766,7 @@ export default function Home() {
     setShareDeleteBusy(true);
     setError(null);
     try {
-      const response = await fetch(`${api}/v1/decisions/${decision.id}/shares/${confirmingShareDelete.id}/record`, { method: "DELETE" });
+      const response = await req(`/v1/decisions/${decision.id}/shares/${confirmingShareDelete.id}/record`, { method: "DELETE" });
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.detail ?? `Delete failed with status ${response.status}`);
@@ -776,7 +784,7 @@ export default function Home() {
     setDeleteBusy(true);
     setError(null);
     try {
-      const response = await fetch(`${api}/v1/decisions/${targetId}`, { method: "DELETE" });
+      const response = await req(`/v1/decisions/${targetId}`, { method: "DELETE" });
       if (!response.ok && response.status !== 404) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.detail ?? `Delete failed with status ${response.status}`);
@@ -875,6 +883,7 @@ export default function Home() {
             return <button type="button" key={value} className={`nav-item ${view === "library" && libraryCriticality === value ? "active" : ""}`} data-tooltip={label} aria-label={label} onClick={() => { setLibraryCriticality(value); setView("library"); }}><span className="nav-icon"><LibraryNavIcon value={value} /></span><span className="pane-label">{label}</span>{value === "all" && libraryCriticality === "all" ? <small className="pane-label">{library.total}</small> : null}</button>;
           })}
           <button type="button" className={`nav-item usage-nav ${view === "usage" ? "active" : ""}`} data-tooltip="Usage and cost" aria-label="Usage and cost" onClick={() => setView("usage")}><span className="nav-icon"><ChartNoAxesColumn aria-hidden="true" /></span><span className="pane-label">Usage &amp; cost</span></button>
+<button type="button" className={`nav-item usage-nav ${view === "settings" ? "active" : ""}`} data-tooltip="Account & keys" aria-label="Account and provider keys" onClick={() => setView("settings")}><span className="nav-icon"><Settings aria-hidden="true" /></span><span className="pane-label">Account &amp; keys</span></button>
         </nav>
         <section className="decision-conversations pane-label" aria-label="Saved decisions">
           <div className="pane-section-heading"><span>Decision conversations</span>{libraryLoading ? <span className="spinner dark" /> : null}</div>
@@ -940,6 +949,8 @@ export default function Home() {
             <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Recent activity</span><h2>Latest model runs</h2></div><span>Newest first</span></div>{usage.recent_runs.length ? <div className="usage-runs">{usage.recent_runs.map((run) => <button type="button" key={`${run.kind}-${run.id}`} disabled={!run.decision_id} onClick={() => run.decision_id && openDecision(run.decision_id)}><span className={`usage-kind ${run.kind}`}>{run.kind}</span><span className="usage-run-model"><strong>{run.model}</strong><small>{run.provider} · {run.prompt_version}</small></span><span><strong>{formatNumber((run.input_tokens ?? 0) + (run.output_tokens ?? 0))}</strong><small>tokens</small></span><span><strong>{run.latency_ms == null ? "—" : `${formatNumber(run.latency_ms)} ms`}</strong><small>latency</small></span><span><strong>{run.estimated_cost_usd == null ? "Unavailable" : `$${run.estimated_cost_usd.toFixed(4)}`}</strong><small>cost</small></span><time dateTime={run.created_at}>{formatDateTime(run.created_at)}</time></button>)}</div> : null}</section>
           </> : null}
         </section> : null}
+
+        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Account &amp; provider keys</strong><p>Sign in to work in your own workspace and store a provider key. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel /></section> : null}
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
 

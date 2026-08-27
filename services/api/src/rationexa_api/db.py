@@ -38,7 +38,34 @@ class AccountRow(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(120))
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    password_salt: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    password_iterations: Mapped[int | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class SessionRow(Base):
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id"), index=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, default=new_share_token)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SecretRow(Base):
+    __tablename__ = "workspace_secrets"
+    __table_args__ = (Index("ix_workspace_secrets_workspace_provider", "workspace_id", "provider"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(80))
+    encrypted_value: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
 
 class WorkspaceRow(Base):
@@ -174,6 +201,7 @@ def init_db() -> None:
     _add_missing_extraction_provenance_columns()
     _add_missing_revisit_provenance_columns()
     _add_missing_decision_challenge_column()
+    _add_missing_account_credential_columns()
 
 
 def _ensure_local_workspace() -> None:
@@ -183,6 +211,7 @@ def _ensure_local_workspace() -> None:
             db.add(AccountRow(id=settings.local_account_id, name=settings.local_account_name))
         elif account.name != settings.local_account_name:
             account.name = settings.local_account_name
+            _seed_local_account_credentials(account)
         if db.get(WorkspaceRow, settings.local_workspace_id) is None:
             db.add(
                 WorkspaceRow(
@@ -193,6 +222,35 @@ def _ensure_local_workspace() -> None:
             )
         db.commit()
 
+
+def _seed_local_account_credentials(account: AccountRow) -> None:
+    """Give the bootstrap local account a log-in credential so it owns a real session path."""
+    if account.password_hash is not None:
+        return
+    if account.email is None:
+        account.email = settings.local_account_email
+    if settings.local_account_password:
+        from .auth import hash_password
+
+        account.password_hash, account.password_salt, account.password_iterations = hash_password(
+            settings.local_account_password,
+            settings.pbkdf2_iterations,
+          )
+
+
+def _add_missing_account_credential_columns() -> None:
+    """Add the Stage 2 login credential fields to databases created before this milestone."""
+    existing = {column["name"] for column in inspect(engine).get_columns("accounts")}
+    column_definitions = {
+          "email": "VARCHAR(255)",
+          "password_hash": "VARCHAR(255)",
+          "password_salt": "VARCHAR(64)",
+          "password_iterations": "INTEGER",
+      }
+    with engine.begin() as connection:
+        for name, sql_type in column_definitions.items():
+            if name not in existing:
+                connection.execute(text(f"ALTER TABLE accounts ADD COLUMN {name} {sql_type}"))
 
 def _add_missing_workspace_columns() -> None:
     """Assign existing local records to the personal workspace during the Stage 2 migration."""

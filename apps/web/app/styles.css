@@ -629,3 +629,23 @@ button { cursor:pointer; }
 @media (max-width:680px) { .challenge-heading,.challenge-confirm>div{align-items:stretch;flex-direction:column}.challenge-grid{grid-template-columns:1fr}.challenge-empty{grid-template-columns:42px minmax(0,1fr)}.challenge-empty .primary{grid-column:1/-1}.challenge-provenance{flex-direction:column} }
 @media (max-width:1100px) { .usage-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.usage-models>article{grid-template-columns:minmax(160px,.8fr) minmax(120px,1fr)}.usage-model-stats{grid-column:1/-1}.usage-runs>button{grid-template-columns:70px minmax(130px,1fr) 82px 110px}.usage-runs>button>span:nth-of-type(3),.usage-runs>button>span:nth-of-type(4){display:none} }
 @media (max-width:680px) { .usage-intro{grid-template-columns:42px minmax(0,1fr)}.usage-intro .text-button{grid-column:1/-1;justify-self:start}.usage-summary-grid{grid-template-columns:1fr}.usage-section-heading{align-items:flex-start;flex-direction:column}.usage-models>article{grid-template-columns:1fr}.usage-model-stats{grid-template-columns:1fr 1fr}.usage-runs>button{grid-template-columns:62px minmax(0,1fr);gap:8px}.usage-runs>button>span:nth-of-type(n+3),.usage-runs time{display:none} }
+
+.account-section .account-body,.account-section .account-login{display:grid;gap:20px}
+.account-identity{display:flex;align-items:center;gap:12px}
+.account-avatar{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:18px}
+.account-identity strong{font-size:14px}
+.account-identity small{color:var(--muted);font-size:11px}
+.account-actions{justify-self:end}
+.account-login,.account-key-form{display:grid;gap:10px;max-width:340px}
+.account-login label,.account-key-form label{display:grid;gap:6px;font-size:12px;font-weight:600}
+.account-login input,.account-key-form input{min-height:41px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fcfdfc;color:var(--ink);outline:none;transition:border .15s,box-shadow .15s}
+.account-login input:focus,.account-key-form input:focus{border-color:#7cab91;box-shadow:0 0 0 3px rgba(31,96,66,.09)}
+.account-hint{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px}
+.account-hint svg{width:13px;height:13px}
+.account-secrets{display:grid;gap:14px}
+.account-key-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.account-key-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fafbfa}
+.account-key-list strong{font-size:12px}
+.account-key-list small{color:var(--muted);font-size:10px}
+.account-empty{color:var(--muted);font-size:12px}
+.account-error{color:var(--red);font-size:12px;padding:8px 10px;border:1px solid rgba(200,60,60,.25);border-radius:8px;background:rgba(200,60,60,.05)}

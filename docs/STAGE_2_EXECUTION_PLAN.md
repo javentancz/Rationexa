@@ -62,16 +62,21 @@ Status: implemented for finalized decisions.
 
 ## Milestone 4 - hosted repeat-use foundation
 
-Status: in progress. A persisted local personal account and workspace now own
-new and migrated decision data, and workspace usage/cost visibility is
-implemented. Authentication and managed secret storage remain.
+Status: complete. A persisted local personal account and workspace own new and
+migrated decision data, workspace usage/cost visibility is implemented, BYOK
+provider keys are stored encrypted in the workspace and resolved per run, and
+network authentication lets a log-in session select its owning workspace. Team
+sharing is intentionally deferred until individual repeat use is observed.
 
 - Add personal accounts and one personal workspace. The local-first foundation
   is implemented with persisted account/workspace records, workspace-attributed
   artifacts, extractions, and decisions, plus workspace-scoped library and
-  usage queries. Network authentication is intentionally not claimed yet.
+  usage queries. Network authentication is implemented: accounts log in with an
+  email + PBKDF2-hashed password and receive a session that selects its workspace.
 - Store BYOK configuration through a secrets provider, never in application
-  logs or decision records.
+  logs or decision records. Implemented as a per-workspace secret store (Fernet
+  encrypted at rest, key from `SECRET_ENCRYPTION_KEY`) that resolves a provider
+  key only at run time and exposes only metadata through shared payloads.
 - Add basic usage and cost visibility. Implemented across extraction, revisit,
   and challenge runs with per-model totals, runtime location, latency, token
   usage, and recent-run provenance. Missing historical or provider pricing is

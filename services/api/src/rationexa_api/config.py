@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     local_account_name: str = "Demo User"
     local_workspace_id: str = "00000000-0000-4000-8000-000000000002"
     local_workspace_name: str = "Personal workspace"
+    secret_encryption_key: str | None = None
+    local_account_email: str = "demo@rationexa.local"
+    local_account_password: str | None = None
+    auth_session_ttl_hours: int = 168
+    pbkdf2_iterations: int = 200_000
 
     @property
     def allowed_origins(self) -> list[str]:

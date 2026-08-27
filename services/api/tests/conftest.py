@@ -8,6 +8,7 @@ artifact_dir = Path(tempfile.gettempdir()) / f"rationexa-artifacts-{os.getpid()}
 os.environ["DATABASE_URL"] = f"sqlite:///{database_file}"
 os.environ["ARTIFACT_DIR"] = str(artifact_dir)
 os.environ["AI_PROVIDER"] = "deterministic"
+os.environ.setdefault("SECRET_ENCRYPTION_KEY", "LVOw0rMnwHO0RjG21UEe89Y8ldVc49I2H0nJX1CPzbk=")
 
 
 def cleanup() -> None:

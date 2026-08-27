@@ -970,7 +970,7 @@ def default_model_id(settings: Settings) -> str:
     return available_models(settings)[0].id
 
 
-def get_provider(settings: Settings, model_id: str | None = None) -> ExtractionProvider:
+def get_provider(settings: Settings, model_id: str | None = None, byok_key: str | None = None) -> ExtractionProvider:
     options = available_models(settings)
     selected = next((option for option in options if option.id == (model_id or default_model_id(settings))), None)
     if selected is None:
@@ -978,5 +978,8 @@ def get_provider(settings: Settings, model_id: str | None = None) -> ExtractionP
     if selected.provider == "ollama":
         return OllamaProvider(settings.model_copy(update={"ollama_model": selected.model}))
     if selected.provider == "openai":
-        return OpenAIResponsesProvider(settings.model_copy(update={"openai_model": selected.model}))
+        effective = settings
+        if byok_key:
+            effective = settings.model_copy(update={"openai_api_key": byok_key})
+        return OpenAIResponsesProvider(effective.model_copy(update={"openai_model": selected.model}))
     return DeterministicProvider()

@@ -4,6 +4,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+PASSWORD_LENGTH_MIN = 8
+PASSWORD_LENGTH_MAX = 128
+
 
 class PremiseKind(StrEnum):
     REQUIREMENT = "requirement"
@@ -70,6 +73,46 @@ class WorkspaceRead(BaseModel):
     account_id: str
     account_name: str
     mode: Literal["local_personal"] = "local_personal"
+    created_at: datetime
+
+
+class CredentialCreate(BaseModel):
+    email: str = Field(min_length=1, max_length=255)
+    name: str = Field(default="", max_length=120)
+    password: str = Field(min_length=PASSWORD_LENGTH_MIN, max_length=PASSWORD_LENGTH_MAX)
+
+
+class SessionRead(BaseModel):
+    account_id: str
+    account_name: str
+    email: str
+    session_token: str
+    created_at: datetime
+    expires_at: datetime
+
+
+class SessionRequest(BaseModel):
+    email: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1, max_length=PASSWORD_LENGTH_MAX)
+
+
+class SecretRead(BaseModel):
+    provider: str
+    configured: bool
+    last_updated_at: datetime | None = None
+    source: Literal["workspace_store", "server_environment"] = "workspace_store"
+
+
+class SecretStoreRequest(BaseModel):
+    provider: str = Field(pattern="^openai$")
+    key: str = Field(min_length=1, max_length=500)
+
+
+class AccountRead(BaseModel):
+    id: str
+    name: str
+    email: str | None
+    has_password: bool
     created_at: datetime
 
 
