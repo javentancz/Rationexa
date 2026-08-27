@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleDollarSign, Clock3, Cpu, Diamond, FileDown, FileText, Library, ListChecks, Plus, Save, Sparkles, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleDollarSign, Clock3, Cpu, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Sparkles, Trash2, UserRound } from "lucide-react";
 
 type Criticality = "routine" | "important" | "critical";
 type ReviewAction = "confirm" | "unknown" | "reject";
@@ -252,6 +252,7 @@ export default function Home() {
   const [shareDeleteBusy, setShareDeleteBusy] = useState(false);
   const [workflowView, setWorkflowView] = useState<WorkflowStep>(1);
   const [libraryPaneCollapsed, setLibraryPaneCollapsed] = useState(false);
+  const [libraryPanePeeking, setLibraryPanePeeking] = useState(false);
   const [workflowPaneCollapsed, setWorkflowPaneCollapsed] = useState(false);
   const [auditExpanded, setAuditExpanded] = useState(true);
   const [challenge, setChallenge] = useState<DecisionChallenge | null>(null);
@@ -862,9 +863,10 @@ export default function Home() {
   ) : null;
 
    return (
-       <div className={`app-shell ${libraryPaneCollapsed ? "library-collapsed" : ""} ${workflowPaneCollapsed ? "workflow-collapsed" : ""}`}>
-      <aside className="sidebar library-pane">
-        <header className="pane-brand"><div className="brand" data-tooltip="Rationexa"><span className="brand-mark">R</span><span className="pane-label">Rationexa</span></div></header>
+       <div className={`app-shell ${libraryPaneCollapsed ? "library-collapsed" : ""} ${libraryPanePeeking ? "library-peeking" : ""} ${workflowPaneCollapsed ? "workflow-collapsed" : ""}`}>
+      {libraryPaneCollapsed ? <button type="button" className="library-hover-zone" aria-label="Reveal decision libraries" onMouseEnter={() => setLibraryPanePeeking(true)} onFocus={() => setLibraryPanePeeking(true)} onClick={() => { setLibraryPaneCollapsed(false); setLibraryPanePeeking(false); }} /> : null}
+      <aside className="sidebar library-pane" onMouseLeave={() => { if (libraryPaneCollapsed) setLibraryPanePeeking(false); }}>
+        <header className="pane-brand"><div className="brand"><span className="brand-mark">R</span><span className="pane-label">Rationexa</span></div><button type="button" className="library-panel-toggle" data-tooltip={libraryPaneCollapsed ? "Keep panel open" : "Collapse panel"} aria-label={libraryPaneCollapsed ? "Keep decision libraries open" : "Collapse decision libraries"} aria-expanded={!libraryPaneCollapsed} onClick={() => { setLibraryPaneCollapsed(!libraryPaneCollapsed); setLibraryPanePeeking(false); }}>{libraryPaneCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}</button></header>
         <button className="new-decision" data-tooltip="New decision review" onClick={resetWorkspace}><Plus aria-hidden="true" /><span className="pane-label">New decision review</span></button>
         <div className="pane-section pane-label"><span className="pane-kicker">Decision libraries</span></div>
         <nav className="library-nav" aria-label="Decision libraries">
@@ -884,7 +886,6 @@ export default function Home() {
         </section>
       </aside>
 
-      <button type="button" className="library-toggle" data-tooltip={libraryPaneCollapsed ? "Show decision libraries" : "Hide decision libraries"} aria-label={libraryPaneCollapsed ? "Expand decision libraries" : "Collapse decision libraries"} aria-expanded={!libraryPaneCollapsed} onClick={() => setLibraryPaneCollapsed((current) => !current)}><span>{libraryPaneCollapsed ? <ChevronRight aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}</span></button>
       <div className={`workbench-shell ${view !== "workspace" ? "library-overview" : ""}`}>
       <button type="button" className="workflow-toggle" data-tooltip={workflowPaneCollapsed ? "Show decision workflow" : "Hide decision workflow"} aria-label={workflowPaneCollapsed ? "Expand workflow" : "Collapse workflow"} aria-expanded={!workflowPaneCollapsed} onClick={() => setWorkflowPaneCollapsed((current) => !current)}><span>{workflowPaneCollapsed ? <ChevronRight aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}</span></button>
       <aside className="workflow-pane">
