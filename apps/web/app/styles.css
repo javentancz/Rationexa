@@ -11,8 +11,8 @@ button { cursor:pointer; }
   .radix-tooltip,.new-decision,.nav-item,.conversation-row { animation:none; transition:none; }
   .new-decision:hover,.new-decision:focus-visible,.nav-item:hover,.nav-item:focus-visible,.conversation-row:hover,.conversation-row:focus-visible { transform:none; }
 }
-.radix-overlay { z-index:190; }
-.radix-dialog { z-index:200; }
+.radix-overlay { z-index:2000; }
+.radix-dialog { position:fixed; top:50%; left:50%; z-index:2010; transform:translate(-50%,-50%); }
 .detail-disclosure { border:1px solid var(--line); border-radius:13px; background:#fff; box-shadow:var(--shadow); overflow:hidden; }
 .detail-disclosure-trigger { display:flex; align-items:center; justify-content:space-between; gap:18px; width:100%; border:0; padding:16px 18px; background:#fff; color:var(--ink); text-align:left; }
 .detail-disclosure-trigger:hover { background:#f8faf8; }
@@ -595,9 +595,9 @@ button { cursor:pointer; }
 .delete-button:hover { background:var(--red-soft); }
 .delete-button.armed { background:var(--red); color:#fff; }
 .modal-backdrop { position:fixed; inset:0; z-index:50; display:grid; place-items:center; padding:24px; background:rgba(19,31,23,.45); backdrop-filter:blur(3px); }
-.confirm-modal { width:min(420px,100%); border:1px solid var(--line); border-radius:14px; background:var(--surface); box-shadow:0 20px 60px rgba(19,31,23,.25); padding:24px; display:grid; gap:12px; }
-.confirm-modal h3 { margin:0; font:500 18px Georgia,serif; }
-.confirm-modal p { margin:0; color:var(--muted); font-size:13px; line-height:1.5; }
+.confirm-modal { width:min(440px,calc(100vw - 32px)); border:1px solid var(--line); border-radius:14px; background:var(--surface); box-shadow:0 20px 60px rgba(19,31,23,.25); padding:24px; display:grid; gap:12px; }
+.confirm-modal h2 { margin:0; font:500 22px Georgia,serif; }
+.confirm-modal p { margin:0; color:var(--muted); font-size:15px; line-height:1.55; }
 .confirm-modal p strong { color:var(--ink); }
 .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:8px; }
 .text-button.danger { color:var(--red); font-weight:750; }
@@ -727,8 +727,8 @@ button { cursor:pointer; }
 .account-actions{justify-self:end}
 .account-login,.account-key-form{display:grid;gap:10px;max-width:340px}
 .account-login label,.account-key-form label{display:grid;gap:6px;font-size:12px;font-weight:600}
-.account-login input,.account-key-form input{min-height:41px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fcfdfc;color:var(--ink);outline:none;transition:border .15s,box-shadow .15s}
-.account-login input:focus,.account-key-form input:focus{border-color:#7cab91;box-shadow:0 0 0 3px rgba(31,96,66,.09)}
+.account-login input,.account-key-form input,.account-key-form select,.provider-model-choice select{min-height:41px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fcfdfc;color:var(--ink);outline:none;transition:border .15s,box-shadow .15s}
+.account-login input:focus,.account-key-form input:focus,.account-key-form select:focus,.provider-model-choice select:focus{border-color:#7cab91;box-shadow:0 0 0 3px rgba(31,96,66,.09)}
 .account-hint{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px}
 .account-hint svg{width:13px;height:13px}
 .account-secrets{display:grid;gap:14px}
@@ -744,6 +744,11 @@ button { cursor:pointer; }
 .account-loading{margin:0;color:var(--muted)}
 .account-key-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .account-key-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fafbfa}
+.account-key-list li.provider-connection{display:grid;align-items:stretch;gap:12px;padding:14px}
+.provider-connection-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.provider-connection-heading>span{display:grid;gap:3px}
+.provider-model-choice{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
+.provider-load-models{justify-self:start}
 .account-key-list strong{font-size:12px}
 .account-key-list small{color:var(--muted);font-size:10px}
 .account-empty{color:var(--muted);font-size:12px}

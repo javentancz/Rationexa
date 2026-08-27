@@ -1,12 +1,24 @@
 from __future__ import annotations
 
+import json
+from typing import Any
+from urllib.parse import urlparse
+
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select
 
 from .config import Settings, get_settings
 from .db import SecretRow
 
-_PROVIDER_KEY_FIELD = {"openai": "openai_api_key"}
+PROVIDER_PRESETS = {
+    "openai": {"label": "OpenAI", "base_url": "https://api.openai.com/v1", "protocol": "responses"},
+    "openrouter": {
+        "label": "OpenRouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "protocol": "chat_completions",
+    },
+    "custom": {"label": "Custom compatible API", "base_url": None, "protocol": "chat_completions"},
+}
 
 
 def fernet(settings: Settings | None = None) -> Fernet | None:
@@ -41,10 +53,11 @@ def store_provider_key(
     provider: str,
     plaintext: str,
     *,
+    base_url: str | None = None,
     settings: Settings | None = None,
 ) -> SecretRow:
     settings = settings or get_settings()
-    if provider not in _PROVIDER_KEY_FIELD:
+    if provider not in PROVIDER_PRESETS:
         raise ValueError("Unknown provider for secret storage")
     value = (plaintext or "").strip()
     if not value:
@@ -58,7 +71,26 @@ def store_provider_key(
              SecretRow.provider == provider,
           )
        )
-    encrypted = handle.encrypt(value.encode("utf-8")).decode("ascii")
+    preset = PROVIDER_PRESETS[provider]
+    resolved_base_url = (base_url or preset["base_url"] or "").strip().rstrip("/")
+    if not resolved_base_url:
+        raise ValueError("A base URL is required for a custom provider")
+    parsed = urlparse(resolved_base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Provider base URL must be a valid HTTP or HTTPS URL")
+    if parsed.scheme != "https" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        raise ValueError("Remote provider base URLs must use HTTPS")
+    configuration = {
+        "key": value,
+        "label": preset["label"],
+        "base_url": resolved_base_url,
+        "protocol": preset["protocol"],
+        "selected_model": None,
+    }
+    if existing is not None:
+        previous = get_provider_config(db, workspace_id, provider, settings=settings)
+        configuration["selected_model"] = previous.get("selected_model") if previous else None
+    encrypted = handle.encrypt(json.dumps(configuration).encode("utf-8")).decode("ascii")
     if existing is None:
         row = SecretRow(workspace_id=workspace_id, provider=provider, encrypted_value=encrypted)
         db.add(row)
@@ -78,7 +110,19 @@ def get_provider_key(
     settings: Settings | None = None,
 ) -> str | None:
     settings = settings or get_settings()
-    if provider not in _PROVIDER_KEY_FIELD:
+    configuration = get_provider_config(db, workspace_id, provider, settings=settings)
+    return str(configuration["key"]) if configuration and configuration.get("key") else None
+
+
+def get_provider_config(
+    db,
+    workspace_id: str,
+    provider: str,
+    *,
+    settings: Settings | None = None,
+) -> dict[str, Any] | None:
+    settings = settings or get_settings()
+    if provider not in PROVIDER_PRESETS:
         return None
     row = db.scalar(
          select(SecretRow).where(
@@ -92,9 +136,44 @@ def get_provider_key(
     if handle is None:
         return None
     try:
-        return handle.decrypt(row.encrypted_value.encode("ascii")).decode("utf-8")
+        decrypted = handle.decrypt(row.encrypted_value.encode("ascii")).decode("utf-8")
     except InvalidToken:
         return None
+    try:
+        parsed = json.loads(decrypted)
+        if isinstance(parsed, dict) and parsed.get("key"):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+    preset = PROVIDER_PRESETS[provider]
+    return {
+        "key": decrypted,
+        "label": preset["label"],
+        "base_url": preset["base_url"],
+        "protocol": preset["protocol"],
+        "selected_model": None,
+    }
+
+
+def select_provider_model(
+    db,
+    workspace_id: str,
+    provider: str,
+    model: str,
+    *,
+    settings: Settings | None = None,
+) -> SecretRow:
+    settings = settings or get_settings()
+    row = db.scalar(select(SecretRow).where(SecretRow.workspace_id == workspace_id, SecretRow.provider == provider))
+    configuration = get_provider_config(db, workspace_id, provider, settings=settings)
+    handle = fernet(settings)
+    if row is None or configuration is None or handle is None:
+        raise ValueError("Connect this provider before selecting a model")
+    configuration["selected_model"] = model.strip()
+    row.encrypted_value = handle.encrypt(json.dumps(configuration).encode("utf-8")).decode("ascii")
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 def has_provider_key(

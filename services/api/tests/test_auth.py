@@ -170,6 +170,40 @@ def test_local_workspace_generates_a_private_secret_key_file(tmp_path) -> None:
     assert second.decrypt(encrypted) == b"sk-local-byok"
 
 
+def test_openrouter_connection_loads_models_and_activates_one(monkeypatch) -> None:
+    class ModelResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"data": [{"id": "anthropic/claude-test"}, {"id": "deepseek/deepseek-test"}]}
+
+    monkeypatch.setattr("rationexa_api.main.httpx.get", lambda *args, **kwargs: ModelResponse())
+
+    with TestClient(app) as client:
+        connected = client.post("/v1/secrets", json={"provider": "openrouter", "key": "sk-or-test"})
+        assert connected.status_code == 201
+        assert connected.json()["provider"] == "openrouter"
+        assert connected.json()["selected_model"] is None
+
+        catalog = client.get("/v1/secrets/openrouter/models")
+        assert catalog.status_code == 200
+        assert catalog.json()["models"] == ["anthropic/claude-test", "deepseek/deepseek-test"]
+
+        selected = client.post(
+            "/v1/secrets/openrouter/model",
+            json={"model": "anthropic/claude-test"},
+        )
+        assert selected.status_code == 200
+        assert selected.json()["selected_model"] == "anthropic/claude-test"
+
+        workspace_models = client.get("/v1/models").json()["models"]
+        assert any(model["id"] == "openrouter/anthropic/claude-test" for model in workspace_models)
+
+        removed = client.delete("/v1/secrets/openrouter")
+        assert removed.status_code == 200
+
+
 def test_password_hash_round_trips() -> None:
     hashed, salt, iterations = hash_password("correct-horse", 10_000)
     assert hashed

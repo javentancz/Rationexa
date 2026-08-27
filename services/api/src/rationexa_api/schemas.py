@@ -99,13 +99,22 @@ class SessionRequest(BaseModel):
 class SecretRead(BaseModel):
     provider: str
     configured: bool
+    label: str | None = None
+    base_url: str | None = None
+    selected_model: str | None = None
+    protocol: str | None = None
     last_updated_at: datetime | None = None
     source: Literal["workspace_store", "server_environment"] = "workspace_store"
 
 
 class SecretStoreRequest(BaseModel):
-    provider: str = Field(pattern="^openai$")
+    provider: str = Field(pattern="^(openai|openrouter|custom)$")
     key: str = Field(min_length=1, max_length=500)
+    base_url: str | None = Field(default=None, min_length=1, max_length=500)
+
+
+class SecretModelSelectRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=240)
 
 
 class AccountRead(BaseModel):

@@ -6,7 +6,14 @@ import { apiFetch, getSessionToken, login, logout, setSessionToken } from "./api
 
 type AccountRead = { id: string; name: string; email?: string; has_password: boolean; created_at: string };
 type WorkspaceRead = { id: string; name: string; account_name: string };
-type SecretRead = { provider: string; configured: boolean; last_updated_at?: string; source: string };
+type SecretRead = { provider: string; configured: boolean; label?: string; base_url?: string; selected_model?: string; protocol?: string; last_updated_at?: string; source: string };
+type ProviderModels = { models: string[] };
+
+const providerOptions = [
+  { id: "openrouter", label: "OpenRouter", detail: "Many model companies through one compatible API" },
+  { id: "openai", label: "OpenAI direct", detail: "Models available to your OpenAI project" },
+  { id: "custom", label: "Custom compatible API", detail: "Your own OpenAI-compatible endpoint" },
+] as const;
 
 type AccountPanelProps = {
   onConfigurationChanged?: () => void;
@@ -21,7 +28,12 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
   const [password, setPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [keyEntry, setKeyEntry] = useState("");
+  const [providerEntry, setProviderEntry] = useState("openrouter");
+  const [baseUrlEntry, setBaseUrlEntry] = useState("");
   const [secretBusy, setSecretBusy] = useState(false);
+  const [providerModels, setProviderModels] = useState<Record<string, string[]>>({});
+  const [providerModelSelection, setProviderModelSelection] = useState<Record<string, string>>({});
+  const [modelBusyFor, setModelBusyFor] = useState<string | null>(null);
 
   async function refresh() {
     setError(null);
@@ -42,7 +54,12 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
         });
       }
       const stored = await apiFetch("/v1/secrets");
-      setSecrets((stored as SecretRead[]) ?? []);
+      const entries = (stored as SecretRead[]) ?? [];
+      setSecrets(entries);
+      setProviderModelSelection((current) => entries.reduce<Record<string, string>>((next, entry) => {
+        if (entry.selected_model) next[entry.provider] = entry.selected_model;
+        return next;
+      }, { ...current }));
     } catch (caught) {
       setAccount(null);
       setSecrets([]);
@@ -84,10 +101,12 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
       await apiFetch("/v1/secrets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: "openai", key: keyEntry }),
+        body: JSON.stringify({ provider: providerEntry, key: keyEntry, base_url: providerEntry === "custom" ? baseUrlEntry : undefined }),
       });
       setKeyEntry("");
+      if (providerEntry === "custom") setBaseUrlEntry("");
       await refresh();
+      await loadProviderModels(providerEntry);
       onConfigurationChanged?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not store the key");
@@ -96,11 +115,50 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
     }
   }
 
+  async function loadProviderModels(provider: string) {
+    setModelBusyFor(provider);
+    setError(null);
+    try {
+      const payload = await apiFetch(`/v1/secrets/${provider}/models`) as ProviderModels;
+      setProviderModels((current) => ({ ...current, [provider]: payload.models }));
+      setProviderModelSelection((current) => ({
+        ...current,
+        [provider]: current[provider] || secrets.find((secret) => secret.provider === provider)?.selected_model || payload.models[0] || "",
+      }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not load provider models");
+    } finally {
+      setModelBusyFor(null);
+    }
+  }
+
+  async function activateProviderModel(provider: string) {
+    const model = providerModelSelection[provider];
+    if (!model) return;
+    setModelBusyFor(provider);
+    setError(null);
+    try {
+      await apiFetch(`/v1/secrets/${provider}/model`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model }),
+      });
+      await refresh();
+      onConfigurationChanged?.();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not activate the hosted model");
+    } finally {
+      setModelBusyFor(null);
+    }
+  }
+
   async function handleRemoveKey(provider: string) {
     setSecretBusy(true);
     setError(null);
     try {
       await apiFetch(`/v1/secrets/${provider}`, { method: "DELETE" });
+      setProviderModels((current) => { const next = { ...current }; delete next[provider]; return next; });
+      setProviderModelSelection((current) => { const next = { ...current }; delete next[provider]; return next; });
       await refresh();
       onConfigurationChanged?.();
     } catch (caught) {
@@ -144,19 +202,21 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
             <KeyRound aria-hidden="true" />
             <div>
               <strong>Bring your own API key</strong>
-              <p>Add a hosted provider for faster or deeper runs. Qwen, Gemma, and Ornith remain available through Ollama without a key.</p>
+              <p>Connect a platform, load its live model catalog, then activate the model you want. Qwen, Gemma, and Ornith remain available through Ollama without a key.</p>
             </div>
           </div>
           <form onSubmit={handleStoreKey} className="account-key-form">
-            <label><span>OpenAI API key <small>Encrypted on this machine</small></span><input type="password" autoComplete="off" value={keyEntry} onChange={(event) => setKeyEntry(event.target.value)} placeholder="sk-…" /></label>
-            <button type="submit" className="primary" disabled={secretBusy || !keyEntry}><KeyRound aria-hidden="true" />{secretBusy ? "Saving…" : "Store key"}</button>
+            <label><span>Provider platform</span><select value={providerEntry} onChange={(event) => setProviderEntry(event.target.value)}>{providerOptions.map((provider) => <option key={provider.id} value={provider.id}>{provider.label} — {provider.detail}</option>)}</select></label>
+            {providerEntry === "custom" ? <label><span>Compatible API base URL <small>HTTPS, or localhost for development</small></span><input type="url" required value={baseUrlEntry} onChange={(event) => setBaseUrlEntry(event.target.value)} placeholder="https://api.example.com/v1" /></label> : null}
+            <label><span>Provider API key <small>Encrypted on this machine</small></span><input type="password" autoComplete="off" value={keyEntry} onChange={(event) => setKeyEntry(event.target.value)} placeholder="Paste this provider's API key" /></label>
+            <button type="submit" className="primary" disabled={secretBusy || !keyEntry || (providerEntry === "custom" && !baseUrlEntry)}><KeyRound aria-hidden="true" />{secretBusy ? "Connecting…" : "Connect provider"}</button>
           </form>
           {secrets.length ? (
             <ul className="account-key-list">
               {secrets.map((secret) => (
-                <li key={secret.provider}>
-                  <span><strong>{secret.provider}</strong><small>{secret.configured ? "Configured" : "Empty"}</small></span>
-                  <button type="button" className="icon-action danger" aria-label={`Remove ${secret.provider} key`} disabled={secretBusy || !secret.configured} onClick={() => handleRemoveKey(secret.provider)}><Trash2 aria-hidden="true" /></button>
+                <li key={secret.provider} className="provider-connection">
+                  <div className="provider-connection-heading"><span><strong>{secret.label ?? secret.provider}</strong><small>{secret.selected_model ? `Active model · ${secret.selected_model}` : "Connected · choose a model"}</small></span><button type="button" className="icon-action danger" aria-label={`Remove ${secret.provider} key`} disabled={secretBusy || !secret.configured} onClick={() => handleRemoveKey(secret.provider)}><Trash2 aria-hidden="true" /></button></div>
+                  {providerModels[secret.provider] ? <div className="provider-model-choice"><select aria-label={`${secret.label ?? secret.provider} model`} value={providerModelSelection[secret.provider] ?? secret.selected_model ?? ""} onChange={(event) => setProviderModelSelection((current) => ({ ...current, [secret.provider]: event.target.value }))}>{providerModels[secret.provider].map((model) => <option key={model} value={model}>{model}</option>)}</select><button type="button" className="primary" disabled={modelBusyFor === secret.provider || !(providerModelSelection[secret.provider] ?? secret.selected_model)} onClick={() => activateProviderModel(secret.provider)}>{modelBusyFor === secret.provider ? "Activating…" : "Use this model"}</button></div> : <button type="button" className="secondary provider-load-models" disabled={modelBusyFor === secret.provider} onClick={() => loadProviderModels(secret.provider)}>{modelBusyFor === secret.provider ? "Loading models…" : "Choose a model"}</button>}
                 </li>
               ))}
             </ul>

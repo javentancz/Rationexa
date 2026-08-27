@@ -52,12 +52,12 @@ export function ConfirmDialog({
     <AlertDialog.Root open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="modal-backdrop radix-overlay" />
-        <AlertDialog.Content className="modal radix-dialog">
+        <AlertDialog.Content className="confirm-modal radix-dialog">
           <AlertDialog.Title>{title}</AlertDialog.Title>
           <AlertDialog.Description>{description}</AlertDialog.Description>
           <div className="modal-actions">
             <AlertDialog.Cancel asChild><button className="text-button" disabled={busy}>Cancel</button></AlertDialog.Cancel>
-            <AlertDialog.Action asChild><button className="primary danger" disabled={busy} onClick={onConfirm}>{busy ? busyLabel : confirmLabel}</button></AlertDialog.Action>
+            <button className="primary danger" disabled={busy} onClick={onConfirm}>{busy ? busyLabel : confirmLabel}</button>
           </div>
         </AlertDialog.Content>
       </AlertDialog.Portal>

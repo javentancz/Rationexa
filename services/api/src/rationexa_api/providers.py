@@ -333,6 +333,62 @@ class OpenAIResponsesProvider(ExtractionProvider):
         }
 
 
+class OpenAICompatibleProvider(ExtractionProvider):
+    """Structured decision operations over an OpenAI-compatible Chat Completions API."""
+
+    def __init__(self, provider: str, model: str, api_key: str, base_url: str):
+        self.name = provider
+        self.model = model
+        self.client = OpenAI(api_key=api_key, base_url=base_url.rstrip("/"))
+        self.last_usage = {}
+
+    def _structured(self, instructions: str, user_input: str, schema_type):
+        schema = schema_type.model_json_schema()
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"{instructions}\nReturn only a JSON object matching this schema:\n{json.dumps(schema)}",
+                },
+                {"role": "user", "content": user_input},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        usage = response.usage
+        self.last_usage = {
+            "input_tokens": getattr(usage, "prompt_tokens", None),
+            "output_tokens": getattr(usage, "completion_tokens", None),
+            "estimated_cost_usd": None,
+        }
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("The hosted model returned an empty structured response")
+        return schema_type.model_validate_json(content)
+
+    def extract(self, source_text: str, filename: str) -> ExtractionResult:
+        result = self._structured(
+            EXTRACTION_INSTRUCTIONS,
+            f"Filename: {filename}\n\nSOURCE TEXT\n{source_text}",
+            ExtractionResult,
+        )
+        return _normalize_extraction(result, source_text)
+
+    def revisit(
+        self,
+        premises: list[RevisitPremiseInput],
+        new_evidence: str,
+        criticality: str,
+    ) -> list[RevisitFinding]:
+        batch = self._structured(REVISIT_INSTRUCTIONS, _revisit_input(premises, new_evidence), RevisitAssessmentBatch)
+        return _validated_findings(batch, premises, new_evidence, criticality)
+
+    def challenge(self, premises: list[RevisitPremiseInput]) -> ChallengeSuggestionBatch:
+        batch = self._structured(CHALLENGE_INSTRUCTIONS, _challenge_input(premises), ChallengeSuggestionBatch)
+        return _validated_challenge(batch, premises)
+
+
 class OllamaProvider(ExtractionProvider):
     name = "ollama"
 

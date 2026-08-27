@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from time import perf_counter
 from typing import Annotated
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import delete, func, or_, select
@@ -39,7 +40,14 @@ from .exports import export_filename, render_decision_markdown
 from .jobs import job_manager
 from .pdf_export import render_decision_pdf
 from .prompts import CHALLENGE_PROMPT_VERSION, EXTRACTION_PROMPT_VERSION, REVISIT_PROMPT_VERSION
-from .providers import ExtractionProvider, available_models, default_model_id, get_provider
+from .providers import (
+    ExtractionProvider,
+    OpenAICompatibleProvider,
+    OpenAIResponsesProvider,
+    available_models,
+    default_model_id,
+    get_provider,
+)
 from .schemas import (
     AccountRead,
     ArtifactCreate,
@@ -62,11 +70,13 @@ from .schemas import (
     HealthRead,
     JobRead,
     ModelCatalogRead,
+    ModelOption,
     PremiseKind,
     RevisitFindingJudgmentRequest,
     RevisitPremiseInput,
     RevisitRead,
     RevisitRequest,
+    SecretModelSelectRequest,
     SecretRead,
     SecretStoreRequest,
     SessionRead,
@@ -80,7 +90,14 @@ from .schemas import (
     UsageSummaryRead,
     WorkspaceRead,
 )
-from .secrets import delete_provider_key, get_provider_key, has_provider_key, store_provider_key
+from .secrets import (
+    delete_provider_key,
+    get_provider_config,
+    get_provider_key,
+    has_provider_key,
+    select_provider_model,
+    store_provider_key,
+)
 from .services import extract_artifact_text, persist_artifact, validate_anchor
 
 settings = get_settings()
@@ -152,6 +169,25 @@ def active_workspace_id(db: Session, token: str | None) -> str:
 
 
 def provider_for(db: Session, workspace_id: str | None, model_id: str | None) -> ExtractionProvider:
+    provider_name = model_id.split("/", 1)[0] if model_id and "/" in model_id else None
+    if workspace_id is not None and provider_name in {"openai", "openrouter", "custom"}:
+        configuration = get_provider_config(db, workspace_id, provider_name)
+        if configuration is None:
+            raise ValueError("Connect this hosted provider before using its model")
+        selected_model = model_id.split("/", 1)[1]
+        if configuration.get("selected_model") != selected_model:
+            raise ValueError("Select this hosted model in Account & keys before using it")
+        if provider_name == "openai":
+            return OpenAIResponsesProvider(settings.model_copy(update={
+                "openai_api_key": str(configuration["key"]),
+                "openai_model": selected_model,
+            }))
+        return OpenAICompatibleProvider(
+            provider_name,
+            selected_model,
+            str(configuration["key"]),
+            str(configuration["base_url"]),
+        )
     byok_key = get_provider_key(db, workspace_id, "openai") if workspace_id is not None else None
     return get_provider(settings, model_id, byok_key=byok_key)
 
@@ -164,9 +200,28 @@ def health() -> HealthRead:
 @app.get("/v1/models", response_model=ModelCatalogRead)
 def list_models(request: Request, db: Db) -> ModelCatalogRead:
     workspace = active_workspace(db, extract_session_token(request))
+    models = available_models(settings)
+    existing_ids = {model.id for model in models}
+    for entry in db.scalars(select(SecretRow).where(SecretRow.workspace_id == workspace.id)).all():
+        configuration = get_provider_config(db, workspace.id, entry.provider)
+        selected_model = configuration.get("selected_model") if configuration else None
+        if not selected_model:
+            continue
+        model_id = f"{entry.provider}/{selected_model}"
+        if model_id in existing_ids:
+            continue
+        models.append(ModelOption(
+            id=model_id,
+            provider=entry.provider,
+            model=selected_model,
+            label=f"{selected_model} · {configuration.get('label', entry.provider)}",
+            location="hosted",
+            best_for="Hosted extraction, revisit, and challenge using your encrypted workspace key",
+        ))
+        existing_ids.add(model_id)
     return ModelCatalogRead(
         default_model_id=default_model_id(settings),
-        models=available_models(settings, include_openai=has_provider_key(db, workspace.id, "openai")),
+        models=models,
     )
 
 
@@ -1323,15 +1378,71 @@ def list_provider_secrets(request: Request, db: Db) -> list[SecretRead]:
     entries = db.scalars(
         select(SecretRow).where(SecretRow.workspace_id == workspace.id).order_by(SecretRow.provider)
      ).all()
-    return [
-        SecretRead(
-            provider=entry.provider,
-            configured=has_provider_key(db, workspace.id, entry.provider),
-            last_updated_at=as_utc(entry.updated_at),
-            source="workspace_store",
-          )
+    return [_secret_read(db, workspace.id, entry) for entry in entries]
+
+
+def _secret_read(db: Session, workspace_id: str, row: SecretRow) -> SecretRead:
+    configuration = get_provider_config(db, workspace_id, row.provider) or {}
+    return SecretRead(
+        provider=row.provider,
+        configured=has_provider_key(db, workspace_id, row.provider),
+        label=str(configuration.get("label") or row.provider),
+        base_url=str(configuration.get("base_url")) if configuration.get("base_url") else None,
+        selected_model=str(configuration.get("selected_model")) if configuration.get("selected_model") else None,
+        protocol=str(configuration.get("protocol")) if configuration.get("protocol") else None,
+        last_updated_at=as_utc(row.updated_at),
+        source="workspace_store",
+    )
+
+
+def _fetch_provider_model_ids(configuration: dict) -> list[str]:
+    try:
+        response = httpx.get(
+            f"{str(configuration['base_url']).rstrip('/')}/models",
+            headers={"Authorization": f"Bearer {configuration['key']}"},
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        raise ValueError(f"Could not load models from this provider: {exc}") from exc
+    entries = payload.get("data", []) if isinstance(payload, dict) else []
+    models = sorted({
+        str(entry.get("id", "")).strip()
         for entry in entries
-        ]
+        if isinstance(entry, dict) and entry.get("id")
+    })
+    if not models:
+        raise ValueError("The provider returned no callable models")
+    return models
+
+
+@app.get("/v1/secrets/{provider}/models")
+def list_provider_models(route: Request, provider: str, db: Db) -> dict[str, list[str]]:
+    workspace = active_workspace(db, extract_session_token(route))
+    configuration = get_provider_config(db, workspace.id, provider)
+    if configuration is None:
+        raise HTTPException(status_code=404, detail="Connect this provider before loading its models")
+    try:
+        return {"models": _fetch_provider_model_ids(configuration)}
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+@app.post("/v1/secrets/{provider}/model", response_model=SecretRead)
+def choose_provider_model(route: Request, provider: str, payload: SecretModelSelectRequest, db: Db) -> SecretRead:
+    workspace = active_workspace(db, extract_session_token(route))
+    configuration = get_provider_config(db, workspace.id, provider)
+    if configuration is None:
+        raise HTTPException(status_code=404, detail="Connect this provider before selecting its model")
+    try:
+        available = _fetch_provider_model_ids(configuration)
+        if payload.model not in available:
+            raise ValueError("The selected model is not in this provider's current model catalog")
+        row = select_provider_model(db, workspace.id, provider, payload.model)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    return _secret_read(db, workspace.id, row)
 
 
 @app.post("/v1/secrets", response_model=SecretRead, status_code=status.HTTP_201_CREATED)
@@ -1342,15 +1453,10 @@ def store_provider_secret(
 ) -> SecretRead:
     workspace = active_workspace(db, extract_session_token(route))
     try:
-        row = store_provider_key(db, workspace.id, payload.provider, payload.key)
+        row = store_provider_key(db, workspace.id, payload.provider, payload.key, base_url=payload.base_url)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
-    return SecretRead(
-        provider=row.provider,
-        configured=True,
-        last_updated_at=as_utc(row.updated_at),
-        source="workspace_store",
-      )
+    return _secret_read(db, workspace.id, row)
 
 
 @app.delete("/v1/secrets/{provider}", response_model=SecretRead)
