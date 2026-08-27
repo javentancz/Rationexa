@@ -64,6 +64,15 @@ class ModelCatalogRead(BaseModel):
     models: list[ModelOption]
 
 
+class WorkspaceRead(BaseModel):
+    id: str
+    name: str
+    account_id: str
+    account_name: str
+    mode: Literal["local_personal"] = "local_personal"
+    created_at: datetime
+
+
 class JobRead(BaseModel):
     id: str
     kind: Literal["extraction", "revisit", "challenge"]

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleDollarSign, Clock3, Cpu, Diamond, FileDown, FileText, Library, ListChecks, Plus, Save, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleDollarSign, Clock3, Cpu, Diamond, FileDown, FileText, Library, ListChecks, Plus, Save, Sparkles, Trash2, UserRound } from "lucide-react";
 
 type Criticality = "routine" | "important" | "critical";
 type ReviewAction = "confirm" | "unknown" | "reject";
@@ -64,6 +64,7 @@ type DecisionListItem = {
 };
 
 type DecisionLibrary = { items: DecisionListItem[]; total: number };
+type PersonalWorkspace = { id: string; name: string; account_id: string; account_name: string; mode: "local_personal"; created_at: string };
 
 type Finding = {
   premise_id: string;
@@ -258,14 +259,18 @@ export default function Home() {
   const [challengeConfirmBusy, setChallengeConfirmBusy] = useState(false);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
+  const [personalWorkspace, setPersonalWorkspace] = useState<PersonalWorkspace | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${api}/v1/models`)
-      .then(responseJson)
-      .then((catalog: ModelCatalog) => {
+    Promise.all([
+      fetch(`${api}/v1/models`).then(responseJson) as Promise<ModelCatalog>,
+      fetch(`${api}/v1/workspace`).then(responseJson) as Promise<PersonalWorkspace>,
+    ])
+      .then(([catalog, workspace]) => {
         if (cancelled) return;
         setModels(catalog.models);
+        setPersonalWorkspace(workspace);
         setRecommendedModelId(catalog.default_model_id);
         setSelectedModelId((current) => current || catalog.default_model_id);
         setComparisonModelId((current) => current || catalog.models.find((model) => model.id !== catalog.default_model_id)?.id || "");
@@ -872,6 +877,10 @@ export default function Home() {
         <section className="decision-conversations pane-label" aria-label="Saved decisions">
           <div className="pane-section-heading"><span>Decision conversations</span>{libraryLoading ? <span className="spinner dark" /> : null}</div>
           <div className="conversation-list">{library.items.length ? library.items.map((item) => <button type="button" key={item.id} className={`conversation-row ${decision?.id === item.id ? "active" : ""}`} onClick={() => openDecision(item.id)}><span className={`conversation-dot ${item.criticality}`} /><span><strong>{item.title}</strong><small>{item.last_revisited_at ? formatDateTime(item.last_revisited_at) : `${item.premise_count} premises · not revisited`}</small></span>{item.pending_revisit_count ? <em>{item.pending_revisit_count}</em> : null}</button>) : <p>No saved decisions in this library.</p>}</div>
+        </section>
+        <section className="workspace-identity" data-tooltip={personalWorkspace?.name || "Personal workspace"} aria-label={personalWorkspace ? `${personalWorkspace.name}, owned by ${personalWorkspace.account_name}` : "Loading personal workspace"}>
+          <span className="workspace-avatar"><UserRound aria-hidden="true" /></span>
+          <span className="workspace-identity-copy pane-label"><strong>{personalWorkspace?.name || "Personal workspace"}</strong><small>{personalWorkspace ? `${personalWorkspace.account_name} · Local profile` : "Loading profile…"}</small></span>
         </section>
       </aside>
 

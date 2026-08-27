@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:3000"
     share_default_ttl_days: int = 30
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    local_account_id: str = "00000000-0000-4000-8000-000000000001"
+    local_account_name: str = "Demo User"
+    local_workspace_id: str = "00000000-0000-4000-8000-000000000002"
+    local_workspace_name: str = "Personal workspace"
 
     @property
     def allowed_origins(self) -> list[str]:

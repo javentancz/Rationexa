@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import (
+    AccountRow,
     ArtifactRow,
     DecisionRow,
     DecisionShareRow,
@@ -19,6 +20,7 @@ from .db import (
     RevisitRow,
     SessionLocal,
     SourceAnchorRow,
+    WorkspaceRow,
     get_db,
     init_db,
     new_share_token,
@@ -61,6 +63,7 @@ from .schemas import (
     UsageModelRead,
     UsageRunRead,
     UsageSummaryRead,
+    WorkspaceRead,
 )
 from .services import extract_artifact_text, persist_artifact, validate_anchor
 
@@ -114,6 +117,48 @@ def list_models() -> ModelCatalogRead:
     )
 
 
+@app.get("/v1/workspace", response_model=WorkspaceRead)
+def get_workspace(db: Db) -> WorkspaceRead:
+    workspace = db.get(WorkspaceRow, settings.local_workspace_id)
+    account = db.get(AccountRow, settings.local_account_id)
+    if workspace is None or account is None:
+        raise HTTPException(status_code=503, detail="Personal workspace is not initialized")
+    return WorkspaceRead(
+        id=workspace.id,
+        name=workspace.name,
+        account_id=account.id,
+        account_name=account.name,
+        created_at=as_utc(workspace.created_at),
+    )
+
+
+def workspace_artifact(db: Session, artifact_id: str) -> ArtifactRow | None:
+    return db.scalar(
+        select(ArtifactRow).where(
+            ArtifactRow.id == artifact_id,
+            ArtifactRow.workspace_id == settings.local_workspace_id,
+        )
+    )
+
+
+def workspace_extraction(db: Session, extraction_id: str) -> ExtractionRow | None:
+    return db.scalar(
+        select(ExtractionRow).where(
+            ExtractionRow.id == extraction_id,
+            ExtractionRow.workspace_id == settings.local_workspace_id,
+        )
+    )
+
+
+def workspace_decision(db: Session, decision_id: str) -> DecisionRow | None:
+    return db.scalar(
+        select(DecisionRow).where(
+            DecisionRow.id == decision_id,
+            DecisionRow.workspace_id == settings.local_workspace_id,
+        )
+    )
+
+
 def _provider_location(provider: str) -> str:
     if provider in {"ollama", "deterministic"}:
         return "local"
@@ -124,9 +169,14 @@ def _provider_location(provider: str) -> str:
 
 @app.get("/v1/usage", response_model=UsageSummaryRead)
 def usage_summary(db: Db) -> UsageSummaryRead:
-    decision_by_extraction = dict(db.execute(select(DecisionRow.extraction_id, DecisionRow.id)).all())
+    workspace_id = settings.local_workspace_id
+    decision_by_extraction = dict(
+        db.execute(
+            select(DecisionRow.extraction_id, DecisionRow.id).where(DecisionRow.workspace_id == workspace_id)
+        ).all()
+    )
     runs: list[UsageRunRead] = []
-    for extraction in db.scalars(select(ExtractionRow)).all():
+    for extraction in db.scalars(select(ExtractionRow).where(ExtractionRow.workspace_id == workspace_id)).all():
         runs.append(
             UsageRunRead(
                 id=extraction.id,
@@ -143,7 +193,9 @@ def usage_summary(db: Db) -> UsageSummaryRead:
                 decision_id=decision_by_extraction.get(extraction.id),
             )
         )
-    for revisit in db.scalars(select(RevisitRow)).all():
+    for revisit in db.scalars(
+        select(RevisitRow).join(DecisionRow).where(DecisionRow.workspace_id == workspace_id)
+    ).all():
         runs.append(
             UsageRunRead(
                 id=revisit.id,
@@ -160,7 +212,12 @@ def usage_summary(db: Db) -> UsageSummaryRead:
                 decision_id=revisit.decision_id,
             )
         )
-    for decision in db.scalars(select(DecisionRow).where(DecisionRow.challenge.is_not(None))).all():
+    for decision in db.scalars(
+        select(DecisionRow).where(
+            DecisionRow.workspace_id == workspace_id,
+            DecisionRow.challenge.is_not(None),
+        )
+    ).all():
         challenge = DecisionChallengeRead.model_validate(decision.challenge)
         runs.append(
             UsageRunRead(
@@ -225,10 +282,16 @@ def save_artifact(db: Session, filename: str, media_type: str, content: bytes, s
         digest, storage_uri = persist_artifact(content, settings.artifact_dir, filename)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
-    existing = db.scalar(select(ArtifactRow).where(ArtifactRow.sha256 == digest))
+    existing = db.scalar(
+        select(ArtifactRow).where(
+            ArtifactRow.workspace_id == settings.local_workspace_id,
+            ArtifactRow.sha256 == digest,
+        )
+    )
     if existing:
         return existing
     row = ArtifactRow(
+        workspace_id=settings.local_workspace_id,
         filename=filename,
         media_type=media_type,
         source_type=source_type,
@@ -242,7 +305,12 @@ def save_artifact(db: Session, filename: str, media_type: str, content: bytes, s
         db.commit()
     except IntegrityError:
         db.rollback()
-        existing = db.scalar(select(ArtifactRow).where(ArtifactRow.sha256 == digest))
+        existing = db.scalar(
+            select(ArtifactRow).where(
+                ArtifactRow.workspace_id == settings.local_workspace_id,
+                ArtifactRow.sha256 == digest,
+            )
+        )
         if existing:
             return existing
         raise
@@ -279,7 +347,7 @@ def perform_extraction(
     db: Session,
     job_id: str | None = None,
 ) -> ExtractionRead | None:
-    artifact = db.get(ArtifactRow, payload.artifact_id)
+    artifact = workspace_artifact(db, payload.artifact_id)
     if artifact is None:
         raise HTTPException(status_code=404, detail="Artifact not found")
     try:
@@ -304,6 +372,7 @@ def perform_extraction(
     if job_id:
         job_manager.update(job_id, phase="Validating and saving premises", progress=85)
     row = ExtractionRow(
+        workspace_id=settings.local_workspace_id,
         artifact_id=artifact.id,
         provider=provider.name,
         model=provider.model,
@@ -322,7 +391,7 @@ def perform_extraction(
 
 @app.get("/v1/extractions/{extraction_id}", response_model=ExtractionRead)
 def get_extraction(extraction_id: str, db: Db) -> ExtractionRead:
-    row = db.get(ExtractionRow, extraction_id)
+    row = workspace_extraction(db, extraction_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Extraction not found")
     return extraction_read(row)
@@ -330,7 +399,7 @@ def get_extraction(extraction_id: str, db: Db) -> ExtractionRead:
 
 @app.post("/v1/extractions/{extraction_id}/review", response_model=ExtractionRead)
 def review_extraction(extraction_id: str, payload: ExtractionReviewRequest, db: Db) -> ExtractionRead:
-    row = db.get(ExtractionRow, extraction_id)
+    row = workspace_extraction(db, extraction_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Extraction not found")
     result = ExtractionResult.model_validate(row.output)
@@ -381,7 +450,7 @@ def review_extraction(extraction_id: str, payload: ExtractionReviewRequest, db: 
     status_code=status.HTTP_201_CREATED,
 )
 def finalize_decision(extraction_id: str, payload: DecisionFinalizeRequest, db: Db) -> DecisionRead:
-    extraction = db.get(ExtractionRow, extraction_id)
+    extraction = workspace_extraction(db, extraction_id)
     if extraction is None:
         raise HTTPException(status_code=404, detail="Extraction not found")
     existing = db.scalar(select(DecisionRow).where(DecisionRow.extraction_id == extraction_id))
@@ -406,6 +475,7 @@ def finalize_decision(extraction_id: str, payload: DecisionFinalizeRequest, db: 
             )
     policy = {"routine": "compact", "important": "key_excerpts", "critical": "strict"}[payload.criticality.value]
     decision = DecisionRow(
+        workspace_id=settings.local_workspace_id,
         extraction_id=extraction.id,
         title=result.title,
         question=result.decision_question,
@@ -450,7 +520,7 @@ def finalize_decision(extraction_id: str, payload: DecisionFinalizeRequest, db: 
 
 @app.get("/v1/decisions/{decision_id}", response_model=DecisionRead)
 def get_decision(decision_id: str, db: Db) -> DecisionRead:
-    decision = db.get(DecisionRow, decision_id)
+    decision = workspace_decision(db, decision_id)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     return decision_read(decision)
@@ -462,7 +532,7 @@ def perform_challenge(
     db: Session,
     job_id: str | None = None,
 ) -> DecisionChallengeRead | None:
-    decision = db.get(DecisionRow, decision_id)
+    decision = workspace_decision(db, decision_id)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     premises = [
@@ -541,7 +611,7 @@ def confirm_decision_challenge(
     payload: DecisionChallengeConfirmRequest,
     db: Db,
 ) -> DecisionChallengeRead:
-    decision = db.get(DecisionRow, decision_id)
+    decision = workspace_decision(db, decision_id)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     if decision.challenge is None:
@@ -561,7 +631,7 @@ def confirm_decision_challenge(
 
 @app.delete("/v1/decisions/{decision_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_decision(decision_id: str, db: Db) -> Response:
-    if db.get(DecisionRow, decision_id) is None:
+    if workspace_decision(db, decision_id) is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     premise_ids = [
         premise.id for premise in db.scalars(select(PremiseRow).where(PremiseRow.decision_id == decision_id)).all()
@@ -584,7 +654,7 @@ def list_decisions(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> DecisionListRead:
-    filters = []
+    filters = [DecisionRow.workspace_id == settings.local_workspace_id]
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         filters.append(
@@ -647,7 +717,7 @@ def list_decisions(
 
 @app.get("/v1/decisions/{decision_id}/revisit-checks", response_model=list[RevisitRead])
 def list_revisit_checks(decision_id: str, db: Db) -> list[RevisitRead]:
-    if db.get(DecisionRow, decision_id) is None:
+    if workspace_decision(db, decision_id) is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     rows = db.scalars(
         select(RevisitRow).where(RevisitRow.decision_id == decision_id).order_by(RevisitRow.created_at.desc())
@@ -657,7 +727,7 @@ def list_revisit_checks(decision_id: str, db: Db) -> list[RevisitRead]:
 
 @app.get("/v1/decisions/{decision_id}/export/markdown")
 def export_decision_markdown(decision_id: str, db: Db) -> Response:
-    decision = db.get(DecisionRow, decision_id)
+    decision = workspace_decision(db, decision_id)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     revisits = db.scalars(
@@ -675,7 +745,7 @@ def export_decision_markdown(decision_id: str, db: Db) -> Response:
 
 @app.get("/v1/decisions/{decision_id}/export/pdf")
 def export_decision_pdf(decision_id: str, db: Db) -> Response:
-    decision = db.get(DecisionRow, decision_id)
+    decision = workspace_decision(db, decision_id)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     revisits = db.scalars(
@@ -829,7 +899,7 @@ def load_shared_decision(db: Session, token: str) -> ShareDecisionRead:
     status_code=status.HTTP_201_CREATED,
 )
 def create_share(decision_id: str, payload: ShareCreate, db: Db) -> ShareRead:
-    if db.get(DecisionRow, decision_id) is None:
+    if workspace_decision(db, decision_id) is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     existing = db.scalar(
         select(DecisionShareRow).where(
@@ -854,7 +924,7 @@ def create_share(decision_id: str, payload: ShareCreate, db: Db) -> ShareRead:
 
 @app.get("/v1/decisions/{decision_id}/shares", response_model=list[ShareRead])
 def list_shares(decision_id: str, db: Db) -> list[ShareRead]:
-    if db.get(DecisionRow, decision_id) is None:
+    if workspace_decision(db, decision_id) is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     shares = db.scalars(
         select(DecisionShareRow)
@@ -911,7 +981,7 @@ def perform_revisit(
     db: Session,
     job_id: str | None = None,
 ) -> RevisitRead | None:
-    decision = db.get(DecisionRow, decision_id)
+    decision = workspace_decision(db, decision_id)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     evidence = save_artifact(db, payload.filename, payload.media_type, payload.content.encode(), "new_evidence")
@@ -992,7 +1062,7 @@ def record_revisit_judgment(
 
 @app.post("/v1/decisions/extractions/jobs", response_model=JobRead, status_code=status.HTTP_202_ACCEPTED)
 def create_extraction_job(payload: ExtractionRequest, db: Db) -> JobRead:
-    if db.get(ArtifactRow, payload.artifact_id) is None:
+    if workspace_artifact(db, payload.artifact_id) is None:
         raise HTTPException(status_code=404, detail="Artifact not found")
     try:
         get_provider(settings, payload.model_id)
@@ -1013,7 +1083,7 @@ def create_extraction_job(payload: ExtractionRequest, db: Db) -> JobRead:
     status_code=status.HTTP_202_ACCEPTED,
 )
 def create_revisit_job(decision_id: str, payload: RevisitRequest, db: Db) -> JobRead:
-    if db.get(DecisionRow, decision_id) is None:
+    if workspace_decision(db, decision_id) is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     try:
         get_provider(settings, payload.model_id)
@@ -1034,7 +1104,7 @@ def create_revisit_job(decision_id: str, payload: RevisitRequest, db: Db) -> Job
     status_code=status.HTTP_202_ACCEPTED,
 )
 def create_challenge_job(decision_id: str, payload: DecisionChallengeRequest, db: Db) -> JobRead:
-    if db.get(DecisionRow, decision_id) is None:
+    if workspace_decision(db, decision_id) is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     try:
         get_provider(settings, payload.model_id)

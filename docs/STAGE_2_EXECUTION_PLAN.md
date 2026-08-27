@@ -62,10 +62,14 @@ Status: implemented for finalized decisions.
 
 ## Milestone 4 - hosted repeat-use foundation
 
-Status: in progress. Workspace usage and cost visibility is implemented; user
-identity and managed secret storage remain.
+Status: in progress. A persisted local personal account and workspace now own
+new and migrated decision data, and workspace usage/cost visibility is
+implemented. Authentication and managed secret storage remain.
 
-- Add personal accounts and one personal workspace.
+- Add personal accounts and one personal workspace. The local-first foundation
+  is implemented with persisted account/workspace records, workspace-attributed
+  artifacts, extractions, and decisions, plus workspace-scoped library and
+  usage queries. Network authentication is intentionally not claimed yet.
 - Store BYOK configuration through a secrets provider, never in application
   logs or decision records.
 - Add basic usage and cost visibility. Implemented across extraction, revisit,

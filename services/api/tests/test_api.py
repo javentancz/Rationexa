@@ -4,6 +4,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, inspect, select
 
 from rationexa_api.db import (
+    AccountRow,
+    ArtifactRow,
     DecisionRow,
     DecisionShareRow,
     ExtractionRow,
@@ -11,6 +13,7 @@ from rationexa_api.db import (
     RevisitRow,
     SessionLocal,
     SourceAnchorRow,
+    WorkspaceRow,
     engine,
 )
 from rationexa_api.main import app
@@ -66,6 +69,12 @@ def test_stage_one_vertical_slice() -> None:
         models = client.get("/v1/models")
         assert models.status_code == 200
         assert models.json()["default_model_id"] == "deterministic/rules-v1"
+
+        workspace = client.get("/v1/workspace")
+        assert workspace.status_code == 200
+        assert workspace.json()["mode"] == "local_personal"
+        assert workspace.json()["name"] == "Personal workspace"
+        assert workspace.json()["account_name"] == "Demo User"
 
         artifact = client.post(
             "/v1/artifacts",
@@ -211,6 +220,16 @@ def test_revisit_provenance_columns_exist() -> None:
     assert "challenge" in decision_columns
     extraction_columns = {column["name"] for column in inspect(engine).get_columns("extractions")}
     assert {"latency_ms", "input_tokens", "output_tokens", "estimated_cost_usd"} <= extraction_columns
+    assert "workspace_id" in extraction_columns
+    assert "workspace_id" in {column["name"] for column in inspect(engine).get_columns("artifacts")}
+    assert "workspace_id" in {column["name"] for column in inspect(engine).get_columns("decisions")}
+
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(AccountRow)) == 1
+        assert db.scalar(select(func.count()).select_from(WorkspaceRow)) == 1
+        assert all(row.workspace_id for row in db.scalars(select(ArtifactRow)).all())
+        assert all(row.workspace_id for row in db.scalars(select(ExtractionRow)).all())
+        assert all(row.workspace_id for row in db.scalars(select(DecisionRow)).all())
 
 
 def test_stage_two_usage_summary_distinguishes_known_and_unpriced_runs() -> None:
@@ -245,6 +264,55 @@ def test_stage_two_usage_summary_distinguishes_known_and_unpriced_runs() -> None
             for run in usage["recent_runs"]
         )
         assert any(model["provider"] == "deterministic" for model in usage["models"])
+
+
+def test_personal_workspace_excludes_other_workspace_records() -> None:
+    other_account_id = "10000000-0000-4000-8000-000000000001"
+    other_workspace_id = "10000000-0000-4000-8000-000000000002"
+    other_artifact_id = "10000000-0000-4000-8000-000000000003"
+    other_extraction_id = "10000000-0000-4000-8000-000000000004"
+    other_decision_id = "10000000-0000-4000-8000-000000000005"
+    with TestClient(app) as client:
+        library_before = client.get("/v1/decisions").json()["total"]
+        usage_before = client.get("/v1/usage").json()["total_runs"]
+        with SessionLocal() as db:
+            db.add(AccountRow(id=other_account_id, name="Other user"))
+            db.add(WorkspaceRow(id=other_workspace_id, owner_account_id=other_account_id, name="Other workspace"))
+            db.add(
+                ArtifactRow(
+                    id=other_artifact_id,
+                    workspace_id=other_workspace_id,
+                    filename="private.txt",
+                    media_type="text/plain",
+                    sha256="f" * 64,
+                    storage_uri="memory://private",
+                    extracted_text="Private decision source.",
+                )
+            )
+            db.add(
+                ExtractionRow(
+                    id=other_extraction_id,
+                    workspace_id=other_workspace_id,
+                    artifact_id=other_artifact_id,
+                    provider="deterministic",
+                    model="rules-v1",
+                    output={},
+                )
+            )
+            db.add(
+                DecisionRow(
+                    id=other_decision_id,
+                    workspace_id=other_workspace_id,
+                    extraction_id=other_extraction_id,
+                    title="Other workspace decision",
+                    question="Should this remain private?",
+                )
+            )
+            db.commit()
+
+        assert client.get("/v1/decisions").json()["total"] == library_before
+        assert client.get("/v1/usage").json()["total_runs"] == usage_before
+        assert client.get(f"/v1/decisions/{other_decision_id}").status_code == 404
 
 
 def test_rejects_model_outside_server_allowlist() -> None:

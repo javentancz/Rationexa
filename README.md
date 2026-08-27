@@ -4,7 +4,7 @@ Rationexa is a human-in-the-loop technical decision memory and review project. I
 
 ## Current status
 
-The Stage 1 prototype is complete with production accuracy validation explicitly deferred. Stage 2 is underway. The current build adds persistent decision memory, revisit history, source-grounded challenge briefs, exports, and revocable expiring share links. A workspace usage view reports extraction, revisit, and challenge runs by model with latency, token, runtime-location, and known-cost provenance; unavailable pricing stays visibly unpriced instead of being treated as free. AI findings and challenges remain drafts until a human reviews them, and shared payloads scrub provider keys and private source artifacts.
+The Stage 1 prototype is complete with production accuracy validation explicitly deferred. Stage 2 is underway. The current build adds a persisted local personal workspace, decision memory, revisit history, source-grounded challenge briefs, exports, and revocable expiring share links. Artifacts, extractions, decisions, library results, and usage reporting are attributed to the workspace. The usage view reports model runs with latency, token, runtime-location, and known-cost provenance; unavailable pricing stays visibly unpriced instead of being treated as free. AI findings and challenges remain drafts until a human reviews them, and shared payloads scrub provider keys and private source artifacts.
 
 See [Stage 1 readiness](docs/STAGE_1_READINESS.md) for the deferred validation boundaries and [the Stage 2 execution plan](docs/STAGE_2_EXECUTION_PLAN.md) for the active product milestones.
 

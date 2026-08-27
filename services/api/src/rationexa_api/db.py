@@ -33,10 +33,28 @@ class Base(DeclarativeBase):
     pass
 
 
+class AccountRow(Base):
+    __tablename__ = "accounts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class WorkspaceRow(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    owner_account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class ArtifactRow(Base):
     __tablename__ = "artifacts"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
     filename: Mapped[str] = mapped_column(String(255))
     media_type: Mapped[str] = mapped_column(String(120))
     source_type: Mapped[str] = mapped_column(String(80), default="user_supplied")
@@ -51,6 +69,7 @@ class ExtractionRow(Base):
     __tablename__ = "extractions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
     artifact_id: Mapped[str] = mapped_column(ForeignKey("artifacts.id"))
     status: Mapped[str] = mapped_column(String(40), default="candidate")
     provider: Mapped[str] = mapped_column(String(80))
@@ -68,6 +87,7 @@ class DecisionRow(Base):
     __tablename__ = "decisions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
     extraction_id: Mapped[str] = mapped_column(ForeignKey("extractions.id"), unique=True)
     title: Mapped[str] = mapped_column(String(255))
     question: Mapped[str] = mapped_column(Text)
@@ -149,9 +169,42 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    _ensure_local_workspace()
+    _add_missing_workspace_columns()
     _add_missing_extraction_provenance_columns()
     _add_missing_revisit_provenance_columns()
     _add_missing_decision_challenge_column()
+
+
+def _ensure_local_workspace() -> None:
+    with SessionLocal() as db:
+        account = db.get(AccountRow, settings.local_account_id)
+        if account is None:
+            db.add(AccountRow(id=settings.local_account_id, name=settings.local_account_name))
+        elif account.name != settings.local_account_name:
+            account.name = settings.local_account_name
+        if db.get(WorkspaceRow, settings.local_workspace_id) is None:
+            db.add(
+                WorkspaceRow(
+                    id=settings.local_workspace_id,
+                    owner_account_id=settings.local_account_id,
+                    name=settings.local_workspace_name,
+                )
+            )
+        db.commit()
+
+
+def _add_missing_workspace_columns() -> None:
+    """Assign existing local records to the personal workspace during the Stage 2 migration."""
+    for table_name in ("artifacts", "extractions", "decisions"):
+        existing = {column["name"] for column in inspect(engine).get_columns(table_name)}
+        with engine.begin() as connection:
+            if "workspace_id" not in existing:
+                connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN workspace_id VARCHAR(36)"))
+            connection.execute(
+                text(f"UPDATE {table_name} SET workspace_id = :workspace_id WHERE workspace_id IS NULL"),
+                {"workspace_id": settings.local_workspace_id},
+            )
 
 
 def _add_missing_extraction_provenance_columns() -> None:
