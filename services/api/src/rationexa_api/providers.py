@@ -921,8 +921,9 @@ def _ground_excerpt(candidate: str, source_text: str) -> str | None:
     return match.group(0) if match else None
 
 
-def available_models(settings: Settings) -> list[ModelOption]:
+def available_models(settings: Settings, *, include_openai: bool = False) -> list[ModelOption]:
     provider = settings.ai_provider.lower()
+    models: list[ModelOption] = []
     if provider == "ollama":
         descriptions = {
             "qwen3.5:9b": ("Qwen 3.5 9B", "Careful premise extraction; lower false-positive rate in the current eval"),
@@ -932,7 +933,7 @@ def available_models(settings: Settings) -> list[ModelOption]:
                 "Best current local development result; independent review pending",
             ),
         }
-        return [
+        models.extend([
             ModelOption(
                 id=f"ollama/{model}",
                 provider="ollama",
@@ -942,9 +943,9 @@ def available_models(settings: Settings) -> list[ModelOption]:
                 best_for=descriptions.get(model, (model, "Locally configured Ollama model"))[1],
             )
             for model in settings.configured_ollama_models
-        ]
-    if provider == "openai":
-        return [
+        ])
+    elif provider == "openai":
+        models.append(
             ModelOption(
                 id=f"openai/{settings.openai_model}",
                 provider="openai",
@@ -953,17 +954,29 @@ def available_models(settings: Settings) -> list[ModelOption]:
                 location="hosted",
                 best_for="Hosted structured extraction and evidence review",
             )
-        ]
-    return [
-        ModelOption(
+        )
+    else:
+        models.append(ModelOption(
             id="deterministic/rules-v1",
             provider="deterministic",
             model="rules-v1",
             label="Deterministic rules",
             location="local",
             best_for="Fast tests without a language model",
+        ))
+
+    if provider != "openai" and (include_openai or settings.openai_api_key):
+        models.append(
+            ModelOption(
+                id=f"openai/{settings.openai_model}",
+                provider="openai",
+                model=settings.openai_model,
+                label=settings.openai_model,
+                location="hosted",
+                best_for="Hosted structured extraction and evidence review with your workspace key",
+            )
         )
-    ]
+    return models
 
 
 def default_model_id(settings: Settings) -> str:
@@ -971,7 +984,7 @@ def default_model_id(settings: Settings) -> str:
 
 
 def get_provider(settings: Settings, model_id: str | None = None, byok_key: str | None = None) -> ExtractionProvider:
-    options = available_models(settings)
+    options = available_models(settings, include_openai=bool(byok_key))
     selected = next((option for option in options if option.id == (model_id or default_model_id(settings))), None)
     if selected is None:
         raise ValueError("The selected model is not in the server's configured model allowlist")

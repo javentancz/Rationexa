@@ -196,12 +196,12 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    _add_missing_account_credential_columns()
     _ensure_local_workspace()
     _add_missing_workspace_columns()
     _add_missing_extraction_provenance_columns()
     _add_missing_revisit_provenance_columns()
     _add_missing_decision_challenge_column()
-    _add_missing_account_credential_columns()
 
 
 def _ensure_local_workspace() -> None:

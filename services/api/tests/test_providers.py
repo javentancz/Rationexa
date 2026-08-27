@@ -101,6 +101,24 @@ def test_model_catalog_and_selector_use_allowlisted_ollama_model() -> None:
     provider.client.close()
 
 
+def test_local_catalog_can_add_hosted_byok_model_without_replacing_local_models() -> None:
+    settings = Settings(
+        ai_provider="ollama",
+        ollama_model="qwen3.5:9b",
+        ollama_models="qwen3.5:9b,gemma4:e4b,ornith-1.5:9b",
+        openai_model="gpt-test",
+    )
+
+    options = available_models(settings, include_openai=True)
+
+    assert [option.id for option in options] == [
+        "ollama/qwen3.5:9b",
+        "ollama/gemma4:e4b",
+        "ollama/ornith-1.5:9b",
+        "openai/gpt-test",
+    ]
+
+
 def test_ollama_provider_wraps_timeout() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("timed out", request=request)

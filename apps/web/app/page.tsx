@@ -14,6 +14,7 @@ type Criticality = "routine" | "important" | "critical";
 type ReviewAction = "confirm" | "unknown" | "reject";
 type FindingJudgment = "worth_reviewing" | "not_material" | "needs_context" | "false_positive";
 type WorkflowStep = 1 | 2 | 3 | 4;
+type WorkspaceView = "workspace" | "library" | "usage" | "settings";
 
 type Premise = {
   candidate_id: string;
@@ -119,6 +120,49 @@ type AuditEvent = { id: string; kind: "decision" | "challenge" | "evidence" | "j
 type UsageRun = { id: string; kind: "extraction" | "revisit" | "challenge"; provider: string; model: string; prompt_version: string; location: "local" | "hosted" | "unknown"; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number; created_at: string; decision_id?: string };
 type UsageModel = { provider: string; model: string; location: "local" | "hosted" | "unknown"; run_count: number; total_tokens: number; known_cost_usd: number; unpriced_run_count: number; average_latency_ms?: number };
 type UsageSummary = { total_runs: number; extraction_runs: number; revisit_runs: number; challenge_runs: number; local_runs: number; hosted_runs: number; unknown_location_runs: number; total_tokens: number; tokenized_run_count: number; known_cost_usd: number; unpriced_run_count: number; models: UsageModel[]; recent_runs: UsageRun[] };
+type PersistedWorkspaceSession = {
+  source?: string;
+  evidence?: string;
+  sourceMode?: "paste" | "file";
+  view?: WorkspaceView;
+  workflowView?: WorkflowStep;
+  selectedModelId?: string;
+  comparisonModelId?: string;
+  compareMode?: boolean;
+  decisionId?: string;
+  extraction?: Extraction;
+  draft?: DecisionDraft;
+  reviews?: Record<string, PremiseReview>;
+  criticality?: Criticality;
+  selectedPremise?: string;
+};
+type EvidenceDraft = { content: string; selectedModelId: string; comparisonModelId: string; compareMode: boolean; updatedAt: string };
+
+const workspaceSessionKey = "rationexa-workspace-draft-v1";
+const evidenceDraftsKey = "rationexa-evidence-drafts-v1";
+
+function readEvidenceDraft(decisionId: string): EvidenceDraft | null {
+  try {
+    const saved = window.localStorage.getItem(evidenceDraftsKey);
+    if (!saved) return null;
+    return (JSON.parse(saved) as Record<string, EvidenceDraft>)[decisionId] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeEvidenceDraft(decisionId: string, draft: EvidenceDraft | null) {
+  try {
+    const saved = window.localStorage.getItem(evidenceDraftsKey);
+    const drafts = saved ? JSON.parse(saved) as Record<string, EvidenceDraft> : {};
+    if (draft?.content.trim()) drafts[decisionId] = draft;
+    else delete drafts[decisionId];
+    if (Object.keys(drafts).length) window.localStorage.setItem(evidenceDraftsKey, JSON.stringify(drafts));
+    else window.localStorage.removeItem(evidenceDraftsKey);
+  } catch {
+    // Draft persistence must never block the decision workflow.
+  }
+}
 
 const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
 const premiseKinds = ["requirement", "hard_constraint", "soft_constraint", "fact", "assumption", "unknown", "material_claim", "revisit_condition"];
@@ -160,7 +204,7 @@ function LibraryNavIcon({ value }: { value: "all" | Criticality }) {
 }
 
 export default function Home() {
-  const [view, setView] = useState<"workspace" | "library" | "usage" | "settings">("workspace");
+  const [view, setView] = useState<WorkspaceView>("workspace");
   const [source, setSource] = useState("");
   const [sourceMode, setSourceMode] = useState<"paste" | "file">("paste");
   const [file, setFile] = useState<File | null>(null);
@@ -214,6 +258,8 @@ export default function Home() {
   const [usageLoading, setUsageLoading] = useState(false);
   const [personalWorkspace, setPersonalWorkspace] = useState<PersonalWorkspace | null>(null);
   const [confirmingNewDecision, setConfirmingNewDecision] = useState(false);
+  const [sessionRestored, setSessionRestored] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const restoredSession = useRef(false);
 
   const bootstrapQuery = useQuery({
@@ -232,41 +278,66 @@ export default function Home() {
     setModels(catalog.models);
     setPersonalWorkspace(workspace);
     setRecommendedModelId(catalog.default_model_id);
-    setSelectedModelId((current) => current || catalog.default_model_id);
-    setComparisonModelId((current) => current || catalog.models.find((model) => model.id !== catalog.default_model_id)?.id || "");
+    setSelectedModelId((current) => catalog.models.some((model) => model.id === current) ? current : catalog.default_model_id);
+    setComparisonModelId((current) => catalog.models.some((model) => model.id === current)
+      ? current
+      : catalog.models.find((model) => model.id !== catalog.default_model_id)?.id || "");
   }, [bootstrapQuery.data, bootstrapQuery.error]);
 
   useEffect(() => {
     if (restoredSession.current) return;
     restoredSession.current = true;
-    try {
-      const saved = window.localStorage.getItem("rationexa-workspace-draft-v1");
-      if (!saved) return;
-      const state = JSON.parse(saved) as { source?: string; evidence?: string; sourceMode?: "paste" | "file"; workflowView?: WorkflowStep; selectedModelId?: string; decisionId?: string; extraction?: Extraction; draft?: DecisionDraft; reviews?: Record<string, PremiseReview>; criticality?: Criticality; selectedPremise?: string };
-      setSource(state.source ?? "");
-      setEvidence(state.evidence ?? "");
-      setSourceMode(state.sourceMode ?? "paste");
-      if (state.selectedModelId) setSelectedModelId(state.selectedModelId);
-      if (state.decisionId) void openDecision(state.decisionId, state.workflowView ?? 4);
-      else if (state.extraction && state.draft) {
-        setExtraction(state.extraction);
-        setDraft(state.draft);
-        setReviews(state.reviews ?? {});
-        setCriticality(state.criticality ?? state.extraction.result.suggested_criticality);
-        setSelectedPremise(state.selectedPremise ?? state.extraction.result.premises[0]?.candidate_id ?? null);
-        setWorkflowView(state.workflowView === 3 ? 3 : 2);
-        toast.info("Unfinished review restored");
+    const restore = async () => {
+      try {
+        const saved = window.localStorage.getItem(workspaceSessionKey);
+        if (!saved) return;
+        const state = JSON.parse(saved) as PersistedWorkspaceSession;
+        setSource(state.source ?? "");
+        setSourceMode(state.sourceMode === "file" ? "paste" : state.sourceMode ?? "paste");
+        if (state.selectedModelId) setSelectedModelId(state.selectedModelId);
+        if (state.comparisonModelId) setComparisonModelId(state.comparisonModelId);
+        setCompareMode(Boolean(state.compareMode));
+        if (state.decisionId) {
+          const restored = await openDecision(state.decisionId, state.workflowView ?? 4, { restoredView: state.view ?? "workspace", legacyEvidence: state.evidence });
+          if (restored) toast.info("Decision workspace restored");
+        } else if (state.extraction && state.draft) {
+          setExtraction(state.extraction);
+          setDraft(state.draft);
+          setReviews(state.reviews ?? {});
+          setCriticality(state.criticality ?? state.extraction.result.suggested_criticality);
+          setSelectedPremise(state.selectedPremise ?? state.extraction.result.premises[0]?.candidate_id ?? null);
+          setWorkflowView(state.workflowView === 3 ? 3 : 2);
+          setView("workspace");
+          toast.info("Unfinished review restored");
+        } else {
+          setEvidence(state.evidence ?? "");
+          setWorkflowView(1);
+          setView(state.view ?? "workspace");
+          if (state.source?.trim()) toast.info("Unfinished import restored");
+        }
+      } catch {
+        window.localStorage.removeItem(workspaceSessionKey);
+      } finally {
+        setSessionRestored(true);
       }
-    } catch {
-      window.localStorage.removeItem("rationexa-workspace-draft-v1");
-    }
+    };
+    void restore();
   }, []);
 
   useEffect(() => {
-    if (!restoredSession.current) return;
-    const state = { source, evidence, sourceMode, workflowView, selectedModelId, decisionId: decision?.id, extraction: decision ? undefined : extraction, draft: decision ? undefined : draft, reviews: decision ? undefined : reviews, criticality, selectedPremise };
-    window.localStorage.setItem("rationexa-workspace-draft-v1", JSON.stringify(state));
-  }, [criticality, decision, draft, evidence, extraction, reviews, selectedModelId, selectedPremise, source, sourceMode, workflowView]);
+    if (!sessionRestored) return;
+    const savedAt = new Date().toISOString();
+    const state: PersistedWorkspaceSession = { source, evidence: decision ? undefined : evidence, sourceMode, view, workflowView, selectedModelId, comparisonModelId, compareMode, decisionId: decision?.id, extraction: decision ? undefined : extraction ?? undefined, draft: decision ? undefined : draft ?? undefined, reviews: decision ? undefined : reviews, criticality, selectedPremise: selectedPremise ?? undefined };
+    window.localStorage.setItem(workspaceSessionKey, JSON.stringify(state));
+    setDraftSavedAt(savedAt);
+  }, [compareMode, comparisonModelId, criticality, decision, draft, evidence, extraction, reviews, selectedModelId, selectedPremise, sessionRestored, source, sourceMode, view, workflowView]);
+
+  useEffect(() => {
+    if (!sessionRestored || !decision) return;
+    const savedAt = new Date().toISOString();
+    writeEvidenceDraft(decision.id, evidence.trim() ? { content: evidence, selectedModelId, comparisonModelId, compareMode, updatedAt: savedAt } : null);
+    if (evidence.trim()) setDraftSavedAt(savedAt);
+  }, [compareMode, comparisonModelId, decision, evidence, selectedModelId, sessionRestored]);
 
   useEffect(() => {
     const hasUnsavedWork = !decision && Boolean(source.trim() || evidence.trim() || extraction || draft);
@@ -623,7 +694,7 @@ export default function Home() {
     setRevisitHistory(history);
   }
 
-  async function openDecision(decisionId: string, targetStep: WorkflowStep = 4) {
+  async function openDecision(decisionId: string, targetStep: WorkflowStep = 4, restore?: { restoredView?: WorkspaceView; legacyEvidence?: string }) {
     setError(null);
     try {
       const [record, history] = await Promise.all([
@@ -640,17 +711,23 @@ export default function Home() {
        setComparisonRuns([]);
        setRevisitCompleted(false);
        setActiveRevisitId(null);
-       setEvidence("");
+       const evidenceDraft = readEvidenceDraft(decisionId);
+       setEvidence(evidenceDraft?.content ?? restore?.legacyEvidence ?? "");
+       if (evidenceDraft?.selectedModelId) setSelectedModelId(evidenceDraft.selectedModelId);
+       if (evidenceDraft?.comparisonModelId) setComparisonModelId(evidenceDraft.comparisonModelId);
+       if (evidenceDraft) setCompareMode(evidenceDraft.compareMode);
        setLibraryQuery("");
        setConfirmingDeleteFor(null);
        setExpandedHistoryId(null);
       setWorkflowView(targetStep);
        setWorkflowPaneCollapsed(false);
-       setView("workspace");
+       setView(restore?.restoredView ?? "workspace");
        void loadShares(decisionId).catch(() => { setShares([]); });
        window.location.hash = "workspace";
+       return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not open the decision");
+      return false;
     }
   }
 
@@ -717,6 +794,10 @@ export default function Home() {
     setChallengeNotes("");
     setWorkflowPaneCollapsed(false);
     setWorkflowView(1);
+    setSource("");
+    setSourceMode("paste");
+    setFile(null);
+    setEvidence("");
      }
 
   function requestNewDecision() {
@@ -816,6 +897,7 @@ export default function Home() {
         setExpandedHistoryId(null);
         setShares([]);
         }
+      writeEvidenceDraft(targetId, null);
       setConfirmingDeleteFor(null);
       setDeleteTitle(null);
       setView("library");
@@ -966,7 +1048,7 @@ export default function Home() {
           </> : null}
         </section> : null}
 
-        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Account &amp; provider keys</strong><p>Sign in to work in your own workspace and store a provider key. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel /></section> : null}
+        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use local models without an account, or add a hosted-provider key to this personal workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel onConfigurationChanged={() => { void bootstrapQuery.refetch(); }} /></section> : null}
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
 
@@ -979,7 +1061,7 @@ export default function Home() {
             </div>
             <form onSubmit={extract}>
               {sourceMode === "paste" ? <label className="field"><span>Decision source</span><textarea aria-label="Decision source" value={source} onChange={(event) => setSource(event.target.value)} rows={10} placeholder="Paste the source material here…" /></label> : <label className="upload-zone"><input aria-label="Decision file" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /><span className="upload-icon">⇧</span><strong>{file ? file.name : "Choose a PDF, Markdown, or text file"}</strong><small>Maximum file size: 10 MB</small></label>}
-              <div className="form-footer model-action-footer"><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Extraction model" /><span>{selectedModel?.label ?? "The selected model"} will suggest structure. You remain the reviewer.</span><button className="primary" disabled={busyPhase === "extract" || !selectedModelId || (sourceMode === "paste" ? !source.trim() : !file)}>{busyPhase === "extract" ? <><span className="spinner" />Extracting with {selectedModel?.label ?? "model"}…</> : "Extract decision →"}</button></div>
+              <div className="form-footer model-action-footer"><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Extraction model" /><span className="draft-assurance"><span>{selectedModel?.label ?? "The selected model"} will suggest structure. You remain the reviewer.</span>{source.trim() && draftSavedAt ? <small><Save aria-hidden="true" />Draft saved locally · {formatDateTime(draftSavedAt)}</small> : null}</span><button className="primary" disabled={busyPhase === "extract" || !selectedModelId || (sourceMode === "paste" ? !source.trim() : !file)}>{busyPhase === "extract" ? <><span className="spinner" />Extracting with {selectedModel?.label ?? "model"}…</> : "Extract decision →"}</button></div>
             </form>
           </section>
         ) : null}
@@ -1089,7 +1171,7 @@ export default function Home() {
             <div className="composer-heading"><div><span className="overline">New message</span><h3>Add evidence to the decision</h3></div><div className="mode-toggle" aria-label="Revisit mode"><button type="button" className={!compareMode ? "active" : ""} aria-pressed={!compareMode} onClick={() => { setCompareMode(false); setComparisonRuns([]); }}>Single model</button><button type="button" className={compareMode ? "active" : ""} aria-pressed={compareMode} disabled={models.length < 2} onClick={() => { setCompareMode(true); setFindings([]); }}>Compare models</button></div></div>
             {compareMode ? <div className="compare-models"><div><span className="compare-label">Model A</span><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} excludeId={comparisonModelId} disabled={busyPhase !== null} label="First model" /></div><div className="versus">VS</div><div><span className="compare-label">Model B</span><ModelPicker compact models={models} selectedId={comparisonModelId} recommendedId={recommendedModelId} onSelect={setComparisonModelId} excludeId={selectedModelId} disabled={busyPhase !== null} label="Second model" /></div></div> : null}
             <label className="composer-input"><span className="composer-plus"><Plus aria-hidden="true" /></span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); setFindings([]); setComparisonRuns([]); setActiveRevisitId(null); }} rows={4} placeholder="Paste a new fact, policy update, incident, or source excerpt…" /></label>
-            <div className="composer-footer"><span>{compareMode ? "Both models receive identical premises and evidence." : "AI maps evidence to premises; you decide whether action is warranted."}</span><div>{compareMode ? <span className="composer-model">{selectedModel?.label ?? "Model A"} + {comparisonModel?.label ?? "Model B"}</span> : <ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Evidence model" />}<button className="primary composer-send" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || (compareMode && !comparisonModelId) || !evidence.trim()} aria-label={compareMode ? "Compare model reasoning" : "Check evidence against premises"}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing…" : "Checking…"}</> : <ArrowUp aria-hidden="true" />}</button></div></div>
+            <div className="composer-footer"><span className="draft-assurance"><span>{compareMode ? "Both models receive identical premises and evidence." : "AI maps evidence to premises; you decide whether action is warranted."}</span>{evidence.trim() && draftSavedAt ? <small><Save aria-hidden="true" />Evidence draft saved locally · {formatDateTime(draftSavedAt)}</small> : null}</span><div>{compareMode ? <span className="composer-model">{selectedModel?.label ?? "Model A"} + {comparisonModel?.label ?? "Model B"}</span> : <ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Evidence model" />}<button className="primary composer-send" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || (compareMode && !comparisonModelId) || !evidence.trim()} aria-label={compareMode ? "Compare model reasoning" : "Check evidence against premises"}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing…" : "Checking…"}</> : <ArrowUp aria-hidden="true" />}</button></div></div>
           </section>
           {comparisonRuns.length === 2 ? <div className="comparison-results"><section className={`disagreement-summary ${disagreements.length ? "has-disagreements" : ""}`}><div><span className="overline">Agreement check</span><h3>{disagreements.length ? `${disagreements.length} disagreement${disagreements.length === 1 ? "" : "s"} need review` : "Models agree on all material relationships"}</h3></div>{disagreements.length ? <div className="disagreement-list">{disagreements.map(({ premise, firstRelationship, secondRelationship }) => <div key={premise.id}><strong>{premise.statement}</strong><span>{comparisonRuns[0].label}: {firstRelationship} · {comparisonRuns[1].label}: {secondRelationship}</span></div>)}</div> : null}</section><div className="comparison-grid">{comparisonRuns.map((run) => <section className="comparison-column" key={run.modelId}><header><div><span className="overline">Model result</span><h3>{run.label}</h3></div><strong>{run.result.findings.length} finding{run.result.findings.length === 1 ? "" : "s"}</strong></header><div className="run-provenance">{provenanceLabel(run.result)}</div>{run.result.findings.length ? run.result.findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.finding_type === "new_constraint" ? "new constraint" : finding.relationship}</span><small>{finding.confidence_band} confidence</small></div>{finding.finding_type === "new_constraint" ? <div className="safety-net-badge">New constraint · human review required</div> : null}<h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{findingReviewControls(run.result.id, finding)}</article>) : <div className="empty-findings"><strong>No material relationship found</strong><span>This model found no effect on the preserved premises.</span></div>}</section>)}</div></div> : null}
           {!comparisonRuns.length && findings.length ? <div className="findings">
@@ -1118,7 +1200,7 @@ export default function Home() {
 
          <ConfirmDialog open={Boolean(confirmingDeleteFor)} title="Delete this decision?" description={`This permanently removes ${deleteTitle || "this decision"}, its premises, source excerpts, revisit history, and share links. This cannot be undone.`} confirmLabel="Delete permanently" busyLabel="Deleting…" busy={deleteBusy} onOpenChange={(open) => { if (!open) { setConfirmingDeleteFor(null); setDeleteTitle(null); } }} onConfirm={() => { if (confirmingDeleteFor) void deleteDecision(confirmingDeleteFor); }} />
          <ConfirmDialog open={Boolean(confirmingShareDelete)} title="Delete this revoked share record?" description="This removes the old link from sharing history. The decision and its revisit history remain unchanged." confirmLabel="Delete share record" busyLabel="Deleting…" busy={shareDeleteBusy} onOpenChange={(open) => { if (!open) setConfirmingShareDelete(null); }} onConfirm={() => void deleteShareRecord()} />
-         <ConfirmDialog open={confirmingNewDecision} title="Start a new decision?" description="Your unfinished import or review draft is saved locally, but starting over will clear it from this workspace." confirmLabel="Start new decision" busyLabel="Starting…" onOpenChange={setConfirmingNewDecision} onConfirm={() => { setConfirmingNewDecision(false); window.localStorage.removeItem("rationexa-workspace-draft-v1"); resetWorkspace(); setSource(""); setEvidence(""); }} />
+         <ConfirmDialog open={confirmingNewDecision} title="Start a new decision?" description="Your unfinished import or review draft is saved locally, but starting over will clear it from this workspace." confirmLabel="Start new decision" busyLabel="Starting…" onOpenChange={setConfirmingNewDecision} onConfirm={() => { setConfirmingNewDecision(false); window.localStorage.removeItem(workspaceSessionKey); resetWorkspace(); }} />
       </div>
     );
 }

@@ -3,6 +3,7 @@ import time
 from fastapi.testclient import TestClient
 from sqlalchemy import func, inspect, select
 
+from rationexa_api.config import get_settings
 from rationexa_api.db import (
     AccountRow,
     ArtifactRow,
@@ -225,7 +226,7 @@ def test_revisit_provenance_columns_exist() -> None:
     assert "workspace_id" in {column["name"] for column in inspect(engine).get_columns("decisions")}
 
     with SessionLocal() as db:
-        assert db.scalar(select(func.count()).select_from(AccountRow)) == 1
+        assert db.get(AccountRow, get_settings().local_account_id) is not None
         assert db.scalar(select(func.count()).select_from(WorkspaceRow)) == 1
         assert all(row.workspace_id for row in db.scalars(select(ArtifactRow)).all())
         assert all(row.workspace_id for row in db.scalars(select(ExtractionRow)).all())

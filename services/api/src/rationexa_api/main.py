@@ -162,10 +162,11 @@ def health() -> HealthRead:
 
 
 @app.get("/v1/models", response_model=ModelCatalogRead)
-def list_models() -> ModelCatalogRead:
+def list_models(request: Request, db: Db) -> ModelCatalogRead:
+    workspace = active_workspace(db, extract_session_token(request))
     return ModelCatalogRead(
         default_model_id=default_model_id(settings),
-        models=available_models(settings),
+        models=available_models(settings, include_openai=has_provider_key(db, workspace.id, "openai")),
     )
 
 

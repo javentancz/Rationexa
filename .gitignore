@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+.rationexa-secret.key
 .venv/
 __pycache__/
 node_modules/

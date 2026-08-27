@@ -13,7 +13,17 @@ def fernet(settings: Settings | None = None) -> Fernet | None:
     settings = settings or get_settings()
     key = settings.secret_encryption_key
     if not key:
-        return None
+        key_file = settings.secret_encryption_key_file
+        try:
+            if key_file.exists():
+                key = key_file.read_text(encoding="utf-8").strip()
+            else:
+                key_file.parent.mkdir(parents=True, exist_ok=True)
+                key = Fernet.generate_key().decode("ascii")
+                key_file.write_text(key, encoding="utf-8")
+                key_file.chmod(0o600)
+        except OSError:
+            return None
     try:
         return Fernet(key.encode("utf-8"))
     except (ValueError, SyntaxError):

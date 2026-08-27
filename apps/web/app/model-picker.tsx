@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, Sparkles } from "lucide-react";
+import { Popover } from "radix-ui";
 import { useState } from "react";
 
 export type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string };
@@ -20,8 +21,8 @@ export function ModelPicker({ models, selectedId, recommendedId, onSelect, disab
   const [open, setOpen] = useState(false);
   const selected = models.find((model) => model.id === selectedId);
   const recommended = models.find((model) => model.id === recommendedId);
-  const localModels = models.filter((model) => model.location === "local");
-  const hostedModels = models.filter((model) => model.location === "hosted");
+  const localModels = models.filter((model) => model.location === "local" && model.id !== recommended?.id);
+  const hostedModels = models.filter((model) => model.location === "hosted" && model.id !== recommended?.id);
 
   function choose(modelId: string) { onSelect(modelId); setOpen(false); }
   const modelOption = (model: ModelOption, recommendedOption = false) => <button type="button" role="option" aria-selected={model.id === selectedId} className={`model-option ${model.id === selectedId ? "selected" : ""}`} disabled={model.id === excludeId} onClick={() => choose(model.id)} key={`${recommendedOption ? "recommended" : "model"}-${model.id}`}>
@@ -30,16 +31,22 @@ export function ModelPicker({ models, selectedId, recommendedId, onSelect, disab
     <span className="model-check">{model.id === selectedId ? <Check aria-hidden="true" /> : null}</span>
   </button>;
 
-  return <div className={`model-picker ${compact ? "compact" : ""} ${open ? "open" : ""}`}>
-    <button type="button" className="model-trigger" aria-haspopup="listbox" aria-expanded={open} disabled={disabled || !models.length} onClick={() => setOpen((current) => !current)}>
-      <span className="model-trigger-icon"><Sparkles aria-hidden="true" /></span><span><small>{label}</small><strong>{selected?.label ?? "Loading models…"}</strong></span><span className="model-location">{selected?.location ?? ""}</span><span className="model-chevron"><ChevronDown aria-hidden="true" /></span>
-    </button>
-    {open ? <><button type="button" className="model-picker-scrim" aria-label="Close model menu" onClick={() => setOpen(false)} /><section className="model-menu" role="listbox" aria-label="Available AI models">
-      <header><div><span className="overline">AI runtime</span><h3>Choose a model</h3></div><button type="button" aria-label="Close model menu" onClick={() => setOpen(false)}>×</button></header>
-      {recommended ? <div className="model-group"><span>Recommended for this workspace</span>{modelOption(recommended, true)}</div> : null}
-      {localModels.length ? <div className="model-group"><span>Local models</span>{localModels.map((model) => modelOption(model))}</div> : null}
-      {hostedModels.length ? <div className="model-group"><span>Hosted models</span>{hostedModels.map((model) => modelOption(model))}</div> : null}
-      <footer><span className="runtime-dot" />Only configured and available models are shown.</footer>
-    </section></> : null}
-  </div>;
+  return <Popover.Root open={open} onOpenChange={setOpen}>
+    <div className={`model-picker ${compact ? "compact" : ""} ${open ? "open" : ""}`}>
+      <Popover.Trigger asChild>
+        <button type="button" className="model-trigger" aria-label={`${label}: ${selected?.label ?? "Loading models"}`} disabled={disabled || !models.length}>
+          <span className="model-trigger-icon"><Sparkles aria-hidden="true" /></span><span><small>{label}</small><strong>{selected?.label ?? "Loading models…"}</strong></span><span className="model-location">{selected?.location ?? ""}</span><span className="model-chevron"><ChevronDown aria-hidden="true" /></span>
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content className="model-menu" role="listbox" aria-label="Available AI models" side={compact ? "top" : "bottom"} align="end" sideOffset={8} collisionPadding={16} avoidCollisions>
+          <header><div><span className="overline">AI runtime</span><h3>Choose a model</h3></div><Popover.Close aria-label="Close model menu">×</Popover.Close></header>
+          {recommended ? <div className="model-group"><span>Recommended for this workspace</span>{modelOption(recommended, true)}</div> : null}
+          {localModels.length ? <div className="model-group"><span>Other local models</span>{localModels.map((model) => modelOption(model))}</div> : null}
+          {hostedModels.length ? <div className="model-group"><span>Other hosted models</span>{hostedModels.map((model) => modelOption(model))}</div> : null}
+          <footer><span className="runtime-dot" />Local models need Ollama only. Hosted models appear after BYOK is configured.</footer>
+        </Popover.Content>
+      </Popover.Portal>
+    </div>
+  </Popover.Root>;
 }

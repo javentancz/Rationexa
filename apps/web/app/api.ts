@@ -34,7 +34,7 @@ export async function apiResponse(path: string, options: RequestInit = {}): Prom
   const token = getSessionToken();
   const headers = new Headers(options.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(`${api}${path}`, { ...options, headers });
+  return fetch(`${api}${path}`, { ...options, cache: options.cache ?? "no-store", headers });
 }
 
 export async function login(email: string, password: string): Promise<{ session_token: string }> {

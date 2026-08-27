@@ -6,6 +6,7 @@ from rationexa_api.config import Settings
 from rationexa_api.db import AccountRow, SecretRow, SessionLocal, SessionRow, WorkspaceRow
 from rationexa_api.main import app
 from rationexa_api.providers import OpenAIResponsesProvider, get_provider
+from rationexa_api.secrets import fernet
 
 
 def _login(client: TestClient, client_obj, email: str, password: str) -> str:
@@ -152,6 +153,21 @@ def test_byok_stored_key_is_resolved_for_the_openai_provider() -> None:
     injected = get_provider(settings, "openai/gpt-test", byok_key="sk-byok-value")
     assert isinstance(injected, OpenAIResponsesProvider)
     assert injected.client.api_key == "sk-byok-value"
+
+
+def test_local_workspace_generates_a_private_secret_key_file(tmp_path) -> None:
+    key_file = tmp_path / "rationexa-secret.key"
+    settings = Settings(secret_encryption_key=None, secret_encryption_key_file=key_file)
+
+    first = fernet(settings)
+    second = fernet(settings)
+
+    assert first is not None
+    assert second is not None
+    assert key_file.exists()
+    assert key_file.stat().st_mode & 0o777 == 0o600
+    encrypted = first.encrypt(b"sk-local-byok")
+    assert second.decrypt(encrypted) == b"sk-local-byok"
 
 
 def test_password_hash_round_trips() -> None:

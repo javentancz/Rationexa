@@ -3,13 +3,15 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+ROOT_ENV_FILE = Path(__file__).resolve().parents[4] / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=ROOT_ENV_FILE, extra="ignore")
 
     app_name: str = "Rationexa API"
-    database_url: str = "sqlite:///./rationexa.db"
-    artifact_dir: Path = Path("./artifacts")
+    database_url: str = f"sqlite:///{ROOT_ENV_FILE.parent / 'services/api/rationexa.db'}"
+    artifact_dir: Path = ROOT_ENV_FILE.parent / "services/api/artifacts"
     ai_provider: str = "deterministic"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3.5:9b"
@@ -25,6 +27,7 @@ class Settings(BaseSettings):
     local_workspace_id: str = "00000000-0000-4000-8000-000000000002"
     local_workspace_name: str = "Personal workspace"
     secret_encryption_key: str | None = None
+    secret_encryption_key_file: Path = ROOT_ENV_FILE.parent / ".rationexa-secret.key"
     local_account_email: str = "demo@rationexa.local"
     local_account_password: str | None = None
     auth_session_ttl_hours: int = 168
