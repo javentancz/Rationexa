@@ -25,7 +25,7 @@ def test_database_is_at_the_alembic_head() -> None:
     with TestClient(app):
         with engine.connect() as connection:
             revision = MigrationContext.configure(connection).get_current_revision()
-    assert revision == "20260828_03"
+    assert revision == "20260828_04"
 
 
 def test_readiness_checks_database_and_artifact_storage() -> None:
@@ -33,6 +33,26 @@ def test_readiness_checks_database_and_artifact_storage() -> None:
         response = client.get("/readyz")
         assert response.status_code == 200
         assert response.json()["status"] == "ready"
+
+
+def test_database_artifact_storage_preserves_original_bytes() -> None:
+    settings = get_settings()
+    original_storage = settings.artifact_storage
+    settings.artifact_storage = "database"
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/artifacts",
+                json={"filename": "durable.txt", "media_type": "text/plain", "content": "durable evidence"},
+            )
+            assert response.status_code == 201
+            with SessionLocal() as db:
+                artifact = db.get(ArtifactRow, response.json()["id"])
+                assert artifact is not None
+                assert artifact.storage_uri.startswith("database://artifacts/")
+                assert artifact.binary_content == b"durable evidence"
+    finally:
+        settings.artifact_storage = original_storage
 
 
 def create_finalized_decision(

@@ -128,7 +128,8 @@ CONSEQUENTIAL_KINDS = {
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    settings.artifact_dir.mkdir(parents=True, exist_ok=True)
+    if settings.artifact_storage == "filesystem":
+        settings.artifact_dir.mkdir(parents=True, exist_ok=True)
     init_db()
     yield
 
@@ -227,7 +228,9 @@ def readiness(db: Db) -> HealthRead:
         db.execute(text("SELECT 1"))
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Database is not ready") from exc
-    if not settings.artifact_dir.exists() or not settings.artifact_dir.is_dir():
+    if settings.artifact_storage == "filesystem" and (
+        not settings.artifact_dir.exists() or not settings.artifact_dir.is_dir()
+    ):
         raise HTTPException(status_code=503, detail="Artifact storage is not ready")
     return HealthRead(status="ready", service=settings.app_name)
 
@@ -521,7 +524,11 @@ def save_artifact(
     target = _workspace_filter_key(workspace_id)
     try:
         text, parser_version = extract_artifact_text(content, media_type)
-        digest, storage_uri = persist_artifact(content, settings.artifact_dir, filename)
+        if settings.artifact_storage == "database":
+            digest = sha256(content).hexdigest()
+            storage_uri = f"database://artifacts/{digest}"
+        else:
+            digest, storage_uri = persist_artifact(content, settings.artifact_dir, filename)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     existing = db.scalar(
@@ -539,6 +546,7 @@ def save_artifact(
         source_type=source_type,
         sha256=digest,
         storage_uri=storage_uri,
+        binary_content=content if settings.artifact_storage == "database" else None,
         extracted_text=text,
         parser_version=parser_version,
       )

@@ -1,15 +1,37 @@
 # Pilot operations
 
-Use PostgreSQL and durable artifact storage for staging. Store `DATABASE_URL`,
+Use PostgreSQL and durable artifact storage for staging. On serverless staging,
+set `ARTIFACT_STORAGE=database` so original artifact bytes are included in the
+PostgreSQL backup. On a VM with a durable volume, keep `filesystem`. Store `DATABASE_URL`,
 `SECRET_ENCRYPTION_KEY`, SMTP credentials, and provider keys in the deployment
 secret manager. Never bake them into an image or backup archive.
 
 ## Health checks
 
 - `GET /healthz` is a process liveness check.
-- `GET /readyz` verifies database access and the artifact storage mount.
+- `GET /readyz` verifies database access and, when configured, the artifact storage mount.
 
 Route traffic only when `/readyz` returns `200`.
+
+## Private Vercel staging
+
+Rationexa uses two Vercel projects: a Next.js web project rooted at `apps/web`
+and a FastAPI project rooted at `services/api`. Keep both Preview deployments
+protected with Vercel Authentication.
+
+The API Preview uses Neon PostgreSQL and `ARTIFACT_STORAGE=database`. The web
+Preview calls the API through `/api/backend`, which keeps the deployment bypass
+secret server-side. Configure these web variables:
+
+```text
+NEXT_PUBLIC_API_URL=/api/backend
+RATIONEXA_API_URL=https://your-api-preview.vercel.app
+RATIONEXA_API_BYPASS_SECRET=<server-only Vercel automation bypass secret>
+```
+
+Do not expose `RATIONEXA_API_BYPASS_SECRET` through a `NEXT_PUBLIC_` variable.
+The API project still enforces Rationexa sessions and workspace isolation after
+the Vercel protection layer.
 
 ## Password recovery
 

@@ -10,6 +10,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -142,6 +143,7 @@ class ArtifactRow(Base):
     source_type: Mapped[str] = mapped_column(String(80), default="user_supplied")
     sha256: Mapped[str] = mapped_column(String(64))
     storage_uri: Mapped[str] = mapped_column(String(500))
+    binary_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     extracted_text: Mapped[str] = mapped_column(Text)
     parser_version: Mapped[str] = mapped_column(String(40), default="text-v1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)

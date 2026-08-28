@@ -1,6 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_ENV_FILE = Path(__file__).resolve().parents[4] / ".env"
@@ -12,6 +14,7 @@ class Settings(BaseSettings):
     app_name: str = "Rationexa API"
     database_url: str = f"sqlite:///{ROOT_ENV_FILE.parent / 'services/api/rationexa.db'}"
     artifact_dir: Path = ROOT_ENV_FILE.parent / "services/api/artifacts"
+    artifact_storage: Literal["filesystem", "database"] = "filesystem"
     ai_provider: str = "deterministic"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3.5:9b"
@@ -40,6 +43,13 @@ class Settings(BaseSettings):
     smtp_from_email: str | None = None
     smtp_use_tls: bool = True
     pbkdf2_iterations: int = 200_000
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def use_psycopg_driver(cls, value: object) -> object:
+        if isinstance(value, str) and value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+psycopg://", 1)
+        return value
 
     @property
     def allowed_origins(self) -> list[str]:
