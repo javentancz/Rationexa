@@ -4,7 +4,7 @@ from secrets import token_urlsafe
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, String, Text, create_engine, inspect, text
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, String, Text, create_engine, inspect, select, text
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -31,6 +31,14 @@ def now_utc() -> datetime:
 
 class Base(DeclarativeBase):
     pass
+
+
+class SchemaMigrationRow(Base):
+    __tablename__ = "schema_migrations"
+
+    version: Mapped[str] = mapped_column(String(80), primary_key=True)
+    description: Mapped[str] = mapped_column(String(255))
+    applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
 class AccountRow(Base):
@@ -74,6 +82,18 @@ class WorkspaceRow(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     owner_account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id"), index=True)
     name: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class ProductEventRow(Base):
+    __tablename__ = "product_events"
+    __table_args__ = (Index("ix_product_events_workspace_created", "workspace_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    decision_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(80), index=True)
+    details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
@@ -196,12 +216,44 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
-    _add_missing_account_credential_columns()
+    # Older account tables must receive credential columns before SQLAlchemy
+    # loads the bootstrap account. The remaining migrations can then safely
+    # assign legacy records to that workspace.
+    _run_schema_migrations(only={"20260825_01_account_credentials"})
     _ensure_local_workspace()
-    _add_missing_workspace_columns()
-    _add_missing_extraction_provenance_columns()
-    _add_missing_revisit_provenance_columns()
-    _add_missing_decision_challenge_column()
+    _run_schema_migrations()
+
+
+def _run_schema_migrations(*, only: set[str] | None = None) -> None:
+    migrations = (
+        (
+            "20260825_01_account_credentials",
+            "Add account login credential fields",
+            _add_missing_account_credential_columns,
+        ),
+        ("20260825_02_workspace_scope", "Assign persisted records to a workspace", _add_missing_workspace_columns),
+        (
+            "20260825_03_extraction_provenance",
+            "Add extraction usage provenance",
+            _add_missing_extraction_provenance_columns,
+        ),
+        ("20260825_04_revisit_provenance", "Add revisit usage provenance", _add_missing_revisit_provenance_columns),
+        (
+            "20260827_05_decision_challenge",
+            "Add persisted decision challenge briefs",
+            _add_missing_decision_challenge_column,
+        ),
+    )
+    with SessionLocal() as db:
+        applied = set(db.scalars(select(SchemaMigrationRow.version)).all())
+    for version, description, migration in migrations:
+        if version in applied or (only is not None and version not in only):
+            continue
+        migration()
+        with SessionLocal() as db:
+            if db.get(SchemaMigrationRow, version) is None:
+                db.add(SchemaMigrationRow(version=version, description=description))
+                db.commit()
 
 
 def _ensure_local_workspace() -> None:

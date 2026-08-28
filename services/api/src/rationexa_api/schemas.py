@@ -117,6 +117,13 @@ class SecretModelSelectRequest(BaseModel):
     model: str = Field(min_length=1, max_length=240)
 
 
+class SecretConnectionTestRead(BaseModel):
+    provider: str
+    ok: bool = True
+    model_count: int
+    latency_ms: int
+
+
 class AccountRead(BaseModel):
     id: str
     name: str
@@ -341,6 +348,18 @@ class UsageSummaryRead(BaseModel):
     unpriced_run_count: int
     models: list[UsageModelRead]
     recent_runs: list[UsageRunRead]
+
+
+class PilotMetricsRead(BaseModel):
+    decision_count: int
+    revisit_count: int
+    judgment_count: int
+    share_count: int
+    export_count: int
+    challenge_confirmation_count: int
+    active_days: int
+    repeat_use_observed: bool
+    latest_activity_at: datetime | None = None
 
 
 class RevisitRequest(BaseModel):

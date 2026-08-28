@@ -12,12 +12,26 @@ from rationexa_api.db import (
     ExtractionRow,
     PremiseRow,
     RevisitRow,
+    SchemaMigrationRow,
     SessionLocal,
     SourceAnchorRow,
     WorkspaceRow,
     engine,
 )
 from rationexa_api.main import app
+
+
+def test_schema_migrations_are_versioned_and_recorded() -> None:
+    with TestClient(app):
+        with SessionLocal() as db:
+            versions = set(db.scalars(select(SchemaMigrationRow.version)).all())
+    assert versions == {
+        "20260825_01_account_credentials",
+        "20260825_02_workspace_scope",
+        "20260825_03_extraction_provenance",
+        "20260825_04_revisit_provenance",
+        "20260827_05_decision_challenge",
+    }
 
 
 def create_finalized_decision(
@@ -265,6 +279,25 @@ def test_stage_two_usage_summary_distinguishes_known_and_unpriced_runs() -> None
             for run in usage["recent_runs"]
         )
         assert any(model["provider"] == "deterministic" for model in usage["models"])
+
+
+def test_pilot_metrics_capture_real_product_actions() -> None:
+    with TestClient(app) as client:
+        decision = create_finalized_decision(
+            client,
+            source="We selected Vendor B because availability is assumed. Revisit if availability changes.",
+            title="Pilot metrics decision",
+        )
+        assert client.get(f"/v1/decisions/{decision['id']}/export/markdown").status_code == 200
+        assert client.post(f"/v1/decisions/{decision['id']}/shares", json={}).status_code == 201
+
+        metrics = client.get("/v1/pilot/metrics")
+        assert metrics.status_code == 200
+        payload = metrics.json()
+        assert payload["decision_count"] >= 1
+        assert payload["share_count"] >= 1
+        assert payload["export_count"] >= 1
+        assert payload["active_days"] >= 1
 
 
 def test_personal_workspace_excludes_other_workspace_records() -> None:

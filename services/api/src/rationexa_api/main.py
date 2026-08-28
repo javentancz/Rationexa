@@ -26,6 +26,7 @@ from .db import (
     DecisionShareRow,
     ExtractionRow,
     PremiseRow,
+    ProductEventRow,
     RevisitRow,
     SecretRow,
     SessionLocal,
@@ -71,11 +72,13 @@ from .schemas import (
     JobRead,
     ModelCatalogRead,
     ModelOption,
+    PilotMetricsRead,
     PremiseKind,
     RevisitFindingJudgmentRequest,
     RevisitPremiseInput,
     RevisitRead,
     RevisitRequest,
+    SecretConnectionTestRead,
     SecretModelSelectRequest,
     SecretRead,
     SecretStoreRequest,
@@ -195,6 +198,22 @@ def provider_for(db: Session, workspace_id: str | None, model_id: str | None) ->
 @app.get("/healthz", response_model=HealthRead)
 def health() -> HealthRead:
     return HealthRead(status="ok", service=settings.app_name)
+
+
+def record_product_event(
+    db: Session,
+    workspace_id: str,
+    event_type: str,
+    *,
+    decision_id: str | None = None,
+    details: dict | None = None,
+) -> None:
+    db.add(ProductEventRow(
+        workspace_id=workspace_id,
+        decision_id=decision_id,
+        event_type=event_type,
+        details=details or {},
+    ))
 
 
 @app.get("/v1/models", response_model=ModelCatalogRead)
@@ -386,6 +405,43 @@ def usage_summary(route: Request, db: Db) -> UsageSummaryRead:
         unpriced_run_count=sum(run.estimated_cost_usd is None for run in runs),
         models=models,
         recent_runs=runs[:20],
+    )
+
+
+@app.get("/v1/pilot/metrics", response_model=PilotMetricsRead)
+def pilot_metrics(route: Request, db: Db) -> PilotMetricsRead:
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    events = db.scalars(
+        select(ProductEventRow)
+        .where(ProductEventRow.workspace_id == workspace_id)
+        .order_by(ProductEventRow.created_at.desc())
+    ).all()
+    event_counts: dict[str, int] = {}
+    for event in events:
+        event_counts[event.event_type] = event_counts.get(event.event_type, 0) + 1
+    active_days = len({as_utc(event.created_at).date() for event in events})
+    decision_count = db.scalar(
+        select(func.count()).select_from(DecisionRow).where(DecisionRow.workspace_id == workspace_id)
+    ) or 0
+    revisit_count = db.scalar(
+        select(func.count()).select_from(RevisitRow).join(DecisionRow).where(DecisionRow.workspace_id == workspace_id)
+    ) or 0
+    share_count = db.scalar(
+        select(func.count())
+        .select_from(DecisionShareRow)
+        .join(DecisionRow)
+        .where(DecisionRow.workspace_id == workspace_id)
+    ) or 0
+    return PilotMetricsRead(
+        decision_count=decision_count,
+        revisit_count=revisit_count,
+        judgment_count=event_counts.get("finding_judged", 0),
+        share_count=share_count,
+        export_count=event_counts.get("decision_exported", 0),
+        challenge_confirmation_count=event_counts.get("challenge_confirmed", 0),
+        active_days=active_days,
+        repeat_use_observed=active_days >= 2 and revisit_count > 0,
+        latest_activity_at=as_utc(events[0].created_at) if events else None,
     )
 
 
@@ -648,6 +704,7 @@ def finalize_decision(route: Request, extraction_id: str, payload: DecisionFinal
                 )
             )
     extraction.status = "finalized"
+    record_product_event(db, workspace_id, "decision_finalized", decision_id=decision.id)
     db.commit()
     db.refresh(decision)
     return decision_read(decision)
@@ -725,6 +782,7 @@ def perform_challenge(
         generated_at=now_utc(),
     )
     decision.challenge = challenge.model_dump(mode="json")
+    record_product_event(db, decision.workspace_id, "challenge_confirmed", decision_id=decision.id)
     db.commit()
     db.refresh(decision)
     return challenge
@@ -873,7 +931,8 @@ def list_revisit_checks(route: Request, decision_id: str, db: Db) -> list[Revisi
 
 @app.get("/v1/decisions/{decision_id}/export/markdown")
 def export_decision_markdown(route: Request, decision_id: str, db: Db) -> Response:
-    decision = workspace_decision(db, decision_id, active_workspace_id(db, extract_session_token(route)))
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    decision = workspace_decision(db, decision_id, workspace_id)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     revisits = db.scalars(
@@ -882,6 +941,8 @@ def export_decision_markdown(route: Request, decision_id: str, db: Db) -> Respon
          .order_by(RevisitRow.created_at.asc(), RevisitRow.id.asc())
         ).all()
     filename = export_filename(decision.title)
+    record_product_event(db, workspace_id, "decision_exported", decision_id=decision.id, details={"format": "markdown"})
+    db.commit()
     return Response(
         content=render_decision_markdown(decision, revisits),
         media_type="text/markdown",
@@ -891,7 +952,8 @@ def export_decision_markdown(route: Request, decision_id: str, db: Db) -> Respon
 
 @app.get("/v1/decisions/{decision_id}/export/pdf")
 def export_decision_pdf(route: Request, decision_id: str, db: Db) -> Response:
-    decision = workspace_decision(db, decision_id, active_workspace_id(db, extract_session_token(route)))
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    decision = workspace_decision(db, decision_id, workspace_id)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     revisits = db.scalars(
@@ -901,6 +963,8 @@ def export_decision_pdf(route: Request, decision_id: str, db: Db) -> Response:
          ).all()
     content = render_decision_pdf(decision, revisits)
     filename = export_filename(decision.title, extension="pdf")
+    record_product_event(db, workspace_id, "decision_exported", decision_id=decision.id, details={"format": "pdf"})
+    db.commit()
     return Response(
         content=content,
         media_type="application/pdf",
@@ -1045,7 +1109,8 @@ def load_shared_decision(db: Session, token: str) -> ShareDecisionRead:
     status_code=status.HTTP_201_CREATED,
 )
 def create_share(route: Request, decision_id: str, payload: ShareCreate, db: Db) -> ShareRead:
-    if workspace_decision(db, decision_id, active_workspace_id(db, extract_session_token(route))) is None:
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    if workspace_decision(db, decision_id, workspace_id) is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     existing = db.scalar(
         select(DecisionShareRow).where(
@@ -1063,6 +1128,7 @@ def create_share(route: Request, decision_id: str, payload: ShareCreate, db: Db)
     expires_at = payload.expires_at or now_utc() + timedelta(days=settings.share_default_ttl_days)
     share = DecisionShareRow(decision_id=decision_id, token=new_share_token(), expires_at=expires_at)
     db.add(share)
+    record_product_event(db, workspace_id, "share_created", decision_id=decision_id)
     db.commit()
     db.refresh(share)
     return share_read(share, settings.public_base_url)
@@ -1185,6 +1251,13 @@ def perform_revisit(
         estimated_cost_usd=provider.last_usage.get("estimated_cost_usd"),
     )
     db.add(row)
+    record_product_event(
+        db,
+        decision.workspace_id,
+        "revisit_completed",
+        decision_id=decision.id,
+        details={"finding_count": len(findings), "model": provider.model, "provider": provider.name},
+    )
     db.commit()
     db.refresh(row)
     return revisit_read(row)
@@ -1195,6 +1268,7 @@ def perform_revisit(
     response_model=RevisitRead,
 )
 def record_revisit_judgment(
+    route: Request,
     revisit_id: str,
     premise_id: str,
     payload: RevisitFindingJudgmentRequest,
@@ -1202,6 +1276,9 @@ def record_revisit_judgment(
 ) -> RevisitRead:
     revisit = db.get(RevisitRow, revisit_id)
     if revisit is None:
+        raise HTTPException(status_code=404, detail="Revisit check not found")
+    decision = workspace_decision(db, revisit.decision_id, active_workspace_id(db, extract_session_token(route)))
+    if decision is None:
         raise HTTPException(status_code=404, detail="Revisit check not found")
 
     findings = [dict(finding) for finding in revisit.findings]
@@ -1214,6 +1291,13 @@ def record_revisit_judgment(
     target["judged_at"] = now_utc().isoformat()
     revisit.findings = findings
     revisit.status = "completed" if all(finding.get("human_judgment") for finding in findings) else "needs_review"
+    record_product_event(
+        db,
+        decision.workspace_id,
+        "finding_judged",
+        decision_id=decision.id,
+        details={"judgment": payload.judgment},
+    )
     db.commit()
     db.refresh(revisit)
     return revisit_read(revisit)
@@ -1427,6 +1511,24 @@ def list_provider_models(route: Request, provider: str, db: Db) -> dict[str, lis
         return {"models": _fetch_provider_model_ids(configuration)}
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+@app.post("/v1/secrets/{provider}/test", response_model=SecretConnectionTestRead)
+def test_provider_connection(route: Request, provider: str, db: Db) -> SecretConnectionTestRead:
+    workspace = active_workspace(db, extract_session_token(route))
+    configuration = get_provider_config(db, workspace.id, provider)
+    if configuration is None:
+        raise HTTPException(status_code=404, detail="Connect this provider before testing it")
+    started_at = perf_counter()
+    try:
+        models = _fetch_provider_model_ids(configuration)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    return SecretConnectionTestRead(
+        provider=provider,
+        model_count=len(models),
+        latency_ms=max(0, round((perf_counter() - started_at) * 1000)),
+    )
 
 
 @app.post("/v1/secrets/{provider}/model", response_model=SecretRead)

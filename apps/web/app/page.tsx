@@ -120,6 +120,7 @@ type AuditEvent = { id: string; kind: "decision" | "challenge" | "evidence" | "j
 type UsageRun = { id: string; kind: "extraction" | "revisit" | "challenge"; provider: string; model: string; prompt_version: string; location: "local" | "hosted" | "unknown"; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number; created_at: string; decision_id?: string };
 type UsageModel = { provider: string; model: string; location: "local" | "hosted" | "unknown"; run_count: number; total_tokens: number; known_cost_usd: number; unpriced_run_count: number; average_latency_ms?: number };
 type UsageSummary = { total_runs: number; extraction_runs: number; revisit_runs: number; challenge_runs: number; local_runs: number; hosted_runs: number; unknown_location_runs: number; total_tokens: number; tokenized_run_count: number; known_cost_usd: number; unpriced_run_count: number; models: UsageModel[]; recent_runs: UsageRun[] };
+type PilotMetrics = { decision_count: number; revisit_count: number; judgment_count: number; share_count: number; export_count: number; challenge_confirmation_count: number; active_days: number; repeat_use_observed: boolean; latest_activity_at?: string };
 type PersistedWorkspaceSession = {
   source?: string;
   evidence?: string;
@@ -161,6 +162,18 @@ function writeEvidenceDraft(decisionId: string, draft: EvidenceDraft | null) {
     else window.localStorage.removeItem(evidenceDraftsKey);
   } catch {
     // Draft persistence must never block the decision workflow.
+  }
+}
+
+function clearPersistedDecision(decisionId: string) {
+  writeEvidenceDraft(decisionId, null);
+  try {
+    const saved = window.localStorage.getItem(workspaceSessionKey);
+    if (!saved) return;
+    const state = JSON.parse(saved) as PersistedWorkspaceSession;
+    if (state.decisionId === decisionId) window.localStorage.removeItem(workspaceSessionKey);
+  } catch {
+    window.localStorage.removeItem(workspaceSessionKey);
   }
 }
 
@@ -255,6 +268,7 @@ export default function Home() {
   const [challengeNotes, setChallengeNotes] = useState("");
   const [challengeConfirmBusy, setChallengeConfirmBusy] = useState(false);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
+  const [pilotMetrics, setPilotMetrics] = useState<PilotMetrics | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [personalWorkspace, setPersonalWorkspace] = useState<PersonalWorkspace | null>(null);
   const [confirmingNewDecision, setConfirmingNewDecision] = useState(false);
@@ -298,7 +312,7 @@ export default function Home() {
         if (state.comparisonModelId) setComparisonModelId(state.comparisonModelId);
         setCompareMode(Boolean(state.compareMode));
         if (state.decisionId) {
-          const restored = await openDecision(state.decisionId, state.workflowView ?? 4, { restoredView: state.view ?? "workspace", legacyEvidence: state.evidence });
+          const restored = await openDecision(state.decisionId, state.workflowView ?? 4, { restoredView: state.view ?? "workspace", legacyEvidence: state.evidence, clearIfMissing: true });
           if (restored) toast.info("Decision workspace restored");
         } else if (state.extraction && state.draft) {
           setExtraction(state.extraction);
@@ -681,7 +695,12 @@ export default function Home() {
     setUsageLoading(true);
     setError(null);
     try {
-      setUsage(await responseJson(await req(`/v1/usage`)) as UsageSummary);
+      const [usageResult, pilotResult] = await Promise.all([
+        responseJson(await req(`/v1/usage`)) as Promise<UsageSummary>,
+        responseJson(await req(`/v1/pilot/metrics`)) as Promise<PilotMetrics>,
+      ]);
+      setUsage(usageResult);
+      setPilotMetrics(pilotResult);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load workspace usage");
     } finally {
@@ -694,12 +713,23 @@ export default function Home() {
     setRevisitHistory(history);
   }
 
-  async function openDecision(decisionId: string, targetStep: WorkflowStep = 4, restore?: { restoredView?: WorkspaceView; legacyEvidence?: string }) {
+  async function openDecision(decisionId: string, targetStep: WorkflowStep = 4, restore?: { restoredView?: WorkspaceView; legacyEvidence?: string; clearIfMissing?: boolean }) {
     setError(null);
     try {
+      const [recordResponse, historyResponse] = await Promise.all([
+        req(`/v1/decisions/${decisionId}`),
+        req(`/v1/decisions/${decisionId}/revisit-checks`),
+      ]);
+      if (restore?.clearIfMissing && (recordResponse.status === 404 || historyResponse.status === 404)) {
+        clearPersistedDecision(decisionId);
+        setView("library");
+        setWorkflowView(1);
+        toast.info("The deleted decision was removed from your restored workspace");
+        return false;
+      }
       const [record, history] = await Promise.all([
-        req(`/v1/decisions/${decisionId}`).then(responseJson),
-        req(`/v1/decisions/${decisionId}/revisit-checks`).then(responseJson),
+        responseJson(recordResponse),
+        responseJson(historyResponse),
       ]) as [Decision, RevisitResult[]];
       setDecision(record);
       setChallenge(record.challenge ?? null);
@@ -897,7 +927,7 @@ export default function Home() {
         setExpandedHistoryId(null);
         setShares([]);
         }
-      writeEvidenceDraft(targetId, null);
+      clearPersistedDecision(targetId);
       setConfirmingDeleteFor(null);
       setDeleteTitle(null);
       setView("library");
@@ -1044,6 +1074,7 @@ export default function Home() {
               const maxRuns = Math.max(...usage.models.map((item) => item.run_count), 1);
               return <article key={`${model.provider}/${model.model}`}><div className="usage-model-name"><span>{model.model.slice(0, 1).toUpperCase()}</span><div><strong>{model.model}</strong><small>{model.provider} · {model.location}</small></div></div><div className="usage-model-meter"><span style={{ width: `${Math.max(8, Math.round((model.run_count / maxRuns) * 100))}%` }} /></div><div className="usage-model-stats"><span><strong>{model.run_count}</strong> runs</span><span><strong>{formatNumber(model.total_tokens)}</strong> tokens</span><span><strong>{model.average_latency_ms == null ? "—" : `${formatNumber(model.average_latency_ms)} ms`}</strong> avg latency</span><span><strong>${model.known_cost_usd.toFixed(4)}</strong> known cost{model.unpriced_run_count ? ` · ${model.unpriced_run_count} unpriced` : ""}</span></div></article>;
             })}</div> : <div className="library-empty"><strong>No AI usage recorded yet</strong><p>Complete an extraction, revisit, or challenge to create the first usage record.</p></div>}</section>
+            {pilotMetrics ? <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Supervised pilot</span><h2>Repeat-use signals</h2></div><span>{pilotMetrics.repeat_use_observed ? "Repeat use observed" : "More real-user sessions needed"}</span></div><div className="pilot-metrics-grid"><article><strong>{pilotMetrics.decision_count}</strong><span>decisions</span></article><article><strong>{pilotMetrics.revisit_count}</strong><span>evidence checks</span></article><article><strong>{pilotMetrics.judgment_count}</strong><span>human judgments</span></article><article><strong>{pilotMetrics.share_count + pilotMetrics.export_count}</strong><span>shares &amp; exports</span></article><article><strong>{pilotMetrics.challenge_confirmation_count}</strong><span>confirmed challenges</span></article><article><strong>{pilotMetrics.active_days}</strong><span>active days</span></article></div><p className="pilot-note">Pilot readiness requires activity from real reviewers across multiple days; these measurements describe behavior and do not claim model accuracy.</p></section> : null}
             <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Recent activity</span><h2>Latest model runs</h2></div><span>Newest first</span></div>{usage.recent_runs.length ? <div className="usage-runs">{usage.recent_runs.map((run) => <button type="button" key={`${run.kind}-${run.id}`} disabled={!run.decision_id} onClick={() => run.decision_id && openDecision(run.decision_id)}><span className={`usage-kind ${run.kind}`}>{run.kind}</span><span className="usage-run-model"><strong>{run.model}</strong><small>{run.provider} · {run.prompt_version}</small></span><span><strong>{formatNumber((run.input_tokens ?? 0) + (run.output_tokens ?? 0))}</strong><small>tokens</small></span><span><strong>{run.latency_ms == null ? "—" : `${formatNumber(run.latency_ms)} ms`}</strong><small>latency</small></span><span><strong>{run.estimated_cost_usd == null ? "Unavailable" : `$${run.estimated_cost_usd.toFixed(4)}`}</strong><small>cost</small></span><time dateTime={run.created_at}>{formatDateTime(run.created_at)}</time></button>)}</div> : null}</section>
           </> : null}
         </section> : null}

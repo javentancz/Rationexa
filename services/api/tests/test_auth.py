@@ -190,6 +190,11 @@ def test_openrouter_connection_loads_models_and_activates_one(monkeypatch) -> No
         assert catalog.status_code == 200
         assert catalog.json()["models"] == ["anthropic/claude-test", "deepseek/deepseek-test"]
 
+        tested = client.post("/v1/secrets/openrouter/test")
+        assert tested.status_code == 200
+        assert tested.json()["ok"] is True
+        assert tested.json()["model_count"] == 2
+
         selected = client.post(
             "/v1/secrets/openrouter/model",
             json={"model": "anthropic/claude-test"},
@@ -199,6 +204,14 @@ def test_openrouter_connection_loads_models_and_activates_one(monkeypatch) -> No
 
         workspace_models = client.get("/v1/models").json()["models"]
         assert any(model["id"] == "openrouter/anthropic/claude-test" for model in workspace_models)
+
+        rotated = client.post("/v1/secrets", json={"provider": "openrouter", "key": "sk-or-rotated"})
+        assert rotated.status_code == 201
+        assert rotated.json()["selected_model"] is None
+        assert not any(
+            model["id"] == "openrouter/anthropic/claude-test"
+            for model in client.get("/v1/models").json()["models"]
+        )
 
         removed = client.delete("/v1/secrets/openrouter")
         assert removed.status_code == 200

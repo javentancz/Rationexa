@@ -15,7 +15,8 @@ Stage 1 established the trusted Import → Review → Finalize → Revisit workf
 - source-grounded challenge briefs;
 - background jobs with progress, cancellation, and late-result suppression;
 - model, provider, prompt, latency, token, runtime, and known-cost provenance;
-- local Ollama models and encrypted bring-your-own-key (BYOK) providers.
+- local Ollama models and encrypted bring-your-own-key (BYOK) providers with live connection checks;
+- versioned database migrations and supervised-pilot repeat-use metrics.
 
 The next milestone is a supervised user pilot. The checked-in 30-case suite is a development regression set, not independent proof of production accuracy.
 
@@ -84,6 +85,7 @@ Reports are written to `packages/evals/reports/`. Production claims require a se
 ```bash
 pnpm check
 pnpm --filter @rationexa/web build
+pnpm --filter @rationexa/web test:e2e
 pnpm --filter @rationexa/web build-storybook
 .venv/bin/pytest services/api/tests
 .venv/bin/ruff check services/api

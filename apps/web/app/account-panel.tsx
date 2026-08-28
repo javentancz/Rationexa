@@ -2,12 +2,15 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { KeyRound, LogIn, LogOut, Trash2, UserRound } from "lucide-react";
+import { toast } from "sonner";
 import { apiFetch, getSessionToken, login, logout, setSessionToken } from "./api";
+import { ConfirmDialog } from "./ui";
 
 type AccountRead = { id: string; name: string; email?: string; has_password: boolean; created_at: string };
 type WorkspaceRead = { id: string; name: string; account_name: string };
 type SecretRead = { provider: string; configured: boolean; label?: string; base_url?: string; selected_model?: string; protocol?: string; last_updated_at?: string; source: string };
 type ProviderModels = { models: string[] };
+type ProviderTest = { provider: string; ok: boolean; model_count: number; latency_ms: number };
 
 const providerOptions = [
   { id: "openrouter", label: "OpenRouter", detail: "Many model companies through one compatible API" },
@@ -34,6 +37,9 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
   const [providerModels, setProviderModels] = useState<Record<string, string[]>>({});
   const [providerModelSelection, setProviderModelSelection] = useState<Record<string, string>>({});
   const [modelBusyFor, setModelBusyFor] = useState<string | null>(null);
+  const [providerErrors, setProviderErrors] = useState<Record<string, string>>({});
+  const [providerTests, setProviderTests] = useState<Record<string, ProviderTest>>({});
+  const [removeProvider, setRemoveProvider] = useState<string | null>(null);
 
   async function refresh() {
     setError(null);
@@ -108,6 +114,7 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
       await refresh();
       await loadProviderModels(providerEntry);
       onConfigurationChanged?.();
+      toast.success("Provider connected. Choose an active model.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not store the key");
     } finally {
@@ -117,7 +124,7 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
 
   async function loadProviderModels(provider: string) {
     setModelBusyFor(provider);
-    setError(null);
+    setProviderErrors((current) => ({ ...current, [provider]: "" }));
     try {
       const payload = await apiFetch(`/v1/secrets/${provider}/models`) as ProviderModels;
       setProviderModels((current) => ({ ...current, [provider]: payload.models }));
@@ -126,7 +133,21 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
         [provider]: current[provider] || secrets.find((secret) => secret.provider === provider)?.selected_model || payload.models[0] || "",
       }));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load provider models");
+      setProviderErrors((current) => ({ ...current, [provider]: caught instanceof Error ? caught.message : "Could not load provider models" }));
+    } finally {
+      setModelBusyFor(null);
+    }
+  }
+
+  async function testProvider(provider: string) {
+    setModelBusyFor(provider);
+    setProviderErrors((current) => ({ ...current, [provider]: "" }));
+    try {
+      const result = await apiFetch(`/v1/secrets/${provider}/test`, { method: "POST" }) as ProviderTest;
+      setProviderTests((current) => ({ ...current, [provider]: result }));
+      toast.success(`Connection verified · ${result.model_count} models`);
+    } catch (caught) {
+      setProviderErrors((current) => ({ ...current, [provider]: caught instanceof Error ? caught.message : "Connection test failed" }));
     } finally {
       setModelBusyFor(null);
     }
@@ -145,6 +166,7 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
       });
       await refresh();
       onConfigurationChanged?.();
+      toast.success("Hosted model activated");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not activate the hosted model");
     } finally {
@@ -161,6 +183,8 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
       setProviderModelSelection((current) => { const next = { ...current }; delete next[provider]; return next; });
       await refresh();
       onConfigurationChanged?.();
+      setRemoveProvider(null);
+      toast.success("Provider key removed");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not remove the key");
     } finally {
@@ -215,7 +239,8 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
             <ul className="account-key-list">
               {secrets.map((secret) => (
                 <li key={secret.provider} className="provider-connection">
-                  <div className="provider-connection-heading"><span><strong>{secret.label ?? secret.provider}</strong><small>{secret.selected_model ? `Active model · ${secret.selected_model}` : "Connected · choose a model"}</small></span><button type="button" className="icon-action danger" aria-label={`Remove ${secret.provider} key`} disabled={secretBusy || !secret.configured} onClick={() => handleRemoveKey(secret.provider)}><Trash2 aria-hidden="true" /></button></div>
+                  <div className="provider-connection-heading"><span><strong>{secret.label ?? secret.provider}</strong><small>{secret.selected_model ? `Active model · ${secret.selected_model}` : "Connected · choose a model"}</small>{providerTests[secret.provider] ? <small className="provider-test-ok">Verified · {providerTests[secret.provider].model_count} models · {providerTests[secret.provider].latency_ms} ms</small> : null}</span><div className="provider-row-actions"><button type="button" className="text-button" disabled={modelBusyFor === secret.provider} onClick={() => testProvider(secret.provider)}>Test</button><button type="button" className="icon-action danger" aria-label={`Remove ${secret.provider} key`} disabled={secretBusy || !secret.configured} onClick={() => setRemoveProvider(secret.provider)}><Trash2 aria-hidden="true" /></button></div></div>
+                  {providerErrors[secret.provider] ? <p className="account-error provider-error">{providerErrors[secret.provider]}</p> : null}
                   {providerModels[secret.provider] ? <div className="provider-model-choice"><select aria-label={`${secret.label ?? secret.provider} model`} value={providerModelSelection[secret.provider] ?? secret.selected_model ?? ""} onChange={(event) => setProviderModelSelection((current) => ({ ...current, [secret.provider]: event.target.value }))}>{providerModels[secret.provider].map((model) => <option key={model} value={model}>{model}</option>)}</select><button type="button" className="primary" disabled={modelBusyFor === secret.provider || !(providerModelSelection[secret.provider] ?? secret.selected_model)} onClick={() => activateProviderModel(secret.provider)}>{modelBusyFor === secret.provider ? "Activating…" : "Use this model"}</button></div> : <button type="button" className="secondary provider-load-models" disabled={modelBusyFor === secret.provider} onClick={() => loadProviderModels(secret.provider)}>{modelBusyFor === secret.provider ? "Loading models…" : "Choose a model"}</button>}
                 </li>
               ))}
@@ -233,6 +258,7 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
           </details>
         ) : null}
       </div>
+      <ConfirmDialog open={Boolean(removeProvider)} title="Remove this provider key?" description="The encrypted key and its activated model will be removed from this workspace. Local Ollama models remain available." confirmLabel="Remove provider" busyLabel="Removing…" busy={secretBusy} onOpenChange={(open) => { if (!open) setRemoveProvider(null); }} onConfirm={() => { if (removeProvider) void handleRemoveKey(removeProvider); }} />
     </section>
   );
 }

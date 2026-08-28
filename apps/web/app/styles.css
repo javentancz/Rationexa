@@ -563,6 +563,11 @@ button { cursor:pointer; }
 .usage-run-model,.usage-runs>button>span:not(.usage-kind) { display:grid; min-width:0; gap:2px; }
 .usage-runs strong,.usage-runs small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .usage-runs strong { font-size:10px; }
+.pilot-metrics-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.pilot-metrics-grid article{display:grid;gap:4px;border:1px solid var(--line);border-radius:10px;padding:13px;background:var(--accent-soft)}
+.pilot-metrics-grid strong{font:500 23px Georgia,serif;color:var(--accent-dark)}
+.pilot-metrics-grid span{color:var(--muted);font-size:10px;text-transform:uppercase}
+.pilot-note{margin:0;color:var(--muted);font-size:11px;line-height:1.5}
 .usage-runs small,.usage-runs time { color:var(--subtle); font-size:8px; }
 .decision-list { display:grid; gap:8px; }
 .decision-card { position:relative; }
@@ -749,6 +754,9 @@ button { cursor:pointer; }
 .provider-connection-heading>span{display:grid;gap:3px}
 .provider-model-choice{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
 .provider-load-models{justify-self:start}
+.provider-row-actions{display:flex;align-items:center;gap:6px}
+.provider-test-ok{color:var(--accent)!important;font-weight:700}
+.provider-error{margin:0}
 .account-key-list strong{font-size:12px}
 .account-key-list small{color:var(--muted);font-size:10px}
 .account-empty{color:var(--muted);font-size:12px}

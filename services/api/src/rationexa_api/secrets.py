@@ -87,9 +87,8 @@ def store_provider_key(
         "protocol": preset["protocol"],
         "selected_model": None,
     }
-    if existing is not None:
-        previous = get_provider_config(db, workspace_id, provider, settings=settings)
-        configuration["selected_model"] = previous.get("selected_model") if previous else None
+    # A rotated key may belong to a different provider project. Force the user
+    # to revalidate the catalog instead of silently retaining a stale model.
     encrypted = handle.encrypt(json.dumps(configuration).encode("utf-8")).decode("ascii")
     if existing is None:
         row = SecretRow(workspace_id=workspace_id, provider=provider, encrypted_value=encrypted)
