@@ -11,8 +11,7 @@ const forwardedResponseHeaders = [
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const apiUrl = process.env.RATIONEXA_API_URL;
-  const bypassSecret = process.env.RATIONEXA_API_BYPASS_SECRET;
-  if (!apiUrl || !bypassSecret) {
+  if (!apiUrl) {
     return Response.json({ detail: "The staging API proxy is not configured." }, { status: 503 });
   }
 
@@ -23,7 +22,6 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   const headers = new Headers(request.headers);
   headers.delete("host");
   headers.delete("content-length");
-  headers.set("x-vercel-protection-bypass", bypassSecret);
 
   const method = request.method.toUpperCase();
   const response = await fetch(target, {
