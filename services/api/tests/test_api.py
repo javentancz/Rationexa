@@ -1,5 +1,6 @@
 import time
 
+from alembic.runtime.migration import MigrationContext
 from fastapi.testclient import TestClient
 from sqlalchemy import func, inspect, select
 
@@ -12,7 +13,6 @@ from rationexa_api.db import (
     ExtractionRow,
     PremiseRow,
     RevisitRow,
-    SchemaMigrationRow,
     SessionLocal,
     SourceAnchorRow,
     WorkspaceRow,
@@ -21,17 +21,11 @@ from rationexa_api.db import (
 from rationexa_api.main import app
 
 
-def test_schema_migrations_are_versioned_and_recorded() -> None:
+def test_database_is_at_the_alembic_head() -> None:
     with TestClient(app):
-        with SessionLocal() as db:
-            versions = set(db.scalars(select(SchemaMigrationRow.version)).all())
-    assert versions == {
-        "20260825_01_account_credentials",
-        "20260825_02_workspace_scope",
-        "20260825_03_extraction_provenance",
-        "20260825_04_revisit_provenance",
-        "20260827_05_decision_challenge",
-    }
+        with engine.connect() as connection:
+            revision = MigrationContext.configure(connection).get_current_revision()
+    assert revision == "20260828_01"
 
 
 def create_finalized_decision(
@@ -311,7 +305,9 @@ def test_personal_workspace_excludes_other_workspace_records() -> None:
         usage_before = client.get("/v1/usage").json()["total_runs"]
         with SessionLocal() as db:
             db.add(AccountRow(id=other_account_id, name="Other user"))
+            db.flush()
             db.add(WorkspaceRow(id=other_workspace_id, owner_account_id=other_account_id, name="Other workspace"))
+            db.flush()
             db.add(
                 ArtifactRow(
                     id=other_artifact_id,
@@ -323,6 +319,7 @@ def test_personal_workspace_excludes_other_workspace_records() -> None:
                     extracted_text="Private decision source.",
                 )
             )
+            db.flush()
             db.add(
                 ExtractionRow(
                     id=other_extraction_id,
@@ -333,6 +330,7 @@ def test_personal_workspace_excludes_other_workspace_records() -> None:
                     output={},
                 )
             )
+            db.flush()
             db.add(
                 DecisionRow(
                     id=other_decision_id,

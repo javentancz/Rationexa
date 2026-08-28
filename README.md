@@ -16,7 +16,7 @@ Stage 1 established the trusted Import → Review → Finalize → Revisit workf
 - background jobs with progress, cancellation, and late-result suppression;
 - model, provider, prompt, latency, token, runtime, and known-cost provenance;
 - local Ollama models and encrypted bring-your-own-key (BYOK) providers with live connection checks;
-- versioned database migrations and supervised-pilot repeat-use metrics.
+- Alembic database migrations and supervised-pilot repeat-use metrics.
 
 The next milestone is a supervised user pilot. The checked-in 30-case suite is a development regression set, not independent proof of production accuracy.
 
@@ -62,6 +62,21 @@ pnpm dev:web
 
 Open `http://localhost:3000`.
 
+The Compose database is exposed on `localhost:5433`. The API applies pending Alembic migrations at startup. SQLite remains supported for an offline demo by setting `DATABASE_URL=sqlite:///./rationexa.db`, but PostgreSQL is the supported pilot database.
+
+### Move existing SQLite data to PostgreSQL
+
+Stop the API, start the empty PostgreSQL service, and run the guarded one-time copy command from the repository root:
+
+```bash
+docker compose up -d db
+.venv/bin/python -m rationexa_api.migrate_database \
+  --source sqlite:///./rationexa.db \
+  --target postgresql+psycopg://rationexa:rationexa@localhost:5433/rationexa
+```
+
+The command refuses to write into a target that already contains application data. It preserves IDs, decisions, premises, revisits, shares, provenance, and encrypted BYOK records. Keep the same `SECRET_ENCRYPTION_KEY` or `.rationexa-secret.key` to decrypt migrated provider records. Artifact files remain in `ARTIFACT_DIR`; back up and move that directory separately when changing machines.
+
 For fast development without a model process, set `AI_PROVIDER=deterministic`. To expose additional installed Ollama models, update the comma-separated `OLLAMA_MODELS` value and restart the API.
 
 Local models only reason over evidence supplied to Rationexa. They do not fetch current web evidence by themselves.
@@ -89,6 +104,14 @@ pnpm --filter @rationexa/web test:e2e
 pnpm --filter @rationexa/web build-storybook
 .venv/bin/pytest services/api/tests
 .venv/bin/ruff check services/api
+```
+
+Run the same API suite in an isolated temporary PostgreSQL schema:
+
+```bash
+docker compose up -d db
+TEST_DATABASE_URL=postgresql+psycopg://rationexa:rationexa@localhost:5433/rationexa \
+  .venv/bin/pytest services/api/tests
 ```
 
 The durable Stage 1 safety boundary is recorded in [ADR-0001](docs/adr/0001-stage-1-trust-boundary.md).

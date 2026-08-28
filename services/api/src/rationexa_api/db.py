@@ -15,6 +15,7 @@ from sqlalchemy.orm import (
 )
 
 from .config import get_settings
+from .database_migrations import run_alembic
 
 
 def new_id() -> str:
@@ -215,13 +216,19 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 
 def init_db() -> None:
-    Base.metadata.create_all(bind=engine)
-    # Older account tables must receive credential columns before SQLAlchemy
-    # loads the bootstrap account. The remaining migrations can then safely
-    # assign legacy records to that workspace.
-    _run_schema_migrations(only={"20260825_01_account_credentials"})
+    existing_tables = set(inspect(engine).get_table_names())
+    has_legacy_schema = "accounts" in existing_tables and "alembic_version" not in existing_tables
+    if has_legacy_schema:
+        # Bring pre-Alembic Stage 1/2 databases to the baseline shape, then
+        # stamp them. New databases and all future upgrades use Alembic only.
+        Base.metadata.create_all(bind=engine)
+        _run_schema_migrations(only={"20260825_01_account_credentials"})
+        _ensure_local_workspace()
+        _run_schema_migrations()
+        run_alembic(engine, "stamp")
+    else:
+        run_alembic(engine)
     _ensure_local_workspace()
-    _run_schema_migrations()
 
 
 def _run_schema_migrations(*, only: set[str] | None = None) -> None:

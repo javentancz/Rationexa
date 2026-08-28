@@ -8,6 +8,7 @@ version = "0.2.0"
 description = "Rationexa human-in-the-loop decision memory and review API"
 requires-python = ">=3.14,<3.15"
 dependencies = [
+  "alembic>=1.19.1,<2",
   "cryptography>=50.0.1,<51",
   "fastapi>=0.141.1,<1",
   "httpx>=0.28.1,<1",
@@ -41,3 +42,7 @@ target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.alembic]
+script_location = "%(here)s/migrations"
+prepend_sys_path = ["%(here)s/src"]
