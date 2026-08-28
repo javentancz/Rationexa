@@ -1,13 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { KeyRound, LogIn, LogOut, Trash2, UserRound } from "lucide-react";
+import { KeyRound, LogIn, LogOut, Monitor, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import { apiFetch, getSessionToken, login, logout, register, setSessionToken } from "./api";
+import { apiFetch, confirmPasswordReset, getSessionToken, login, logout, register, requestPasswordReset, setSessionToken } from "./api";
 import { ConfirmDialog } from "./ui";
 
 type AccountRead = { id: string; name: string; email?: string; has_password: boolean; created_at: string };
 type WorkspaceRead = { id: string; name: string; account_name: string };
+type SessionSummary = { id: string; created_at: string; expires_at: string; current: boolean };
 type SecretRead = { provider: string; configured: boolean; label?: string; base_url?: string; selected_model?: string; protocol?: string; last_updated_at?: string; source: string };
 type ProviderModels = { models: string[] };
 type ProviderTest = { provider: string; ok: boolean; model_count: number; latency_ms: number };
@@ -20,18 +21,27 @@ const providerOptions = [
 
 type AccountPanelProps = {
   onConfigurationChanged?: () => void;
+  onWorkspaceProfileChanged?: () => void;
 };
 
-export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
+export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged }: AccountPanelProps) {
   const [authenticated, setAuthenticated] = useState(false);
   const [account, setAccount] = useState<AccountRead | null>(null);
+  const [workspace, setWorkspace] = useState<WorkspaceRead | null>(null);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [secrets, setSecrets] = useState<SecretRead[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authMode, setAuthMode] = useState<"login" | "register" | "reset">("login");
   const [authBusy, setAuthBusy] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [keyEntry, setKeyEntry] = useState("");
   const [providerEntry, setProviderEntry] = useState("openrouter");
   const [baseUrlEntry, setBaseUrlEntry] = useState("");
@@ -49,9 +59,17 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
     try {
       const token = getSessionToken();
       if (token) {
-        const who = (await apiFetch("/v1/account")) as AccountRead;
+        const [who, currentWorkspace, activeSessions] = await Promise.all([
+          apiFetch("/v1/account") as Promise<AccountRead>,
+          apiFetch("/v1/workspace") as Promise<WorkspaceRead>,
+          apiFetch("/v1/auth/sessions") as Promise<SessionSummary[]>,
+        ]);
         setAuthenticated(true);
         setAccount(who);
+        setWorkspace(currentWorkspace);
+        setSessions(activeSessions);
+        setProfileName(who.name);
+        setWorkspaceName(currentWorkspace.name);
       } else {
         const workspace = (await apiFetch("/v1/workspace")) as WorkspaceRead;
         setAuthenticated(false);
@@ -61,6 +79,8 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
           has_password: false,
           created_at: "",
         });
+        setWorkspace(workspace);
+        setSessions([]);
       }
       const stored = await apiFetch("/v1/secrets");
       const entries = (stored as SecretRead[]) ?? [];
@@ -74,16 +94,25 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
         const workspace = (await apiFetch("/v1/workspace")) as WorkspaceRead;
         setAuthenticated(false);
         setAccount({ id: workspace.id, name: workspace.account_name, has_password: false, created_at: "" });
+        setWorkspace(workspace);
+        setSessions([]);
         setSecrets((await apiFetch("/v1/secrets")) as SecretRead[]);
         return;
       }
       setAccount(null);
+      setWorkspace(null);
+      setSessions([]);
       setSecrets([]);
       setError(caught instanceof Error ? caught.message : "Could not load workspace settings");
     }
   }
 
   useEffect(() => {
+    const resetHash = window.location.hash.match(/^#account-reset=(.+)$/);
+    if (resetHash) {
+      setResetToken(decodeURIComponent(resetHash[1]));
+      setAuthMode("reset");
+    }
     void refresh();
     const recover = () => { void refresh(); };
     window.addEventListener("rationexa-auth-expired", recover);
@@ -121,6 +150,91 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
       toast.success("Pilot workspace created");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Account creation failed");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleResetRequest(event: FormEvent) {
+    event.preventDefault();
+    setAuthBusy(true);
+    setError(null);
+    setResetMessage(null);
+    try {
+      const result = await requestPasswordReset(email);
+      setResetMessage(result.message);
+      if (result.development_token) setResetToken(result.development_token);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not prepare password reset");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleResetConfirm(event: FormEvent) {
+    event.preventDefault();
+    setAuthBusy(true);
+    setError(null);
+    try {
+      const session = await confirmPasswordReset(resetToken, newPassword);
+      setSessionToken(session.session_token);
+      setResetToken("");
+      setNewPassword("");
+      setResetMessage(null);
+      setAuthMode("login");
+      await refresh();
+      onConfigurationChanged?.();
+      toast.success("Password reset complete");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Password reset failed");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleProfileSave(event: FormEvent) {
+    event.preventDefault();
+    setAuthBusy(true);
+    setError(null);
+    try {
+      await apiFetch("/v1/account", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: profileName }) });
+      await apiFetch("/v1/workspace", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: workspaceName }) });
+      await refresh();
+      onWorkspaceProfileChanged?.();
+      toast.success("Workspace profile updated");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update workspace profile");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handlePasswordChange(event: FormEvent) {
+    event.preventDefault();
+    setAuthBusy(true);
+    setError(null);
+    try {
+      await apiFetch("/v1/auth/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) });
+      setCurrentPassword("");
+      setNewPassword("");
+      await refresh();
+      toast.success("Password changed. Other sessions were signed out.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not change password");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleLogoutOthers() {
+    setAuthBusy(true);
+    setError(null);
+    try {
+      await apiFetch("/v1/auth/logout-others", { method: "POST" });
+      await refresh();
+      toast.success("Other sessions signed out");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not sign out other sessions");
     } finally {
       setAuthBusy(false);
     }
@@ -254,6 +368,31 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
             <button type="button" className="text-button danger" disabled={secretBusy} onClick={handleLogout}><LogOut aria-hidden="true" />Sign out</button>
           </div>
         ) : null}
+        {authenticated ? (
+          <div className="pilot-account-grid">
+            <section className="account-management-card">
+              <div className="byok-heading"><UserRound aria-hidden="true" /><div><strong>Workspace profile</strong><p>Names shown only inside this private pilot workspace.</p></div></div>
+              <form className="account-login" onSubmit={handleProfileSave}>
+                <label><span>Display name</span><input required value={profileName} onChange={(event) => setProfileName(event.target.value)} /></label>
+                <label><span>Workspace name</span><input required value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} /></label>
+                <button type="submit" className="secondary" disabled={authBusy || !workspace}>Save profile</button>
+              </form>
+            </section>
+            <section className="account-management-card">
+              <div className="byok-heading"><ShieldCheck aria-hidden="true" /><div><strong>Password security</strong><p>Changing your password signs out every other active session.</p></div></div>
+              <form className="account-login" onSubmit={handlePasswordChange}>
+                <label><span>Current password</span><input type="password" autoComplete="current-password" required value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
+                <label><span>New password</span><input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
+                <button type="submit" className="secondary" disabled={authBusy}>Change password</button>
+              </form>
+            </section>
+            <section className="account-management-card account-sessions">
+              <div className="byok-heading"><Monitor aria-hidden="true" /><div><strong>Active sessions</strong><p>Review access to this workspace and sign out other browsers.</p></div></div>
+              <ul>{sessions.map((session) => <li key={session.id}><span><strong>{session.current ? "This browser" : "Signed-in browser"}</strong><small>Started {new Date(session.created_at).toLocaleString()} · expires {new Date(session.expires_at).toLocaleString()}</small></span>{session.current ? <em>Current</em> : null}</li>)}</ul>
+              <button type="button" className="text-button danger" disabled={authBusy || sessions.every((session) => session.current)} onClick={handleLogoutOthers}>Sign out other sessions</button>
+            </section>
+          </div>
+        ) : null}
         <div className="account-secrets">
           <div className="byok-heading">
             <KeyRound aria-hidden="true" />
@@ -283,12 +422,15 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
         {!authenticated ? (
           <details className="optional-sign-in">
             <summary>Optional: use a private pilot workspace</summary>
-            <div className="auth-mode-toggle" role="tablist" aria-label="Account action"><button type="button" role="tab" aria-selected={authMode === "login"} className={authMode === "login" ? "active" : ""} onClick={() => setAuthMode("login")}>Sign in</button><button type="button" role="tab" aria-selected={authMode === "register"} className={authMode === "register" ? "active" : ""} onClick={() => setAuthMode("register")}>Create workspace</button></div>
-            <form onSubmit={authMode === "login" ? handleLogin : handleRegister} className="account-login">
+            <div className="auth-mode-toggle" role="tablist" aria-label="Account action"><button type="button" role="tab" aria-selected={authMode === "login"} className={authMode === "login" ? "active" : ""} onClick={() => setAuthMode("login")}>Sign in</button><button type="button" role="tab" aria-selected={authMode === "register"} className={authMode === "register" ? "active" : ""} onClick={() => setAuthMode("register")}>Create workspace</button><button type="button" role="tab" aria-selected={authMode === "reset"} className={authMode === "reset" ? "active" : ""} onClick={() => setAuthMode("reset")}>Reset password</button></div>
+            <form onSubmit={authMode === "login" ? handleLogin : authMode === "register" ? handleRegister : resetToken ? handleResetConfirm : handleResetRequest} className="account-login">
               {authMode === "register" ? <label><span>Display name</span><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Pilot reviewer" /></label> : null}
-              <label><span>Email</span><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label>
-              <label><span>Password</span><input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" /></label>
-              <button type="submit" className="primary" disabled={authBusy}>{authBusy ? (authMode === "login" ? "Signing in…" : "Creating workspace…") : <><LogIn aria-hidden="true" />{authMode === "login" ? "Sign in" : "Create private workspace"}</>}</button>
+              {authMode !== "reset" || !resetToken ? <label><span>Email</span><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label> : null}
+              {authMode === "reset" && resetToken ? <label><span>One-time reset token</span><input required value={resetToken} onChange={(event) => setResetToken(event.target.value)} /></label> : null}
+              {authMode === "reset" && resetToken ? <label><span>New password</span><input type="password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="At least 8 characters" /></label> : null}
+              {authMode !== "reset" ? <label><span>Password</span><input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" /></label> : null}
+              {resetMessage ? <p className="account-hint">{resetMessage}</p> : null}
+              <button type="submit" className="primary" disabled={authBusy}>{authBusy ? "Working…" : <><LogIn aria-hidden="true" />{authMode === "login" ? "Sign in" : authMode === "register" ? "Create private workspace" : resetToken ? "Set new password" : "Send reset link"}</>}</button>
             </form>
           </details>
         ) : null}

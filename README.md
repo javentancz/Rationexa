@@ -20,6 +20,10 @@ Stage 1 established the trusted Import → Review → Finalize → Revisit workf
 
 The next milestone is a supervised user pilot. The checked-in 30-case suite is a development regression set, not independent proof of production accuracy.
 
+Pilot operations now include private account registration, one-time password
+recovery, active-session revocation, workspace profile management, database-aware
+readiness checks, and guarded PostgreSQL-plus-artifact backup/restore tooling.
+
 ## Model runtimes
 
 Local Ollama is free and requires no account. The configured local models are:
@@ -113,5 +117,8 @@ docker compose up -d db
 TEST_DATABASE_URL=postgresql+psycopg://rationexa:rationexa@localhost:5433/rationexa \
   .venv/bin/pytest services/api/tests
 ```
+
+Staging environment, password recovery, health-check, backup, and restore
+instructions are in [Pilot operations](ops/README.md).
 
 The durable Stage 1 safety boundary is recorded in [ADR-0001](docs/adr/0001-stage-1-trust-boundary.md).

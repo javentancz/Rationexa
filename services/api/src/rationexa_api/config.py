@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     local_account_email: str = "demo@rationexa.local"
     local_account_password: str | None = None
     auth_session_ttl_hours: int = 168
+    password_reset_ttl_minutes: int = 30
+    password_reset_dev_mode: bool = False
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str | None = None
+    smtp_use_tls: bool = True
     pbkdf2_iterations: int = 200_000
 
     @property

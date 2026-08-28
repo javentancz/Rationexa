@@ -25,7 +25,14 @@ def test_database_is_at_the_alembic_head() -> None:
     with TestClient(app):
         with engine.connect() as connection:
             revision = MigrationContext.configure(connection).get_current_revision()
-    assert revision == "20260828_02"
+    assert revision == "20260828_03"
+
+
+def test_readiness_checks_database_and_artifact_storage() -> None:
+    with TestClient(app) as client:
+        response = client.get("/readyz")
+        assert response.status_code == 200
+        assert response.json()["status"] == "ready"
 
 
 def create_finalized_decision(
@@ -235,7 +242,7 @@ def test_revisit_provenance_columns_exist() -> None:
 
     with SessionLocal() as db:
         assert db.get(AccountRow, get_settings().local_account_id) is not None
-        assert db.scalar(select(func.count()).select_from(WorkspaceRow)) == 1
+        assert db.get(WorkspaceRow, get_settings().local_workspace_id) is not None
         assert all(row.workspace_id for row in db.scalars(select(ArtifactRow)).all())
         assert all(row.workspace_id for row in db.scalars(select(ExtractionRow)).all())
         assert all(row.workspace_id for row in db.scalars(select(DecisionRow)).all())

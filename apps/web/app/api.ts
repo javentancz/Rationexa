@@ -60,6 +60,24 @@ export async function register(name: string, email: string, password: string): P
   return responseJson(response);
 }
 
+export async function requestPasswordReset(email: string): Promise<{ message: string; development_token?: string }> {
+  const response = await fetch(`${api}/v1/auth/password-reset/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return responseJson(response);
+}
+
+export async function confirmPasswordReset(token: string, newPassword: string): Promise<{ session_token: string }> {
+  const response = await fetch(`${api}/v1/auth/password-reset/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  return responseJson(response);
+}
+
 export async function logout(): Promise<void> {
   await apiFetch("/v1/auth/logout", { method: "POST" }).catch(() => undefined);
   setSessionToken(null);

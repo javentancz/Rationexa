@@ -276,6 +276,10 @@ export default function Home() {
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const restoredSession = useRef(false);
 
+  useEffect(() => {
+    if (window.location.hash.startsWith("#account-reset=")) setView("settings");
+  }, []);
+
   const bootstrapQuery = useQuery({
     queryKey: ["workspace-bootstrap"],
     queryFn: async () => Promise.all([
@@ -317,6 +321,10 @@ export default function Home() {
     restoredSession.current = true;
     const restore = async () => {
       try {
+        if (window.location.hash.startsWith("#account-reset=")) {
+          setView("settings");
+          return;
+        }
         const saved = window.localStorage.getItem(workspaceSessionKey);
         if (!saved) return;
         const state = JSON.parse(saved) as PersistedWorkspaceSession;
@@ -1064,7 +1072,7 @@ export default function Home() {
 
       <main id="workspace" className="workspace">
         <header className="topbar">
-          <div><span className="overline">{view === "library" ? "Decision memory / Library" : view === "usage" ? "Workspace / Usage" : `Decision memory / ${workflowView === 1 ? "Import" : workflowView === 2 ? "Review" : workflowView === 3 ? "Finalize" : "Revisit"}`}</span><h1>{view === "library" ? "Decision library" : view === "usage" ? "Usage & cost" : draft?.title || decision?.title || "New decision review"}</h1></div>
+          <div><span className="overline">{view === "library" ? "Decision memory / Library" : view === "usage" ? "Workspace / Usage" : view === "settings" ? "Workspace / Account" : `Decision memory / ${workflowView === 1 ? "Import" : workflowView === 2 ? "Review" : workflowView === 3 ? "Finalize" : "Revisit"}`}</span><h1>{view === "library" ? "Decision library" : view === "usage" ? "Usage & cost" : view === "settings" ? "Account & keys" : draft?.title || decision?.title || "New decision review"}</h1></div>
         </header>
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
@@ -1102,7 +1110,7 @@ export default function Home() {
           </> : null}
         </section> : null}
 
-        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use local models without an account, or add a hosted-provider key to this personal workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel onConfigurationChanged={() => { void handleWorkspaceChanged(); }} /></section> : null}
+        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use local models without an account, or add a hosted-provider key to this personal workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel onConfigurationChanged={() => { void handleWorkspaceChanged(); }} onWorkspaceProfileChanged={() => { void bootstrapQuery.refetch(); }} /></section> : null}
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
 

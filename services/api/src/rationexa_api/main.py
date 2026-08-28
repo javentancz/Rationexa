@@ -1,12 +1,14 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
+from secrets import token_urlsafe
 from time import perf_counter
 from typing import Annotated
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,11 +27,13 @@ from .db import (
     DecisionRow,
     DecisionShareRow,
     ExtractionRow,
+    PasswordResetRow,
     PremiseRow,
     ProductEventRow,
     RevisitRow,
     SecretRow,
     SessionLocal,
+    SessionRow,
     SourceAnchorRow,
     WorkspaceRow,
     get_db,
@@ -39,6 +43,7 @@ from .db import (
 )
 from .exports import export_filename, render_decision_markdown
 from .jobs import job_manager
+from .notifications import send_password_reset_email
 from .pdf_export import render_decision_pdf
 from .prompts import CHALLENGE_PROMPT_VERSION, EXTRACTION_PROMPT_VERSION, REVISIT_PROMPT_VERSION
 from .providers import (
@@ -51,6 +56,7 @@ from .providers import (
 )
 from .schemas import (
     AccountRead,
+    AccountUpdateRequest,
     ArtifactCreate,
     ArtifactRead,
     ChallengePoint,
@@ -72,6 +78,10 @@ from .schemas import (
     JobRead,
     ModelCatalogRead,
     ModelOption,
+    PasswordChangeRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
+    PasswordResetRequestRead,
     PilotMetricsRead,
     PremiseKind,
     RevisitFindingJudgmentRequest,
@@ -84,6 +94,7 @@ from .schemas import (
     SecretStoreRequest,
     SessionRead,
     SessionRequest,
+    SessionSummaryRead,
     ShareCreate,
     ShareDecisionRead,
     ShareRead,
@@ -92,6 +103,7 @@ from .schemas import (
     UsageRunRead,
     UsageSummaryRead,
     WorkspaceRead,
+    WorkspaceUpdateRequest,
 )
 from .secrets import (
     delete_provider_key,
@@ -207,6 +219,17 @@ def provider_for(db: Session, workspace_id: str | None, model_id: str | None) ->
 @app.get("/healthz", response_model=HealthRead)
 def health() -> HealthRead:
     return HealthRead(status="ok", service=settings.app_name)
+
+
+@app.get("/readyz", response_model=HealthRead)
+def readiness(db: Db) -> HealthRead:
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Database is not ready") from exc
+    if not settings.artifact_dir.exists() or not settings.artifact_dir.is_dir():
+        raise HTTPException(status_code=503, detail="Artifact storage is not ready")
+    return HealthRead(status="ready", service=settings.app_name)
 
 
 def record_product_event(
@@ -1483,6 +1506,26 @@ def session_read(account: AccountRow, session) -> SessionRead:
     )
 
 
+def authenticated_account(request: Request, db: Session) -> AccountRow:
+    account = resolve_session(extract_session_token(request), db)
+    if account is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    return account
+
+
+def revoke_account_sessions(db: Session, account_id: str, *, except_token: str | None = None) -> int:
+    sessions = db.scalars(
+        select(SessionRow).where(SessionRow.account_id == account_id, SessionRow.revoked_at.is_(None))
+    ).all()
+    revoked = 0
+    for session in sessions:
+        if except_token and session.token == except_token:
+            continue
+        session.revoked_at = now_utc()
+        revoked += 1
+    return revoked
+
+
 @app.post("/v1/auth/register", response_model=SessionRead, status_code=status.HTTP_201_CREATED)
 def register(payload: CredentialCreate, db: Db) -> SessionRead:
     account = _create_account(payload, db)
@@ -1491,10 +1534,41 @@ def register(payload: CredentialCreate, db: Db) -> SessionRead:
 
 @app.get("/v1/account", response_model=AccountRead)
 def whoami(request: Request, db: Db) -> AccountRead:
-    account = resolve_session(extract_session_token(request), db)
-    if account is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    return account_read(authenticated_account(request, db))
+
+
+@app.patch("/v1/account", response_model=AccountRead)
+def update_account(payload: AccountUpdateRequest, request: Request, db: Db) -> AccountRead:
+    account = authenticated_account(request, db)
+    account.name = payload.name.strip()
+    workspace = account_workspace(db, account.id)
+    if workspace is not None and workspace.name.endswith("'s workspace"):
+        workspace.name = f"{account.name}'s workspace"
+    db.commit()
+    db.refresh(account)
     return account_read(account)
+
+
+@app.patch("/v1/workspace", response_model=WorkspaceRead)
+def update_workspace(payload: WorkspaceUpdateRequest, request: Request, db: Db) -> WorkspaceRead:
+    token = extract_session_token(request)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in to rename a pilot workspace")
+    account = authenticated_account(request, db)
+    workspace = account_workspace(db, account.id)
+    if workspace is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    workspace.name = payload.name.strip()
+    db.commit()
+    db.refresh(workspace)
+    return WorkspaceRead(
+        id=workspace.id,
+        name=workspace.name,
+        account_id=account.id,
+        account_name=account.name,
+        mode="authenticated_personal",
+        created_at=as_utc(workspace.created_at),
+    )
 
 
 @app.post("/v1/auth/login", response_model=SessionRead)
@@ -1517,6 +1591,123 @@ def login(payload: SessionRequest, db: Db) -> SessionRead:
 def logout(request: Request, db: Db) -> Response:
     revoke_session(extract_session_token(request), db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/v1/auth/sessions", response_model=list[SessionSummaryRead])
+def list_sessions(request: Request, db: Db) -> list[SessionSummaryRead]:
+    account = authenticated_account(request, db)
+    current_token = extract_session_token(request)
+    rows = db.scalars(
+        select(SessionRow).where(
+            SessionRow.account_id == account.id,
+            SessionRow.revoked_at.is_(None),
+            SessionRow.expires_at > now_utc(),
+        ).order_by(SessionRow.created_at.desc())
+    ).all()
+    return [
+        SessionSummaryRead(
+            id=row.id,
+            created_at=as_utc(row.created_at),
+            expires_at=as_utc(row.expires_at),
+            current=row.token == current_token,
+        )
+        for row in rows
+    ]
+
+
+@app.delete("/v1/auth/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_session(session_id: str, request: Request, db: Db) -> Response:
+    account = authenticated_account(request, db)
+    row = db.scalar(select(SessionRow).where(SessionRow.id == session_id, SessionRow.account_id == account.id))
+    if row is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if row.revoked_at is None:
+        row.revoked_at = now_utc()
+        db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.post("/v1/auth/logout-others", status_code=status.HTTP_204_NO_CONTENT)
+def logout_other_sessions(request: Request, db: Db) -> Response:
+    account = authenticated_account(request, db)
+    revoke_account_sessions(db, account.id, except_token=extract_session_token(request))
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.post("/v1/auth/password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(payload: PasswordChangeRequest, request: Request, db: Db) -> Response:
+    account = authenticated_account(request, db)
+    if (
+        account.password_hash is None
+        or account.password_salt is None
+        or not verify_password(
+            payload.current_password,
+            account.password_hash,
+            account.password_salt,
+            account.password_iterations or settings.pbkdf2_iterations,
+        )
+    ):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+    account.password_hash, account.password_salt, account.password_iterations = hash_password(
+        payload.new_password,
+        settings.pbkdf2_iterations,
+    )
+    revoke_account_sessions(db, account.id, except_token=extract_session_token(request))
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.post("/v1/auth/password-reset/request", response_model=PasswordResetRequestRead)
+def request_password_reset(
+    payload: PasswordResetRequest,
+    background_tasks: BackgroundTasks,
+    db: Db,
+) -> PasswordResetRequestRead:
+    generic_message = "If that account exists, a password reset link has been prepared."
+    account = find_account_by_email(payload.email, db)
+    if account is None or account.email is None:
+        return PasswordResetRequestRead(message=generic_message)
+    now = now_utc()
+    for previous in db.scalars(
+        select(PasswordResetRow).where(
+            PasswordResetRow.account_id == account.id,
+            PasswordResetRow.used_at.is_(None),
+        )
+    ).all():
+        previous.used_at = now
+    token = token_urlsafe(32)
+    db.add(
+        PasswordResetRow(
+            account_id=account.id,
+            token_hash=sha256(token.encode("utf-8")).hexdigest(),
+            expires_at=now + timedelta(minutes=settings.password_reset_ttl_minutes),
+        )
+    )
+    db.commit()
+    development_token = token if settings.password_reset_dev_mode else None
+    if not settings.password_reset_dev_mode and settings.smtp_host and settings.smtp_from_email:
+        background_tasks.add_task(send_password_reset_email, settings, account.email, token)
+    return PasswordResetRequestRead(message=generic_message, development_token=development_token)
+
+
+@app.post("/v1/auth/password-reset/confirm", response_model=SessionRead)
+def confirm_password_reset(payload: PasswordResetConfirmRequest, db: Db) -> SessionRead:
+    token_hash = sha256(payload.token.encode("utf-8")).hexdigest()
+    row = db.scalar(select(PasswordResetRow).where(PasswordResetRow.token_hash == token_hash))
+    if row is None or row.used_at is not None or as_utc(row.expires_at) <= now_utc():
+        raise HTTPException(status_code=400, detail="This password reset link is invalid or has expired")
+    account = db.get(AccountRow, row.account_id)
+    if account is None:
+        raise HTTPException(status_code=400, detail="This password reset link is invalid or has expired")
+    account.password_hash, account.password_salt, account.password_iterations = hash_password(
+        payload.new_password,
+        settings.pbkdf2_iterations,
+    )
+    row.used_at = now_utc()
+    revoke_account_sessions(db, account.id)
+    db.commit()
+    return session_read(account, issue_session(db, account.id))
 
 
 @app.get("/v1/secrets", response_model=list[SecretRead])

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from rationexa_api.auth import hash_password, verify_password
 from rationexa_api.config import Settings
 from rationexa_api.db import AccountRow, SecretRow, SessionLocal, SessionRow, WorkspaceRow
-from rationexa_api.main import app
+from rationexa_api.main import app, settings
 from rationexa_api.providers import OpenAIResponsesProvider, get_provider
 from rationexa_api.secrets import fernet
 
@@ -65,6 +65,92 @@ def test_invalid_session_never_falls_back_to_the_local_workspace() -> None:
         response = client.get("/v1/workspace", headers={"Authorization": "Bearer invalid-session"})
         assert response.status_code == 401
         assert "expired" in response.json()["detail"]
+
+
+def test_profile_and_workspace_names_can_be_updated_only_by_the_owner() -> None:
+    with TestClient(app) as client:
+        client.post("/v1/account", json={"email": "profile@rationexa.local", "password": "profile-pass"})
+        token = _login(client, client, "profile@rationexa.local", "profile-pass")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        profile = client.patch("/v1/account", headers=headers, json={"name": "Pilot One"})
+        workspace = client.patch("/v1/workspace", headers=headers, json={"name": "Architecture pilot"})
+
+        assert profile.status_code == 200 and profile.json()["name"] == "Pilot One"
+        assert workspace.status_code == 200 and workspace.json()["name"] == "Architecture pilot"
+        assert client.patch("/v1/workspace", json={"name": "Local renamed"}).status_code == 401
+
+
+def test_active_sessions_can_be_listed_and_other_sessions_revoked() -> None:
+    with TestClient(app) as client:
+        client.post("/v1/account", json={"email": "sessions@rationexa.local", "password": "session-pass"})
+        first = _login(client, client, "sessions@rationexa.local", "session-pass")
+        second = _login(client, client, "sessions@rationexa.local", "session-pass")
+        first_headers = {"Authorization": f"Bearer {first}"}
+        second_headers = {"Authorization": f"Bearer {second}"}
+
+        sessions = client.get("/v1/auth/sessions", headers=first_headers)
+        assert sessions.status_code == 200
+        assert len(sessions.json()) == 2
+        assert sum(1 for entry in sessions.json() if entry["current"]) == 1
+
+        assert client.post("/v1/auth/logout-others", headers=first_headers).status_code == 204
+        assert client.get("/v1/account", headers=first_headers).status_code == 200
+        assert client.get("/v1/account", headers=second_headers).status_code == 401
+
+
+def test_password_change_keeps_current_session_and_revokes_others() -> None:
+    with TestClient(app) as client:
+        client.post("/v1/account", json={"email": "change@rationexa.local", "password": "before-pass"})
+        current = _login(client, client, "change@rationexa.local", "before-pass")
+        other = _login(client, client, "change@rationexa.local", "before-pass")
+        response = client.post(
+            "/v1/auth/password",
+            headers={"Authorization": f"Bearer {current}"},
+            json={"current_password": "before-pass", "new_password": "after-pass"},
+        )
+        assert response.status_code == 204
+        assert client.get("/v1/account", headers={"Authorization": f"Bearer {current}"}).status_code == 200
+        assert client.get("/v1/account", headers={"Authorization": f"Bearer {other}"}).status_code == 401
+        assert client.post(
+            "/v1/auth/login", json={"email": "change@rationexa.local", "password": "before-pass"}
+        ).status_code == 401
+        assert client.post(
+            "/v1/auth/login", json={"email": "change@rationexa.local", "password": "after-pass"}
+        ).status_code == 200
+
+
+def test_password_reset_is_single_use_and_revokes_existing_sessions(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "password_reset_dev_mode", True)
+    with TestClient(app) as client:
+        client.post("/v1/account", json={"email": "reset@rationexa.local", "password": "before-reset"})
+        old_token = _login(client, client, "reset@rationexa.local", "before-reset")
+        requested = client.post("/v1/auth/password-reset/request", json={"email": "reset@rationexa.local"})
+        assert requested.status_code == 200
+        reset_token = requested.json()["development_token"]
+        assert reset_token
+
+        confirmed = client.post(
+            "/v1/auth/password-reset/confirm",
+            json={"token": reset_token, "new_password": "after-reset"},
+        )
+        assert confirmed.status_code == 200
+        assert client.get("/v1/account", headers={"Authorization": f"Bearer {old_token}"}).status_code == 401
+        assert client.get(
+            "/v1/account", headers={"Authorization": f"Bearer {confirmed.json()['session_token']}"}
+        ).status_code == 200
+        assert client.post(
+            "/v1/auth/password-reset/confirm",
+            json={"token": reset_token, "new_password": "another-pass"},
+        ).status_code == 400
+
+
+def test_password_reset_request_does_not_reveal_unknown_accounts() -> None:
+    with TestClient(app) as client:
+        response = client.post("/v1/auth/password-reset/request", json={"email": "missing@rationexa.local"})
+        assert response.status_code == 200
+        assert response.json()["accepted"] is True
+        assert response.json()["development_token"] is None
 
 
 def test_duplicate_email_is_rejected() -> None:

@@ -98,6 +98,41 @@ class SessionRequest(BaseModel):
     password: str = Field(min_length=1, max_length=PASSWORD_LENGTH_MAX)
 
 
+class SessionSummaryRead(BaseModel):
+    id: str
+    created_at: datetime
+    expires_at: datetime
+    current: bool
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=PASSWORD_LENGTH_MAX)
+    new_password: str = Field(min_length=PASSWORD_LENGTH_MIN, max_length=PASSWORD_LENGTH_MAX)
+
+
+class PasswordResetRequest(BaseModel):
+    email: str = Field(min_length=1, max_length=255)
+
+
+class PasswordResetRequestRead(BaseModel):
+    accepted: bool = True
+    message: str
+    development_token: str | None = None
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+    new_password: str = Field(min_length=PASSWORD_LENGTH_MIN, max_length=PASSWORD_LENGTH_MAX)
+
+
+class AccountUpdateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class WorkspaceUpdateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
 class SecretRead(BaseModel):
     provider: str
     configured: bool
