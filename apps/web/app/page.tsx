@@ -72,7 +72,7 @@ type DecisionListItem = {
 };
 
 type DecisionLibrary = { items: DecisionListItem[]; total: number };
-type PersonalWorkspace = { id: string; name: string; account_id: string; account_name: string; mode: "local_personal"; created_at: string };
+type PersonalWorkspace = { id: string; name: string; account_id: string; account_name: string; mode: "local_personal" | "authenticated_personal"; created_at: string };
 
 type Finding = {
   premise_id: string;
@@ -297,6 +297,20 @@ export default function Home() {
       ? current
       : catalog.models.find((model) => model.id !== catalog.default_model_id)?.id || "");
   }, [bootstrapQuery.data, bootstrapQuery.error]);
+
+  useEffect(() => {
+    const recoverLocalWorkspace = () => {
+      window.localStorage.removeItem(workspaceSessionKey);
+      window.localStorage.removeItem(evidenceDraftsKey);
+      resetWorkspace();
+      setLibrary({ items: [], total: 0 });
+      void bootstrapQuery.refetch();
+      void loadLibrary();
+      toast.info("Your session expired. The local workspace is active.");
+    };
+    window.addEventListener("rationexa-auth-expired", recoverLocalWorkspace);
+    return () => window.removeEventListener("rationexa-auth-expired", recoverLocalWorkspace);
+  }, []);
 
   useEffect(() => {
     if (restoredSession.current) return;
@@ -830,6 +844,15 @@ export default function Home() {
     setEvidence("");
      }
 
+  async function handleWorkspaceChanged() {
+    window.localStorage.removeItem(workspaceSessionKey);
+    window.localStorage.removeItem(evidenceDraftsKey);
+    resetWorkspace();
+    setLibrary({ items: [], total: 0 });
+    await bootstrapQuery.refetch();
+    await loadLibrary();
+  }
+
   function requestNewDecision() {
     const hasUnsavedWork = !decision && Boolean(source.trim() || evidence.trim() || extraction || draft);
     if (hasUnsavedWork) setConfirmingNewDecision(true);
@@ -974,7 +997,7 @@ export default function Home() {
         })}</div>
         <div className="challenge-provenance"><span>{challenge.provider}/{challenge.model} · {challenge.prompt_version} · {challenge.latency_ms ?? 0} ms</span><span>Generated {formatDateTime(challenge.generated_at)}</span></div>
         {challenge.status === "draft" ? <div className="challenge-confirm"><label><span>Reviewer notes <small>Optional</small></span><textarea rows={2} maxLength={4000} value={challengeNotes} onChange={(event) => setChallengeNotes(event.target.value)} placeholder="Record what you verified, what remains open, or why these challenge prompts are useful…" /></label><div><p>Confirming records that a person reviewed the prompts. It does not approve or reverse the decision.</p><button type="button" className="primary" disabled={challengeConfirmBusy} onClick={confirmChallenge}>{challengeConfirmBusy ? "Saving confirmation…" : <><Check aria-hidden="true" />Confirm reviewed challenge</>}</button></div></div> : <div className="challenge-confirmed"><Check aria-hidden="true" /><div><strong>Reviewed by a human {challenge.confirmed_at ? `· ${formatDateTime(challenge.confirmed_at)}` : ""}</strong>{challenge.reviewer_notes ? <p>{challenge.reviewer_notes}</p> : <p>No reviewer note was added.</p>}</div></div>}
-      </> : <div className="challenge-empty"><span><Sparkles aria-hidden="true" /></span><div><strong>Generate four source-grounded challenge prompts</strong><p>The selected model will inspect only the preserved premises. It will not browse, change the decision, or run a multi-agent debate.</p></div><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Challenge model" /><button type="button" className="primary" disabled={busyPhase !== null || !selectedModelId} onClick={generateChallenge}>{busyPhase === "challenge" ? <><span className="spinner" />Generating challenge…</> : <><Sparkles aria-hidden="true" />Generate challenge brief</>}</button></div>}
+      </> : <div className="challenge-empty"><span><Sparkles aria-hidden="true" /></span><div><strong>Generate four source-grounded challenge prompts</strong><p>{selectedModel?.availability_reason ?? "The selected model will inspect only the preserved premises. It will not browse, change the decision, or run a multi-agent debate."}</p></div><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Challenge model" /><button type="button" className="primary" disabled={busyPhase !== null || !selectedModelId || selectedModel?.available === false} onClick={generateChallenge}>{busyPhase === "challenge" ? <><span className="spinner" />Generating challenge…</> : <><Sparkles aria-hidden="true" />Generate challenge brief</>}</button></div>}
     </section>
   ) : null;
 
@@ -1020,7 +1043,7 @@ export default function Home() {
         </section>
         <section className="workspace-identity" aria-label={personalWorkspace ? `${personalWorkspace.name}, owned by ${personalWorkspace.account_name}` : "Loading personal workspace"}>
           <span className="workspace-avatar"><UserRound aria-hidden="true" /></span>
-          <span className="workspace-identity-copy pane-label"><strong>{personalWorkspace?.name || "Personal workspace"}</strong><small>{personalWorkspace ? `${personalWorkspace.account_name} · Local profile` : "Loading profile…"}</small></span>
+          <span className="workspace-identity-copy pane-label"><strong>{personalWorkspace?.name || "Personal workspace"}</strong><small>{personalWorkspace ? `${personalWorkspace.account_name} · ${personalWorkspace.mode === "authenticated_personal" ? "Private pilot" : "Local profile"}` : "Loading profile…"}</small></span>
         </section>
       </aside>
 
@@ -1079,7 +1102,7 @@ export default function Home() {
           </> : null}
         </section> : null}
 
-        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use local models without an account, or add a hosted-provider key to this personal workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel onConfigurationChanged={() => { void bootstrapQuery.refetch(); }} /></section> : null}
+        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use local models without an account, or add a hosted-provider key to this personal workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel onConfigurationChanged={() => { void handleWorkspaceChanged(); }} /></section> : null}
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
 
@@ -1092,7 +1115,7 @@ export default function Home() {
             </div>
             <form onSubmit={extract}>
               {sourceMode === "paste" ? <label className="field"><span>Decision source</span><textarea aria-label="Decision source" value={source} onChange={(event) => setSource(event.target.value)} rows={10} placeholder="Paste the source material here…" /></label> : <label className="upload-zone"><input aria-label="Decision file" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /><span className="upload-icon">⇧</span><strong>{file ? file.name : "Choose a PDF, Markdown, or text file"}</strong><small>Maximum file size: 10 MB</small></label>}
-              <div className="form-footer model-action-footer"><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Extraction model" /><span className="draft-assurance"><span>{selectedModel?.label ?? "The selected model"} will suggest structure. You remain the reviewer.</span>{source.trim() && draftSavedAt ? <small><Save aria-hidden="true" />Draft saved locally · {formatDateTime(draftSavedAt)}</small> : null}</span><button className="primary" disabled={busyPhase === "extract" || !selectedModelId || (sourceMode === "paste" ? !source.trim() : !file)}>{busyPhase === "extract" ? <><span className="spinner" />Extracting with {selectedModel?.label ?? "model"}…</> : "Extract decision →"}</button></div>
+              <div className="form-footer model-action-footer"><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Extraction model" /><span className="draft-assurance"><span>{selectedModel?.availability_reason ?? `${selectedModel?.label ?? "The selected model"} will suggest structure. You remain the reviewer.`}</span>{source.trim() && draftSavedAt ? <small><Save aria-hidden="true" />Draft saved locally · {formatDateTime(draftSavedAt)}</small> : null}</span><button className="primary" disabled={busyPhase === "extract" || !selectedModelId || selectedModel?.available === false || (sourceMode === "paste" ? !source.trim() : !file)}>{busyPhase === "extract" ? <><span className="spinner" />Extracting with {selectedModel?.label ?? "model"}…</> : "Extract decision →"}</button></div>
             </form>
           </section>
         ) : null}
@@ -1202,7 +1225,7 @@ export default function Home() {
             <div className="composer-heading"><div><span className="overline">New message</span><h3>Add evidence to the decision</h3></div><div className="mode-toggle" aria-label="Revisit mode"><button type="button" className={!compareMode ? "active" : ""} aria-pressed={!compareMode} onClick={() => { setCompareMode(false); setComparisonRuns([]); }}>Single model</button><button type="button" className={compareMode ? "active" : ""} aria-pressed={compareMode} disabled={models.length < 2} onClick={() => { setCompareMode(true); setFindings([]); }}>Compare models</button></div></div>
             {compareMode ? <div className="compare-models"><div><span className="compare-label">Model A</span><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} excludeId={comparisonModelId} disabled={busyPhase !== null} label="First model" /></div><div className="versus">VS</div><div><span className="compare-label">Model B</span><ModelPicker compact models={models} selectedId={comparisonModelId} recommendedId={recommendedModelId} onSelect={setComparisonModelId} excludeId={selectedModelId} disabled={busyPhase !== null} label="Second model" /></div></div> : null}
             <label className="composer-input"><span className="composer-plus"><Plus aria-hidden="true" /></span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); setFindings([]); setComparisonRuns([]); setActiveRevisitId(null); }} rows={4} placeholder="Paste a new fact, policy update, incident, or source excerpt…" /></label>
-            <div className="composer-footer"><span className="draft-assurance"><span>{compareMode ? "Both models receive identical premises and evidence." : "AI maps evidence to premises; you decide whether action is warranted."}</span>{evidence.trim() && draftSavedAt ? <small><Save aria-hidden="true" />Evidence draft saved locally · {formatDateTime(draftSavedAt)}</small> : null}</span><div>{compareMode ? <span className="composer-model">{selectedModel?.label ?? "Model A"} + {comparisonModel?.label ?? "Model B"}</span> : <ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Evidence model" />}<button className="primary composer-send" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || (compareMode && !comparisonModelId) || !evidence.trim()} aria-label={compareMode ? "Compare model reasoning" : "Check evidence against premises"}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing…" : "Checking…"}</> : <ArrowUp aria-hidden="true" />}</button></div></div>
+            <div className="composer-footer"><span className="draft-assurance"><span>{selectedModel?.availability_reason ?? (compareMode ? "Both models receive identical premises and evidence." : "AI maps evidence to premises; you decide whether action is warranted.")}</span>{evidence.trim() && draftSavedAt ? <small><Save aria-hidden="true" />Evidence draft saved locally · {formatDateTime(draftSavedAt)}</small> : null}</span><div>{compareMode ? <span className="composer-model">{selectedModel?.label ?? "Model A"} + {comparisonModel?.label ?? "Model B"}</span> : <ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Evidence model" />}<button className="primary composer-send" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || selectedModel?.available === false || (compareMode && (!comparisonModelId || comparisonModel?.available === false)) || !evidence.trim()} aria-label={compareMode ? "Compare model reasoning" : "Check evidence against premises"}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing…" : "Checking…"}</> : <ArrowUp aria-hidden="true" />}</button></div></div>
           </section>
           {comparisonRuns.length === 2 ? <div className="comparison-results"><section className={`disagreement-summary ${disagreements.length ? "has-disagreements" : ""}`}><div><span className="overline">Agreement check</span><h3>{disagreements.length ? `${disagreements.length} disagreement${disagreements.length === 1 ? "" : "s"} need review` : "Models agree on all material relationships"}</h3></div>{disagreements.length ? <div className="disagreement-list">{disagreements.map(({ premise, firstRelationship, secondRelationship }) => <div key={premise.id}><strong>{premise.statement}</strong><span>{comparisonRuns[0].label}: {firstRelationship} · {comparisonRuns[1].label}: {secondRelationship}</span></div>)}</div> : null}</section><div className="comparison-grid">{comparisonRuns.map((run) => <section className="comparison-column" key={run.modelId}><header><div><span className="overline">Model result</span><h3>{run.label}</h3></div><strong>{run.result.findings.length} finding{run.result.findings.length === 1 ? "" : "s"}</strong></header><div className="run-provenance">{provenanceLabel(run.result)}</div>{run.result.findings.length ? run.result.findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.finding_type === "new_constraint" ? "new constraint" : finding.relationship}</span><small>{finding.confidence_band} confidence</small></div>{finding.finding_type === "new_constraint" ? <div className="safety-net-badge">New constraint · human review required</div> : null}<h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{findingReviewControls(run.result.id, finding)}</article>) : <div className="empty-findings"><strong>No material relationship found</strong><span>This model found no effect on the preserved premises.</span></div>}</section>)}</div></div> : null}
           {!comparisonRuns.length && findings.length ? <div className="findings">

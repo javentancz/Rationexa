@@ -60,6 +60,8 @@ class ModelOption(BaseModel):
     label: str
     location: Literal["local", "hosted"]
     best_for: str
+    available: bool = True
+    availability_reason: str | None = None
 
 
 class ModelCatalogRead(BaseModel):
@@ -72,7 +74,7 @@ class WorkspaceRead(BaseModel):
     name: str
     account_id: str
     account_name: str
-    mode: Literal["local_personal"] = "local_personal"
+    mode: Literal["local_personal", "authenticated_personal"] = "local_personal"
     created_at: datetime
 
 

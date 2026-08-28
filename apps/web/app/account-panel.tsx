@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { KeyRound, LogIn, LogOut, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import { apiFetch, getSessionToken, login, logout, setSessionToken } from "./api";
+import { apiFetch, getSessionToken, login, logout, register, setSessionToken } from "./api";
 import { ConfirmDialog } from "./ui";
 
 type AccountRead = { id: string; name: string; email?: string; has_password: boolean; created_at: string };
@@ -28,7 +28,9 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
   const [secrets, setSecrets] = useState<SecretRead[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authBusy, setAuthBusy] = useState(false);
   const [keyEntry, setKeyEntry] = useState("");
   const [providerEntry, setProviderEntry] = useState("openrouter");
@@ -43,6 +45,7 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
 
   async function refresh() {
     setError(null);
+    const startedWithToken = Boolean(getSessionToken());
     try {
       const token = getSessionToken();
       if (token) {
@@ -67,6 +70,13 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
         return next;
       }, { ...current }));
     } catch (caught) {
+      if (startedWithToken && getSessionToken() === null) {
+        const workspace = (await apiFetch("/v1/workspace")) as WorkspaceRead;
+        setAuthenticated(false);
+        setAccount({ id: workspace.id, name: workspace.account_name, has_password: false, created_at: "" });
+        setSecrets((await apiFetch("/v1/secrets")) as SecretRead[]);
+        return;
+      }
       setAccount(null);
       setSecrets([]);
       setError(caught instanceof Error ? caught.message : "Could not load workspace settings");
@@ -75,6 +85,9 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
 
   useEffect(() => {
     void refresh();
+    const recover = () => { void refresh(); };
+    window.addEventListener("rationexa-auth-expired", recover);
+    return () => window.removeEventListener("rationexa-auth-expired", recover);
   }, []);
 
   async function handleLogin(event: FormEvent) {
@@ -88,6 +101,26 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
       onConfigurationChanged?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Login failed");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleRegister(event: FormEvent) {
+    event.preventDefault();
+    setAuthBusy(true);
+    setError(null);
+    try {
+      const session = await register(name, email, password);
+      setSessionToken(session.session_token);
+      setName("");
+      setEmail("");
+      setPassword("");
+      await refresh();
+      onConfigurationChanged?.();
+      toast.success("Pilot workspace created");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Account creation failed");
     } finally {
       setAuthBusy(false);
     }
@@ -249,11 +282,13 @@ export function AccountPanel({ onConfigurationChanged }: AccountPanelProps) {
         </div>
         {!authenticated ? (
           <details className="optional-sign-in">
-            <summary>Optional: sign in for another workspace</summary>
-            <form onSubmit={handleLogin} className="account-login">
+            <summary>Optional: use a private pilot workspace</summary>
+            <div className="auth-mode-toggle" role="tablist" aria-label="Account action"><button type="button" role="tab" aria-selected={authMode === "login"} className={authMode === "login" ? "active" : ""} onClick={() => setAuthMode("login")}>Sign in</button><button type="button" role="tab" aria-selected={authMode === "register"} className={authMode === "register" ? "active" : ""} onClick={() => setAuthMode("register")}>Create workspace</button></div>
+            <form onSubmit={authMode === "login" ? handleLogin : handleRegister} className="account-login">
+              {authMode === "register" ? <label><span>Display name</span><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Pilot reviewer" /></label> : null}
               <label><span>Email</span><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label>
               <label><span>Password</span><input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" /></label>
-              <button type="submit" className="primary" disabled={authBusy}>{authBusy ? "Signing in…" : <><LogIn aria-hidden="true" />Sign in</>}</button>
+              <button type="submit" className="primary" disabled={authBusy}>{authBusy ? (authMode === "login" ? "Signing in…" : "Creating workspace…") : <><LogIn aria-hidden="true" />{authMode === "login" ? "Sign in" : "Create private workspace"}</>}</button>
             </form>
           </details>
         ) : null}

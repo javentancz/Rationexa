@@ -25,7 +25,7 @@ def test_database_is_at_the_alembic_head() -> None:
     with TestClient(app):
         with engine.connect() as connection:
             revision = MigrationContext.configure(connection).get_current_revision()
-    assert revision == "20260828_01"
+    assert revision == "20260828_02"
 
 
 def create_finalized_decision(

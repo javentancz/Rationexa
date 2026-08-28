@@ -4,7 +4,7 @@ import { Check, ChevronDown, Sparkles } from "lucide-react";
 import { Popover } from "radix-ui";
 import { useState } from "react";
 
-export type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string };
+export type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string; available: boolean; availability_reason?: string };
 
 type ModelPickerProps = {
   models: ModelOption[];
@@ -25,9 +25,9 @@ export function ModelPicker({ models, selectedId, recommendedId, onSelect, disab
   const hostedModels = models.filter((model) => model.location === "hosted" && model.id !== recommended?.id);
 
   function choose(modelId: string) { onSelect(modelId); setOpen(false); }
-  const modelOption = (model: ModelOption, recommendedOption = false) => <button type="button" role="option" aria-selected={model.id === selectedId} className={`model-option ${model.id === selectedId ? "selected" : ""}`} disabled={model.id === excludeId} onClick={() => choose(model.id)} key={`${recommendedOption ? "recommended" : "model"}-${model.id}`}>
+  const modelOption = (model: ModelOption, recommendedOption = false) => <button type="button" role="option" aria-selected={model.id === selectedId} className={`model-option ${model.id === selectedId ? "selected" : ""} ${model.available === false ? "unavailable" : ""}`} disabled={model.id === excludeId || model.available === false} onClick={() => choose(model.id)} key={`${recommendedOption ? "recommended" : "model"}-${model.id}`}>
     <span className="model-avatar">{model.label.slice(0, 1).toUpperCase()}</span>
-    <span className="model-option-copy"><span><strong>{model.label}</strong>{recommendedOption ? <em>Recommended</em> : null}</span><small>{model.best_for}</small><span className="model-option-meta">{model.location === "local" ? "Private local runtime" : `${model.provider} hosted API`}</span></span>
+    <span className="model-option-copy"><span><strong>{model.label}</strong>{recommendedOption ? <em>Recommended</em> : null}{model.available === false ? <em className="unavailable-badge">Unavailable</em> : null}</span><small>{model.availability_reason ?? model.best_for}</small><span className="model-option-meta">{model.location === "local" ? "Private local runtime" : `${model.provider} hosted API`}</span></span>
     <span className="model-check">{model.id === selectedId ? <Check aria-hidden="true" /> : null}</span>
   </button>;
 

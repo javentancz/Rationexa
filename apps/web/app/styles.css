@@ -757,6 +757,11 @@ button { cursor:pointer; }
 .provider-row-actions{display:flex;align-items:center;gap:6px}
 .provider-test-ok{color:var(--accent)!important;font-weight:700}
 .provider-error{margin:0}
+.auth-mode-toggle{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:12px 0;padding:4px;border-radius:10px;background:var(--paper)}
+.auth-mode-toggle button{min-height:38px;border:0;border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-weight:700;cursor:pointer}
+.auth-mode-toggle button.active{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(20,42,31,.1)}
+.model-option.unavailable{opacity:.58;cursor:not-allowed}
+.model-option-copy .unavailable-badge{background:#ecefed;color:#647069}
 .account-key-list strong{font-size:12px}
 .account-key-list small{color:var(--muted);font-size:10px}
 .account-empty{color:var(--muted);font-size:12px}

@@ -153,11 +153,20 @@ def account_workspace(db: Session, account_id: str) -> WorkspaceRow | None:
 
 def active_workspace(db: Session, token: str | None) -> WorkspaceRow:
     """Prefer an authenticated session's workspace; fall back to the local personal workspace."""
-    account = resolve_session(token, db) if token else None
-    if account is not None:
+    if token:
+        account = resolve_session(token, db)
+        if account is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Your session is invalid or has expired. Sign in again.",
+            )
         workspace = account_workspace(db, account.id)
-        if workspace is not None:
-            return workspace
+        if workspace is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This account does not have an accessible workspace.",
+            )
+        return workspace
     workspace = db.get(WorkspaceRow, settings.local_workspace_id)
     if workspace is None:
         raise HTTPException(
@@ -220,6 +229,21 @@ def record_product_event(
 def list_models(request: Request, db: Db) -> ModelCatalogRead:
     workspace = active_workspace(db, extract_session_token(request))
     models = available_models(settings)
+    ollama_installed, ollama_error = _ollama_model_status()
+    models = [
+        model.model_copy(update={
+            "available": ollama_error is None and model.model in ollama_installed,
+            "availability_reason": (
+                ollama_error
+                if ollama_error is not None
+                else None if model.model in ollama_installed
+                else f"Not installed. Run `ollama pull {model.model}`."
+            ),
+        })
+        if model.provider == "ollama"
+        else model
+        for model in models
+    ]
     existing_ids = {model.id for model in models}
     for entry in db.scalars(select(SecretRow).where(SecretRow.workspace_id == workspace.id)).all():
         configuration = get_provider_config(db, workspace.id, entry.provider)
@@ -238,10 +262,27 @@ def list_models(request: Request, db: Db) -> ModelCatalogRead:
             best_for="Hosted extraction, revisit, and challenge using your encrypted workspace key",
         ))
         existing_ids.add(model_id)
-    return ModelCatalogRead(
-        default_model_id=default_model_id(settings),
-        models=models,
-    )
+    configured_default = default_model_id(settings)
+    available_default = next((model.id for model in models if model.available), configured_default)
+    return ModelCatalogRead(default_model_id=available_default, models=models)
+
+
+def _ollama_model_status() -> tuple[set[str], str | None]:
+    if settings.ai_provider.lower() != "ollama":
+        return set(), None
+    try:
+        response = httpx.get(f"{settings.ollama_base_url.rstrip('/')}/api/tags", timeout=2)
+        response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        return set(), f"Ollama is unavailable: {exc}"
+    entries = payload.get("models", []) if isinstance(payload, dict) else []
+    installed = {
+        str(entry.get("model") or entry.get("name") or "").strip()
+        for entry in entries
+        if isinstance(entry, dict)
+    }
+    return {model for model in installed if model}, None
 
 
 @app.get("/v1/workspace", response_model=WorkspaceRead)
@@ -255,6 +296,7 @@ def get_workspace(request: Request, db: Db) -> WorkspaceRead:
         name=workspace.name,
         account_id=account.id,
         account_name=account.name,
+        mode="local_personal" if workspace.id == settings.local_workspace_id else "authenticated_personal",
         created_at=as_utc(workspace.created_at),
      )
 
@@ -1395,6 +1437,10 @@ def account_read(account: AccountRow) -> AccountRead:
 
 @app.post("/v1/account", response_model=AccountRead, status_code=status.HTTP_201_CREATED)
 def create_account(payload: CredentialCreate, db: Db) -> AccountRead:
+    return account_read(_create_account(payload, db))
+
+
+def _create_account(payload: CredentialCreate, db: Session) -> AccountRow:
     email = payload.email.strip().lower()
     if find_account_by_email(email, db) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
@@ -1414,9 +1460,33 @@ def create_account(payload: CredentialCreate, db: Db) -> AccountRead:
             name=f"{account.name}'s workspace",
           )
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists",
+        ) from exc
     db.refresh(account)
-    return account_read(account)
+    return account
+
+
+def session_read(account: AccountRow, session) -> SessionRead:
+    return SessionRead(
+        account_id=account.id,
+        account_name=account.name,
+        email=account.email or "",
+        session_token=session.token,
+        created_at=as_utc(session.created_at),
+        expires_at=as_utc(session.expires_at),
+    )
+
+
+@app.post("/v1/auth/register", response_model=SessionRead, status_code=status.HTTP_201_CREATED)
+def register(payload: CredentialCreate, db: Db) -> SessionRead:
+    account = _create_account(payload, db)
+    return session_read(account, issue_session(db, account.id))
 
 
 @app.get("/v1/account", response_model=AccountRead)
@@ -1440,14 +1510,7 @@ def login(payload: SessionRequest, db: Db) -> SessionRead:
      ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     session = issue_session(db, account.id)
-    return SessionRead(
-        account_id=account.id,
-        account_name=account.name,
-        email=account.email or "",
-        session_token=session.token,
-        created_at=as_utc(session.created_at),
-        expires_at=as_utc(session.expires_at),
-      )
+    return session_read(account, session)
 
 
 @app.post("/v1/auth/logout", status_code=status.HTTP_204_NO_CONTENT)

@@ -4,7 +4,20 @@ from secrets import token_urlsafe
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, String, Text, create_engine, inspect, select, text
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    create_engine,
+    inspect,
+    select,
+    text,
+)
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -44,6 +57,7 @@ class SchemaMigrationRow(Base):
 
 class AccountRow(Base):
     __tablename__ = "accounts"
+    __table_args__ = (UniqueConstraint("email", name="uq_accounts_email"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(120))
@@ -67,7 +81,10 @@ class SessionRow(Base):
 
 class SecretRow(Base):
     __tablename__ = "workspace_secrets"
-    __table_args__ = (Index("ix_workspace_secrets_workspace_provider", "workspace_id", "provider"),)
+    __table_args__ = (
+        Index("ix_workspace_secrets_workspace_provider", "workspace_id", "provider"),
+        UniqueConstraint("workspace_id", "provider", name="uq_workspace_secrets_workspace_provider"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
@@ -79,6 +96,7 @@ class SecretRow(Base):
 
 class WorkspaceRow(Base):
     __tablename__ = "workspaces"
+    __table_args__ = (UniqueConstraint("owner_account_id", name="uq_workspaces_owner_account_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     owner_account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id"), index=True)
@@ -100,13 +118,14 @@ class ProductEventRow(Base):
 
 class ArtifactRow(Base):
     __tablename__ = "artifacts"
+    __table_args__ = (UniqueConstraint("workspace_id", "sha256", name="uq_artifacts_workspace_sha256"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
     filename: Mapped[str] = mapped_column(String(255))
     media_type: Mapped[str] = mapped_column(String(120))
     source_type: Mapped[str] = mapped_column(String(80), default="user_supplied")
-    sha256: Mapped[str] = mapped_column(String(64), unique=True)
+    sha256: Mapped[str] = mapped_column(String(64))
     storage_uri: Mapped[str] = mapped_column(String(500))
     extracted_text: Mapped[str] = mapped_column(Text)
     parser_version: Mapped[str] = mapped_column(String(40), default="text-v1")

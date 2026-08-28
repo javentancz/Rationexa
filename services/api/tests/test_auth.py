@@ -1,3 +1,4 @@
+import httpx
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -43,6 +44,27 @@ def test_account_create_login_whoami_and_logout() -> None:
         after_logout = client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
         assert after_logout.status_code == 204
         assert client.get("/v1/account", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+
+
+def test_register_creates_an_authenticated_private_workspace() -> None:
+    with TestClient(app) as client:
+        registered = client.post(
+            "/v1/auth/register",
+            json={"email": "pilot@rationexa.local", "name": "Pilot Reviewer", "password": "pilot-pass-1"},
+        )
+        assert registered.status_code == 201
+        token = registered.json()["session_token"]
+        workspace = client.get("/v1/workspace", headers={"Authorization": f"Bearer {token}"})
+        assert workspace.status_code == 200
+        assert workspace.json()["account_name"] == "Pilot Reviewer"
+        assert workspace.json()["mode"] == "authenticated_personal"
+
+
+def test_invalid_session_never_falls_back_to_the_local_workspace() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/workspace", headers={"Authorization": "Bearer invalid-session"})
+        assert response.status_code == 401
+        assert "expired" in response.json()["detail"]
 
 
 def test_duplicate_email_is_rejected() -> None:
@@ -107,6 +129,65 @@ def test_records_created_in_one_workspace_do_not_leak_to_another() -> None:
             headers={"Authorization": f"Bearer {token_b}"},
          )
         assert hidden.status_code == 404
+
+
+def test_identical_artifacts_are_isolated_between_workspaces() -> None:
+    with TestClient(app) as client:
+        client.post("/v1/account", json={"email": "same-a@rationexa.local", "password": "aaaaa123"})
+        client.post("/v1/account", json={"email": "same-b@rationexa.local", "password": "bbbbb123"})
+        token_a = _login(client, client, "same-a@rationexa.local", "aaaaa123")
+        token_b = _login(client, client, "same-b@rationexa.local", "bbbbb123")
+        payload = {"filename": "same.txt", "content": "The same source belongs to two reviewers."}
+
+        artifact_a = client.post(
+            "/v1/artifacts",
+            headers={"Authorization": f"Bearer {token_a}"},
+            json=payload,
+        )
+        artifact_b = client.post(
+            "/v1/artifacts",
+            headers={"Authorization": f"Bearer {token_b}"},
+            json=payload,
+        )
+
+        assert artifact_a.status_code == 201
+        assert artifact_b.status_code == 201
+        assert artifact_a.json()["id"] != artifact_b.json()["id"]
+
+
+def test_byok_connections_and_models_do_not_leak_between_workspaces(monkeypatch) -> None:
+    class ModelResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"data": [{"id": "provider/private-model"}]}
+
+    monkeypatch.setattr("rationexa_api.main.httpx.get", lambda *args, **kwargs: ModelResponse())
+    with TestClient(app) as client:
+        client.post("/v1/account", json={"email": "key-a@rationexa.local", "password": "aaaaa123"})
+        client.post("/v1/account", json={"email": "key-b@rationexa.local", "password": "bbbbb123"})
+        token_a = _login(client, client, "key-a@rationexa.local", "aaaaa123")
+        token_b = _login(client, client, "key-b@rationexa.local", "bbbbb123")
+        headers_a = {"Authorization": f"Bearer {token_a}"}
+        headers_b = {"Authorization": f"Bearer {token_b}"}
+
+        assert client.post(
+            "/v1/secrets",
+            headers=headers_a,
+            json={"provider": "openrouter", "key": "workspace-a-key"},
+        ).status_code == 201
+        assert client.post(
+            "/v1/secrets/openrouter/model",
+            headers=headers_a,
+            json={"model": "provider/private-model"},
+        ).status_code == 200
+
+        assert client.get("/v1/secrets", headers=headers_b).json() == []
+        assert not any(
+            model["id"] == "openrouter/provider/private-model"
+            for model in client.get("/v1/models", headers=headers_b).json()["models"]
+        )
 
 
 def test_byok_secret_is_encrypted_at_rest_and_exposed_only_as_metadata() -> None:
@@ -215,6 +296,48 @@ def test_openrouter_connection_loads_models_and_activates_one(monkeypatch) -> No
 
         removed = client.delete("/v1/secrets/openrouter")
         assert removed.status_code == 200
+
+
+def test_provider_connection_failure_is_contextual(monkeypatch) -> None:
+    def unavailable(*args, **kwargs):
+        raise httpx.ConnectError("provider is offline")
+
+    monkeypatch.setattr("rationexa_api.main.httpx.get", unavailable)
+    with TestClient(app) as client:
+        assert client.post(
+            "/v1/secrets",
+            json={"provider": "openrouter", "key": "sk-or-offline"},
+        ).status_code == 201
+        tested = client.post("/v1/secrets/openrouter/test")
+        assert tested.status_code == 422
+        assert "Could not load models from this provider" in tested.json()["detail"]
+
+
+def test_model_catalog_marks_missing_ollama_models_unavailable(monkeypatch) -> None:
+    from rationexa_api import main
+
+    class TagsResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"models": [{"model": "qwen3.5:9b"}]}
+
+    runtime = Settings(
+        ai_provider="ollama",
+        ollama_model="qwen3.5:9b",
+        ollama_models="qwen3.5:9b,missing:latest",
+    )
+    monkeypatch.setattr(main, "settings", runtime)
+    monkeypatch.setattr(main.httpx, "get", lambda *args, **kwargs: TagsResponse())
+
+    with TestClient(app) as client:
+        catalog = client.get("/v1/models").json()
+
+    by_id = {model["id"]: model for model in catalog["models"]}
+    assert by_id["ollama/qwen3.5:9b"]["available"] is True
+    assert by_id["ollama/missing:latest"]["available"] is False
+    assert "ollama pull missing:latest" in by_id["ollama/missing:latest"]["availability_reason"]
 
 
 def test_password_hash_round_trips() -> None:

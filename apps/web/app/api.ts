@@ -34,7 +34,12 @@ export async function apiResponse(path: string, options: RequestInit = {}): Prom
   const token = getSessionToken();
   const headers = new Headers(options.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(`${api}${path}`, { ...options, cache: options.cache ?? "no-store", headers });
+  const response = await fetch(`${api}${path}`, { ...options, cache: options.cache ?? "no-store", headers });
+  if (response.status === 401 && token) {
+    setSessionToken(null);
+    window.dispatchEvent(new Event("rationexa-auth-expired"));
+  }
+  return response;
 }
 
 export async function login(email: string, password: string): Promise<{ session_token: string }> {
@@ -42,6 +47,15 @@ export async function login(email: string, password: string): Promise<{ session_
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
+  });
+  return responseJson(response);
+}
+
+export async function register(name: string, email: string, password: string): Promise<{ session_token: string }> {
+  const response = await fetch(`${api}/v1/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email, password }),
   });
   return responseJson(response);
 }

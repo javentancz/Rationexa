@@ -9,6 +9,7 @@ const models = {
     label: "Deterministic rules",
     location: "local",
     best_for: "Fast tests",
+    available: true,
   }],
 };
 
@@ -61,4 +62,36 @@ test("delete confirmation stays visible and can be cancelled", async ({ page }) 
   await expect(page.getByRole("heading", { name: "Delete this decision?" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
+});
+
+test("unavailable models explain the problem and block extraction", async ({ page }) => {
+  const unavailableModels = {
+    default_model_id: "ollama/missing:latest",
+    models: [{
+      id: "ollama/missing:latest",
+      provider: "ollama",
+      model: "missing:latest",
+      label: "Missing model",
+      location: "local",
+      best_for: "Local reasoning",
+      available: false,
+      availability_reason: "Not installed. Run `ollama pull missing:latest`.",
+    }],
+  };
+  await page.route(/\/v1\/models(?:\?.*)?$/, (route) => route.fulfill({ json: unavailableModels, headers: corsHeaders }));
+  await page.route(/\/v1\/workspace(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: {
+    id: "workspace-1",
+    name: "Personal workspace",
+    account_id: "account-1",
+    account_name: "Demo User",
+    mode: "local_personal",
+    created_at: "2026-08-28T00:00:00Z",
+  } }));
+  await page.route(/\/v1\/decisions(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: { items: [], total: 0 } }));
+
+  await page.goto("/");
+  await page.getByLabel("Decision source").fill("We decided to use the pilot architecture.");
+
+  await expect(page.getByText("Not installed. Run `ollama pull missing:latest`.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Extract decision →" })).toBeDisabled();
 });
