@@ -734,6 +734,7 @@ button { cursor:pointer; }
 .account-actions{justify-self:end}
 .account-login,.account-key-form{display:grid;gap:10px;max-width:340px}
 .account-login label,.account-key-form label{display:grid;gap:6px;font-size:12px;font-weight:600}
+.provider-choice-note{color:var(--muted);font-size:10px;font-weight:500;line-height:1.4}
 .account-login input,.account-key-form input,.account-key-form select,.provider-model-choice select{min-height:41px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fcfdfc;color:var(--ink);outline:none;transition:border .15s,box-shadow .15s}
 .account-login input:focus,.account-key-form input:focus,.account-key-form select:focus,.provider-model-choice select:focus{border-color:#7cab91;box-shadow:0 0 0 3px rgba(31,96,66,.09)}
 .account-hint{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px}

@@ -56,6 +56,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
   const [deletePassword, setDeletePassword] = useState("");
   const [confirmingAccountDelete, setConfirmingAccountDelete] = useState(false);
   const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
+  const selectedProvider = providerOptions.find((provider) => provider.id === providerEntry) ?? providerOptions[0];
 
   async function refresh() {
     setError(null);
@@ -377,7 +378,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
     <section className="usage-section account-section">
       <div className="usage-section-heading">
         <div><span className="overline">Models &amp; provider keys</span><h2>Your AI runtime</h2></div>
-        <span>{authenticated ? "Private workspace · encrypted BYOK" : "Local models · sign in for BYOK"}</span>
+        <span>{authenticated ? "Private workspace · encrypted BYOK" : "Built-in rules · sign in for BYOK"}</span>
       </div>
       {error ? <p className="account-error">{error}</p> : null}
       <div className="account-body">
@@ -385,7 +386,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
           <span className="account-avatar"><UserRound aria-hidden="true" /></span>
           <div>
             <strong>{account.name}</strong>
-            <small>{authenticated ? account.email ?? "Signed-in workspace" : "Local personal workspace · no signup required"}</small>
+            <small>{authenticated ? account.email ?? "Signed-in workspace" : "Guest workspace · no signup required"}</small>
           </div>
         </div>
         {authenticated ? (
@@ -423,11 +424,11 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
             <KeyRound aria-hidden="true" />
             <div>
               <strong>Bring your own API key</strong>
-              <p>{authenticated ? "Connect a platform, load its live model catalog, then activate the model you want. The key is isolated to this signed-in workspace." : "Sign in or create a private workspace before connecting a hosted provider. Anonymous browsers can use local models but cannot store or use BYOK credentials."}</p>
+              <p>{authenticated ? "Choose the platform that issued your key, load its live model catalog, then activate one model. Keys cannot be safely auto-detected because provider formats overlap." : "Sign in or create a private workspace before connecting a hosted provider. Guest browsers can use built-in deterministic rules, but cannot store or use BYOK credentials."}</p>
             </div>
           </div>
           {authenticated ? <><form onSubmit={handleStoreKey} className="account-key-form">
-            <label><span>Provider platform</span><select value={providerEntry} onChange={(event) => setProviderEntry(event.target.value)}>{providerOptions.map((provider) => <option key={provider.id} value={provider.id}>{provider.label} — {provider.detail}</option>)}</select></label>
+            <label><span>Provider platform</span><select value={providerEntry} onChange={(event) => setProviderEntry(event.target.value)}>{providerOptions.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select><small className="provider-choice-note">{selectedProvider.detail}</small></label>
             {providerEntry === "custom" ? <label><span>Compatible API base URL <small>HTTPS, or localhost for development</small></span><input type="url" required value={baseUrlEntry} onChange={(event) => setBaseUrlEntry(event.target.value)} placeholder="https://api.example.com/v1" /></label> : null}
             <label><span>Provider API key <small>Encrypted on this machine</small></span><input type="password" autoComplete="off" value={keyEntry} onChange={(event) => setKeyEntry(event.target.value)} placeholder="Paste this provider's API key" /></label>
             <button type="submit" className="primary" disabled={secretBusy || !keyEntry || (providerEntry === "custom" && !baseUrlEntry)}><KeyRound aria-hidden="true" />{secretBusy ? "Connecting…" : "Connect provider"}</button>
@@ -442,7 +443,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
                 </li>
               ))}
             </ul>
-          ) : <p className="account-empty">No hosted-provider keys stored. Local models are ready without one.</p>}</> : <p className="account-empty">BYOK is disabled in the anonymous local workspace to prevent one visitor's key from being shared with other browsers.</p>}
+          ) : <p className="account-empty">No hosted-provider keys stored. Built-in deterministic rules remain available without one.</p>}</> : <p className="account-empty">BYOK is disabled in the guest workspace to prevent one visitor&apos;s key from being shared with other browsers.</p>}
         </div>
         {authenticated ? <section className="account-danger-zone">
           <div><strong>Delete account and workspace</strong><p>Permanently removes your decisions, evidence, shares, provider keys, sessions, and account. This cannot be undone.</p></div>
@@ -465,7 +466,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
           </details>
         ) : null}
       </div>
-      <ConfirmDialog open={Boolean(removeProvider)} title="Remove this provider key?" description="The encrypted key and its activated model will be removed from this workspace. Local Ollama models remain available." confirmLabel="Remove provider" busyLabel="Removing…" busy={secretBusy} onOpenChange={(open) => { if (!open) setRemoveProvider(null); }} onConfirm={() => { if (removeProvider) void handleRemoveKey(removeProvider); }} />
+      <ConfirmDialog open={Boolean(removeProvider)} title="Remove this provider key?" description="The encrypted key and its activated hosted model will be removed from this workspace. Built-in deterministic rules remain available." confirmLabel="Remove provider" busyLabel="Removing…" busy={secretBusy} onOpenChange={(open) => { if (!open) setRemoveProvider(null); }} onConfirm={() => { if (removeProvider) void handleRemoveKey(removeProvider); }} />
       <ConfirmDialog open={confirmingAccountDelete} title="Permanently delete this account?" description="Every decision, evidence file, share link, provider key, active session, and workspace record will be deleted. This action cannot be undone." confirmLabel="Delete everything" busyLabel="Deleting…" busy={accountDeleteBusy} onOpenChange={setConfirmingAccountDelete} onConfirm={() => { void handleDeleteAccount(); }} />
     </section>
   );

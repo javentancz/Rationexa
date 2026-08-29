@@ -43,7 +43,7 @@ export function ModelPicker({ models, selectedId, recommendedId, onSelect, disab
     <div className={`model-picker ${compact ? "compact" : ""} ${open ? "open" : ""}`}>
       <Popover.Trigger asChild>
         <button type="button" className="model-trigger" aria-label={`${label}: ${selected?.label ?? "Loading models"}`} disabled={disabled || !models.length}>
-          <span className="model-trigger-icon"><Sparkles aria-hidden="true" /></span><span><small>{label}</small><strong>{selected?.label ?? "Loading models…"}</strong></span><span className="model-location">{selected?.location ?? ""}</span><span className="model-chevron"><ChevronDown aria-hidden="true" /></span>
+          <span className="model-trigger-icon"><Sparkles aria-hidden="true" /></span><span><small>{label}</small><strong>{selected?.label ?? "Loading models…"}</strong></span><span className="model-location">{selected?.provider === "deterministic" ? "Built-in" : selected?.location ?? ""}</span><span className="model-chevron"><ChevronDown aria-hidden="true" /></span>
         </button>
       </Popover.Trigger>
       <Popover.Portal>
