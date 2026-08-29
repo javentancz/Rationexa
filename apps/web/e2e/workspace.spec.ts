@@ -14,17 +14,23 @@ const models = {
 };
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*" };
+const workspace = {
+  id: "workspace-1",
+  name: "Personal workspace",
+  account_id: "account-1",
+  account_name: "Demo User",
+  mode: "local_personal",
+  created_at: "2026-08-28T00:00:00Z",
+};
 
 async function mockBootstrap(page: Page, decisions: unknown[] = []) {
-  await page.route(/\/v1\/models(?:\?.*)?$/, (route) => route.fulfill({ json: models, headers: corsHeaders }));
-  await page.route(/\/v1\/workspace(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: {
-    id: "workspace-1",
-    name: "Personal workspace",
-    account_id: "account-1",
-    account_name: "Demo User",
-    mode: "local_personal",
-    created_at: "2026-08-28T00:00:00Z",
+  await page.route(/\/v1\/bootstrap(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: {
+    models,
+    workspace,
+    library: { items: decisions, total: decisions.length },
   } }));
+  await page.route(/\/v1\/models(?:\?.*)?$/, (route) => route.fulfill({ json: models, headers: corsHeaders }));
+  await page.route(/\/v1\/workspace(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: workspace }));
   await page.route(/\/v1\/decisions(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: { items: decisions, total: decisions.length } }));
 }
 
@@ -78,15 +84,13 @@ test("unavailable models explain the problem and block extraction", async ({ pag
       availability_reason: "Not installed. Run `ollama pull missing:latest`.",
     }],
   };
-  await page.route(/\/v1\/models(?:\?.*)?$/, (route) => route.fulfill({ json: unavailableModels, headers: corsHeaders }));
-  await page.route(/\/v1\/workspace(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: {
-    id: "workspace-1",
-    name: "Personal workspace",
-    account_id: "account-1",
-    account_name: "Demo User",
-    mode: "local_personal",
-    created_at: "2026-08-28T00:00:00Z",
+  await page.route(/\/v1\/bootstrap(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: {
+    models: unavailableModels,
+    workspace,
+    library: { items: [], total: 0 },
   } }));
+  await page.route(/\/v1\/models(?:\?.*)?$/, (route) => route.fulfill({ json: unavailableModels, headers: corsHeaders }));
+  await page.route(/\/v1\/workspace(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: workspace }));
   await page.route(/\/v1\/decisions(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: { items: [], total: 0 } }));
 
   await page.goto("/");

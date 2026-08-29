@@ -34,7 +34,13 @@ export async function apiResponse(path: string, options: RequestInit = {}): Prom
   const token = getSessionToken();
   const headers = new Headers(options.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const response = await fetch(`${api}${path}`, { ...options, cache: options.cache ?? "no-store", headers });
+  let response: Response;
+  try {
+    response = await fetch(`${api}${path}`, { ...options, cache: options.cache ?? "no-store", headers });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new Error("Rationexa could not reach the API. Check the service connection and try again.", { cause: error });
+  }
   if (response.status === 401 && token) {
     setSessionToken(null);
     window.dispatchEvent(new Event("rationexa-auth-expired"));

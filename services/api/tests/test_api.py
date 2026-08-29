@@ -25,7 +25,7 @@ def test_database_is_at_the_alembic_head() -> None:
     with TestClient(app):
         with engine.connect() as connection:
             revision = MigrationContext.configure(connection).get_current_revision()
-    assert revision == "20260828_04"
+    assert revision == "20260829_05"
 
 
 def test_readiness_checks_database_and_artifact_storage() -> None:
@@ -101,6 +101,7 @@ def test_stage_one_vertical_slice() -> None:
     with TestClient(app) as client:
         health = client.get("/healthz")
         assert health.status_code == 200
+        assert "app;dur=" in health.headers["server-timing"]
 
         models = client.get("/v1/models")
         assert models.status_code == 200
@@ -111,6 +112,12 @@ def test_stage_one_vertical_slice() -> None:
         assert workspace.json()["mode"] == "local_personal"
         assert workspace.json()["name"] == "Personal workspace"
         assert workspace.json()["account_name"] == "Demo User"
+
+        bootstrap = client.get("/v1/bootstrap")
+        assert bootstrap.status_code == 200
+        assert bootstrap.json()["models"]["default_model_id"] == "deterministic/rules-v1"
+        assert bootstrap.json()["workspace"]["id"] == workspace.json()["id"]
+        assert isinstance(bootstrap.json()["library"]["items"], list)
 
         artifact = client.post(
             "/v1/artifacts",
@@ -638,7 +645,7 @@ def test_stage_two_markdown_export_contains_reviewed_record_and_revisit_history(
         assert exported.headers["content-disposition"] == (
             'attachment; filename="exportable-vendor-decision-record.md"'
         )
-        assert exported.headers["access-control-expose-headers"] == "Content-Disposition"
+        assert exported.headers["access-control-expose-headers"] == "Content-Disposition, Server-Timing"
         assert "# Exportable vendor decision" in exported.text
         assert "## Preserved premises" in exported.text
         assert "Reviewed source excerpt" in exported.text

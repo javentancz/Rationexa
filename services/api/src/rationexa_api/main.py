@@ -3,7 +3,8 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from secrets import token_urlsafe
-from time import perf_counter
+from threading import Lock
+from time import monotonic, perf_counter
 from typing import Annotated
 
 import httpx
@@ -104,6 +105,7 @@ from .schemas import (
     UsageModelRead,
     UsageRunRead,
     UsageSummaryRead,
+    WorkspaceBootstrapRead,
     WorkspaceRead,
     WorkspaceUpdateRequest,
 )
@@ -118,6 +120,9 @@ from .secrets import (
 from .services import extract_artifact_text, persist_artifact, validate_anchor
 
 settings = get_settings()
+_cache_lock = Lock()
+_ollama_status_cache: dict[tuple[str, str], tuple[float, set[str], str | None]] = {}
+_provider_model_cache: dict[str, tuple[float, tuple[str, ...]]] = {}
 
 CONSEQUENTIAL_KINDS = {
     PremiseKind.HARD_CONSTRAINT,
@@ -143,8 +148,17 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition"],
+    expose_headers=["Content-Disposition", "Server-Timing"],
 )
+
+
+@app.middleware("http")
+async def add_server_timing(request: Request, call_next):
+    started_at = perf_counter()
+    response = await call_next(request)
+    duration_ms = (perf_counter() - started_at) * 1000
+    response.headers["Server-Timing"] = f'app;dur={duration_ms:.1f};desc="Rationexa API"'
+    return response
 
 Db = Annotated[Session, Depends(get_db)]
 
@@ -323,19 +337,34 @@ def list_models(request: Request, db: Db) -> ModelCatalogRead:
 def _ollama_model_status() -> tuple[set[str], str | None]:
     if settings.ai_provider.lower() != "ollama":
         return set(), None
+    cache_key = (settings.ollama_base_url, settings.ollama_models)
+    now = monotonic()
+    with _cache_lock:
+        cached = _ollama_status_cache.get(cache_key)
+        if cached and cached[0] > now:
+            return set(cached[1]), cached[2]
     try:
-        response = httpx.get(f"{settings.ollama_base_url.rstrip('/')}/api/tags", timeout=2)
+        response = httpx.get(
+            f"{settings.ollama_base_url.rstrip('/')}/api/tags",
+            timeout=settings.ollama_status_timeout_seconds,
+        )
         response.raise_for_status()
         payload = response.json()
     except (httpx.HTTPError, ValueError) as exc:
-        return set(), f"Ollama is unavailable: {exc}"
+        result = (set(), f"Ollama is unavailable: {exc}")
+        with _cache_lock:
+            _ollama_status_cache[cache_key] = (now + settings.ollama_status_cache_seconds, *result)
+        return result
     entries = payload.get("models", []) if isinstance(payload, dict) else []
     installed = {
         str(entry.get("model") or entry.get("name") or "").strip()
         for entry in entries
         if isinstance(entry, dict)
     }
-    return {model for model in installed if model}, None
+    result = ({model for model in installed if model}, None)
+    with _cache_lock:
+        _ollama_status_cache[cache_key] = (now + settings.ollama_status_cache_seconds, *result)
+    return result
 
 
 @app.get("/v1/workspace", response_model=WorkspaceRead)
@@ -1016,6 +1045,16 @@ def list_decisions(
             for decision, premises, revisits, pending, last_revisited in rows
         ],
         total=total,
+    )
+
+
+@app.get("/v1/bootstrap", response_model=WorkspaceBootstrapRead)
+def workspace_bootstrap(route: Request, db: Db) -> WorkspaceBootstrapRead:
+    """Load the initial workspace in one serverless round trip."""
+    return WorkspaceBootstrapRead(
+        models=list_models(route, db),
+        workspace=get_workspace(route, db),
+        library=list_decisions(route, db),
     )
 
 
@@ -1860,6 +1899,28 @@ def _fetch_provider_model_ids(configuration: dict) -> list[str]:
     return models
 
 
+def _cached_provider_model_ids(configuration: dict, *, force: bool = False) -> list[str]:
+    fingerprint = sha256(
+        f"{configuration.get('base_url', '')}\0{configuration.get('key', '')}".encode()
+    ).hexdigest()
+    now = monotonic()
+    if not force:
+        with _cache_lock:
+            cached = _provider_model_cache.get(fingerprint)
+            if cached and cached[0] > now:
+                return list(cached[1])
+    models = _fetch_provider_model_ids(configuration)
+    with _cache_lock:
+        if len(_provider_model_cache) >= 64:
+            expired = [key for key, value in _provider_model_cache.items() if value[0] <= now]
+            for key in expired:
+                _provider_model_cache.pop(key, None)
+            if len(_provider_model_cache) >= 64:
+                _provider_model_cache.pop(next(iter(_provider_model_cache)))
+        _provider_model_cache[fingerprint] = (now + settings.provider_model_cache_seconds, tuple(models))
+    return models
+
+
 @app.get("/v1/secrets/{provider}/models")
 def list_provider_models(route: Request, provider: str, db: Db) -> dict[str, list[str]]:
     workspace = authenticated_private_workspace(db, extract_session_token(route))
@@ -1867,7 +1928,7 @@ def list_provider_models(route: Request, provider: str, db: Db) -> dict[str, lis
     if configuration is None:
         raise HTTPException(status_code=404, detail="Connect this provider before loading its models")
     try:
-        return {"models": _fetch_provider_model_ids(configuration)}
+        return {"models": _cached_provider_model_ids(configuration)}
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
@@ -1880,7 +1941,7 @@ def test_provider_connection(route: Request, provider: str, db: Db) -> SecretCon
         raise HTTPException(status_code=404, detail="Connect this provider before testing it")
     started_at = perf_counter()
     try:
-        models = _fetch_provider_model_ids(configuration)
+        models = _cached_provider_model_ids(configuration, force=True)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     return SecretConnectionTestRead(
@@ -1897,7 +1958,7 @@ def choose_provider_model(route: Request, provider: str, payload: SecretModelSel
     if configuration is None:
         raise HTTPException(status_code=404, detail="Connect this provider before selecting its model")
     try:
-        available = _fetch_provider_model_ids(configuration)
+        available = _cached_provider_model_ids(configuration)
         if payload.model not in available:
             raise ValueError("The selected model is not in this provider's current model catalog")
         row = select_provider_model(db, workspace.id, provider, payload.model)

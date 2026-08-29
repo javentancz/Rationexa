@@ -21,10 +21,11 @@ const providerOptions = [
 
 type AccountPanelProps = {
   onConfigurationChanged?: () => void;
+  onModelConfigurationChanged?: () => void;
   onWorkspaceProfileChanged?: () => void;
 };
 
-export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged }: AccountPanelProps) {
+export function AccountPanel({ onConfigurationChanged, onModelConfigurationChanged, onWorkspaceProfileChanged }: AccountPanelProps) {
   const [authenticated, setAuthenticated] = useState(false);
   const [account, setAccount] = useState<AccountRead | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceRead | null>(null);
@@ -62,10 +63,11 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
     try {
       const token = getSessionToken();
       if (token) {
-        const [who, currentWorkspace, activeSessions] = await Promise.all([
+        const [who, currentWorkspace, activeSessions, stored] = await Promise.all([
           apiFetch("/v1/account") as Promise<AccountRead>,
           apiFetch("/v1/workspace") as Promise<WorkspaceRead>,
           apiFetch("/v1/auth/sessions") as Promise<SessionSummary[]>,
+          apiFetch("/v1/secrets") as Promise<SecretRead[]>,
         ]);
         setAuthenticated(true);
         setAccount(who);
@@ -73,6 +75,11 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
         setSessions(activeSessions);
         setProfileName(who.name);
         setWorkspaceName(currentWorkspace.name);
+        setSecrets(stored);
+        setProviderModelSelection((current) => stored.reduce<Record<string, string>>((next, entry) => {
+          if (entry.selected_model) next[entry.provider] = entry.selected_model;
+          return next;
+        }, { ...current }));
       } else {
         const workspace = (await apiFetch("/v1/workspace")) as WorkspaceRead;
         setAuthenticated(false);
@@ -84,13 +91,8 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
         });
         setWorkspace(workspace);
         setSessions([]);
+        setSecrets([]);
       }
-      const entries = token ? ((await apiFetch("/v1/secrets")) as SecretRead[]) ?? [] : [];
-      setSecrets(entries);
-      setProviderModelSelection((current) => entries.reduce<Record<string, string>>((next, entry) => {
-        if (entry.selected_model) next[entry.provider] = entry.selected_model;
-        return next;
-      }, { ...current }));
     } catch (caught) {
       if (startedWithToken && getSessionToken() === null) {
         const workspace = (await apiFetch("/v1/workspace")) as WorkspaceRead;
@@ -253,16 +255,15 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
     setSecretBusy(true);
     setError(null);
     try {
-      await apiFetch("/v1/secrets", {
+      const connected = await apiFetch("/v1/secrets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider: providerEntry, key: keyEntry, base_url: providerEntry === "custom" ? baseUrlEntry : undefined }),
-      });
+      }) as SecretRead;
       setKeyEntry("");
       if (providerEntry === "custom") setBaseUrlEntry("");
-      await refresh();
+      setSecrets((current) => [...current.filter((entry) => entry.provider !== connected.provider), connected].sort((a, b) => a.provider.localeCompare(b.provider)));
       await loadProviderModels(providerEntry);
-      onConfigurationChanged?.();
       toast.success("Provider connected. Choose an active model.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not store the key");
@@ -308,13 +309,13 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
     setModelBusyFor(provider);
     setError(null);
     try {
-      await apiFetch(`/v1/secrets/${provider}/model`, {
+      const activated = await apiFetch(`/v1/secrets/${provider}/model`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model }),
-      });
-      await refresh();
-      onConfigurationChanged?.();
+      }) as SecretRead;
+      setSecrets((current) => current.map((entry) => entry.provider === provider ? activated : entry));
+      onModelConfigurationChanged?.();
       toast.success("Hosted model activated");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not activate the hosted model");
@@ -330,8 +331,8 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
       await apiFetch(`/v1/secrets/${provider}`, { method: "DELETE" });
       setProviderModels((current) => { const next = { ...current }; delete next[provider]; return next; });
       setProviderModelSelection((current) => { const next = { ...current }; delete next[provider]; return next; });
-      await refresh();
-      onConfigurationChanged?.();
+      setSecrets((current) => current.filter((entry) => entry.provider !== provider));
+      onModelConfigurationChanged?.();
       setRemoveProvider(null);
       toast.success("Provider key removed");
     } catch (caught) {

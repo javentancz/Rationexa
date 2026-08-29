@@ -508,6 +508,65 @@ def test_model_catalog_marks_missing_ollama_models_unavailable(monkeypatch) -> N
     assert "ollama pull missing:latest" in by_id["ollama/missing:latest"]["availability_reason"]
 
 
+def test_ollama_discovery_is_cached(monkeypatch) -> None:
+    from rationexa_api import main
+
+    class TagsResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"models": [{"model": "qwen3.5:9b"}]}
+
+    calls = 0
+
+    def tags(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return TagsResponse()
+
+    runtime = Settings(
+        ai_provider="ollama",
+        ollama_model="qwen3.5:9b",
+        ollama_models="qwen3.5:9b",
+        ollama_status_cache_seconds=30,
+    )
+    monkeypatch.setattr(main, "settings", runtime)
+    monkeypatch.setattr(main.httpx, "get", tags)
+    main._ollama_status_cache.clear()
+
+    with TestClient(app) as client:
+        assert client.get("/v1/models").status_code == 200
+        assert client.get("/v1/models").status_code == 200
+
+    assert calls == 1
+
+
+def test_provider_catalog_cache_uses_a_key_fingerprint(monkeypatch) -> None:
+    from rationexa_api import main
+
+    calls = 0
+
+    def provider_models(configuration: dict) -> list[str]:
+        nonlocal calls
+        calls += 1
+        return ["provider/model"]
+
+    runtime = Settings(provider_model_cache_seconds=30)
+    monkeypatch.setattr(main, "settings", runtime)
+    monkeypatch.setattr(main, "_fetch_provider_model_ids", provider_models)
+    main._provider_model_cache.clear()
+    configuration = {"base_url": "https://models.example.test", "key": "private-provider-key"}
+
+    assert main._cached_provider_model_ids(configuration) == ["provider/model"]
+    assert main._cached_provider_model_ids(configuration) == ["provider/model"]
+    assert calls == 1
+    assert all("private-provider-key" not in cache_key for cache_key in main._provider_model_cache)
+
+    assert main._cached_provider_model_ids(configuration, force=True) == ["provider/model"]
+    assert calls == 2
+
+
 def test_password_hash_round_trips() -> None:
     hashed, salt, iterations = hash_password("correct-horse", 10_000)
     assert hashed

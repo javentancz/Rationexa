@@ -349,6 +349,12 @@ class DecisionListRead(BaseModel):
     total: int
 
 
+class WorkspaceBootstrapRead(BaseModel):
+    models: ModelCatalogRead
+    workspace: WorkspaceRead
+    library: DecisionListRead
+
+
 class UsageRunRead(BaseModel):
     id: str
     kind: Literal["extraction", "revisit", "challenge"]

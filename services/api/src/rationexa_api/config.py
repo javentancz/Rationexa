@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3.5:9b"
     ollama_models: str = "qwen3.5:9b,gemma4:e4b,ornith-1.5:9b"
     ollama_timeout_seconds: float = 180
+    ollama_status_timeout_seconds: float = 0.75
+    ollama_status_cache_seconds: float = 15
+    provider_model_cache_seconds: float = 60
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.4-mini"
     public_base_url: str = "http://localhost:3000"

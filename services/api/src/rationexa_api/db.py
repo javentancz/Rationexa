@@ -169,6 +169,7 @@ class ExtractionRow(Base):
 
 class DecisionRow(Base):
     __tablename__ = "decisions"
+    __table_args__ = (Index("ix_decisions_workspace_created", "workspace_id", "created_at"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
@@ -188,6 +189,7 @@ class DecisionRow(Base):
 
 class PremiseRow(Base):
     __tablename__ = "premises"
+    __table_args__ = (Index("ix_premises_decision_id", "decision_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     decision_id: Mapped[str] = mapped_column(ForeignKey("decisions.id"))
@@ -215,6 +217,7 @@ class SourceAnchorRow(Base):
 
 class RevisitRow(Base):
     __tablename__ = "revisit_checks"
+    __table_args__ = (Index("ix_revisit_checks_decision_created", "decision_id", "created_at"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     decision_id: Mapped[str] = mapped_column(ForeignKey("decisions.id"))

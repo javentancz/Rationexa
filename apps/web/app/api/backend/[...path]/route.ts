@@ -7,6 +7,7 @@ const forwardedResponseHeaders = [
   "content-disposition",
   "content-type",
   "retry-after",
+  "server-timing",
 ];
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {

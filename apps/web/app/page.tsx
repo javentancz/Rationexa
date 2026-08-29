@@ -73,6 +73,7 @@ type DecisionListItem = {
 
 type DecisionLibrary = { items: DecisionListItem[]; total: number };
 type PersonalWorkspace = { id: string; name: string; account_id: string; account_name: string; mode: "local_personal" | "authenticated_personal"; created_at: string };
+type WorkspaceBootstrap = { models: ModelCatalog; workspace: PersonalWorkspace; library: DecisionLibrary };
 
 type Finding = {
   premise_id: string;
@@ -247,7 +248,7 @@ export default function Home() {
   const [library, setLibrary] = useState<DecisionLibrary>({ items: [], total: 0 });
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryCriticality, setLibraryCriticality] = useState<"all" | Criticality>("all");
-  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryLoading, setLibraryLoading] = useState(true);
    const [revisitHistory, setRevisitHistory] = useState<RevisitResult[]>([]);
    const [exportBusy, setExportBusy] = useState(false);
    const [pdfExportBusy, setPdfExportBusy] = useState(false);
@@ -275,26 +276,33 @@ export default function Home() {
   const [sessionRestored, setSessionRestored] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const restoredSession = useRef(false);
+  const libraryRequest = useRef<AbortController | null>(null);
+  const loadedLibraryQuery = useRef<string | null>(null);
 
   useEffect(() => {
     if (window.location.hash.startsWith("#account-reset=")) setView("settings");
   }, []);
 
+  useEffect(() => () => libraryRequest.current?.abort(), []);
+
   const bootstrapQuery = useQuery({
     queryKey: ["workspace-bootstrap"],
-    queryFn: async () => Promise.all([
-      req(`/v1/models`).then(responseJson) as Promise<ModelCatalog>,
-      req(`/v1/workspace`).then(responseJson) as Promise<PersonalWorkspace>,
-    ]),
+    queryFn: async () => req(`/v1/bootstrap`).then(responseJson) as Promise<WorkspaceBootstrap>,
     staleTime: 60_000,
   });
 
   useEffect(() => {
-    if (bootstrapQuery.error) setError(bootstrapQuery.error instanceof Error ? bootstrapQuery.error.message : "Could not load workspace");
+    if (bootstrapQuery.error) {
+      setError(bootstrapQuery.error instanceof Error ? bootstrapQuery.error.message : "Could not load workspace");
+      setLibraryLoading(false);
+    }
     if (!bootstrapQuery.data) return;
-    const [catalog, workspace] = bootstrapQuery.data;
+    const { models: catalog, workspace, library: initialLibrary } = bootstrapQuery.data;
     setModels(catalog.models);
     setPersonalWorkspace(workspace);
+    setLibrary(initialLibrary);
+    setLibraryLoading(false);
+    loadedLibraryQuery.current = "";
     setRecommendedModelId(catalog.default_model_id);
     setSelectedModelId((current) => catalog.models.some((model) => model.id === current) ? current : catalog.default_model_id);
     setComparisonModelId((current) => catalog.models.some((model) => model.id === current)
@@ -302,14 +310,45 @@ export default function Home() {
       : catalog.models.find((model) => model.id !== catalog.default_model_id)?.id || "");
   }, [bootstrapQuery.data, bootstrapQuery.error]);
 
+  const modelCatalogQuery = useQuery({
+    queryKey: ["model-catalog"],
+    queryFn: async () => req(`/v1/models`).then(responseJson) as Promise<ModelCatalog>,
+    enabled: false,
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (modelCatalogQuery.error) setError(modelCatalogQuery.error instanceof Error ? modelCatalogQuery.error.message : "Could not load models");
+    if (!modelCatalogQuery.data) return;
+    const catalog = modelCatalogQuery.data;
+    setModels(catalog.models);
+    setRecommendedModelId(catalog.default_model_id);
+    setSelectedModelId((current) => catalog.models.some((model) => model.id === current) ? current : catalog.default_model_id);
+    setComparisonModelId((current) => catalog.models.some((model) => model.id === current)
+      ? current
+      : catalog.models.find((model) => model.id !== catalog.default_model_id)?.id || "");
+  }, [modelCatalogQuery.data, modelCatalogQuery.error]);
+
+  const workspaceQuery = useQuery({
+    queryKey: ["personal-workspace"],
+    queryFn: async () => req(`/v1/workspace`).then(responseJson) as Promise<PersonalWorkspace>,
+    enabled: false,
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (workspaceQuery.error) setError(workspaceQuery.error instanceof Error ? workspaceQuery.error.message : "Could not load workspace");
+    if (workspaceQuery.data) setPersonalWorkspace(workspaceQuery.data);
+  }, [workspaceQuery.data, workspaceQuery.error]);
+
   useEffect(() => {
     const recoverLocalWorkspace = () => {
       window.localStorage.removeItem(workspaceSessionKey);
       window.localStorage.removeItem(evidenceDraftsKey);
       resetWorkspace();
       setLibrary({ items: [], total: 0 });
+      loadedLibraryQuery.current = null;
       void bootstrapQuery.refetch();
-      void loadLibrary();
       toast.info("Your session expired. The local workspace is active.");
     };
     window.addEventListener("rationexa-auth-expired", recoverLocalWorkspace);
@@ -392,15 +431,20 @@ export default function Home() {
   }, [compareMode, models, selectedModelId]);
 
   useEffect(() => {
+    if (!bootstrapQuery.data) return;
+    const params = new URLSearchParams();
+    if (libraryQuery.trim()) params.set("q", libraryQuery.trim());
+    if (libraryCriticality !== "all") params.set("criticality", libraryCriticality);
+    if (loadedLibraryQuery.current === params.toString()) return;
     const timer = window.setTimeout(() => {
       void loadLibrary();
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [libraryQuery, libraryCriticality]);
+  }, [bootstrapQuery.data, libraryQuery, libraryCriticality]);
 
   useEffect(() => {
-    if (view === "usage") void loadUsage();
-  }, [view]);
+    if (view === "usage" && !usage) void loadUsage();
+  }, [usage, view]);
 
   const premises = extraction?.result.premises ?? [];
   const counts = useMemo(() => {
@@ -698,6 +742,9 @@ export default function Home() {
   }
 
   async function loadLibrary() {
+    libraryRequest.current?.abort();
+    const controller = new AbortController();
+    libraryRequest.current = controller;
     setLibraryLoading(true);
     setError(null);
     try {
@@ -705,11 +752,19 @@ export default function Home() {
       if (libraryQuery.trim()) params.set("q", libraryQuery.trim());
       if (libraryCriticality !== "all") params.set("criticality", libraryCriticality);
       const query = params.size ? `?${params.toString()}` : "";
-      setLibrary(await responseJson(await req(`/v1/decisions${query}`)) as DecisionLibrary);
+      const result = await responseJson(await req(`/v1/decisions${query}`, { signal: controller.signal })) as DecisionLibrary;
+      if (libraryRequest.current === controller) {
+        setLibrary(result);
+        loadedLibraryQuery.current = params.toString();
+      }
     } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
       setError(caught instanceof Error ? caught.message : "Could not load the decision library");
     } finally {
-      setLibraryLoading(false);
+      if (libraryRequest.current === controller) {
+        libraryRequest.current = null;
+        setLibraryLoading(false);
+      }
     }
   }
 
@@ -859,8 +914,12 @@ export default function Home() {
     resetWorkspace();
     if (keepSettingsOpen) setView("settings");
     setLibrary({ items: [], total: 0 });
+    loadedLibraryQuery.current = null;
     await bootstrapQuery.refetch();
-    await loadLibrary();
+  }
+
+  async function handleModelConfigurationChanged() {
+    await modelCatalogQuery.refetch();
   }
 
   function requestNewDecision() {
@@ -1116,7 +1175,7 @@ export default function Home() {
           </> : null}
         </section> : null}
 
-        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use local models without an account, or add a hosted-provider key to this personal workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel onConfigurationChanged={() => { void handleWorkspaceChanged(); }} onWorkspaceProfileChanged={() => { void bootstrapQuery.refetch(); }} /></section> : null}
+        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use built-in deterministic rules without a key, or add a hosted-provider key to your private workspace. Self-hosted installations can also expose local Ollama models. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel onConfigurationChanged={() => { void handleWorkspaceChanged(); }} onModelConfigurationChanged={() => { void handleModelConfigurationChanged(); }} onWorkspaceProfileChanged={() => { void workspaceQuery.refetch(); }} /></section> : null}
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
 
