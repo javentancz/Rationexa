@@ -1081,6 +1081,9 @@ export default function Home() {
           <div className="library-toolbar">
             <label className="library-search"><span>⌕</span><input aria-label="Search decisions" value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search title, question, context, or chosen option" /></label>
           </div>
+          <div className="mobile-library-filters" aria-label="Filter decisions by criticality">
+            {(["all", "critical", "important", "routine"] as ("all" | Criticality)[]).map((value) => <button type="button" key={value} className={libraryCriticality === value ? "active" : ""} aria-pressed={libraryCriticality === value} onClick={() => setLibraryCriticality(value)}>{value === "all" ? "All" : value[0].toUpperCase() + value.slice(1)}</button>)}
+          </div>
           <div className="library-summary"><div><strong>{library.total}</strong><span>saved decisions</span></div><p>Reopen a record to review its premises, add new evidence, or inspect previous revisit checks.</p></div>
 {libraryLoading ? <div className="library-empty"><span className="spinner dark" /><strong>Loading decision memory…</strong></div> : library.items.length ? <div className="decision-list">{library.items.map((item) => <div className="decision-card" key={item.id}>
             <button type="button" className="decision-row" onClick={() => openDecision(item.id)}>

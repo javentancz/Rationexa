@@ -518,6 +518,7 @@ button { cursor:pointer; }
 .library-search { display:flex; align-items:center; gap:9px; min-height:43px; border:1px solid var(--line); border-radius:10px; padding:0 13px; background:var(--surface); box-shadow:0 1px 2px rgba(0,0,0,.02); }
 .library-search span { color:var(--subtle); font-size:18px; }
 .library-search input { width:100%; border:0; outline:0; background:transparent; color:var(--ink); font-size:12px; }
+.mobile-library-filters { display:none; }
 .library-summary { display:flex; align-items:center; justify-content:space-between; gap:24px; border:1px solid #cde0d3; border-radius:12px; padding:16px 18px; background:var(--accent-soft); }
 .library-summary>div { display:flex; align-items:baseline; gap:7px; white-space:nowrap; }
 .library-summary strong { color:var(--accent-dark); font:500 25px Georgia,serif; }
@@ -773,3 +774,209 @@ button { cursor:pointer; }
 .account-sessions li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .account-sessions li span{display:grid;gap:2px}.account-sessions li small{color:var(--muted);font-size:10px}.account-sessions li em{font-style:normal;color:var(--accent);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em}
 @media (max-width:760px){.pilot-account-grid{grid-template-columns:1fr}.account-management-card.account-sessions{grid-column:auto}}
+
+/* Mobile web shell: content first, workflow at the top, primary navigation at the bottom. */
+@media (max-width:760px) {
+  html,body { height:100%; overflow:hidden; }
+  .app-shell,
+  .app-shell.library-collapsed,
+  .app-shell.workflow-collapsed {
+    --library-pane-width:0px;
+    --workflow-pane-width:0px;
+    display:block;
+    height:100dvh;
+    overflow:hidden;
+  }
+  .workbench-shell,
+  .workbench-shell.library-overview {
+    grid-column:1;
+    width:100%;
+    height:100dvh;
+    margin:0;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    border:0;
+    border-radius:0;
+    box-shadow:none;
+  }
+  .workspace {
+    flex:1;
+    height:auto;
+    min-height:0;
+    padding:0 16px calc(92px + env(safe-area-inset-bottom));
+    overscroll-behavior:contain;
+  }
+  .topbar {
+    min-height:72px;
+    gap:10px;
+    padding:11px 0 10px;
+    background:rgba(251,252,250,.97);
+  }
+  .topbar h1 { margin-top:2px; font-size:24px; line-height:1.08; }
+  .overline { font-size:10px; letter-spacing:.1em; }
+
+  .sidebar,
+  .library-collapsed .library-pane,
+  .library-collapsed.library-peeking .library-pane {
+    position:fixed;
+    z-index:500;
+    inset:auto 0 0;
+    width:100%;
+    height:calc(70px + env(safe-area-inset-bottom));
+    display:flex;
+    align-items:stretch;
+    gap:4px;
+    overflow:hidden;
+    border:1px solid var(--line);
+    border-width:1px 0 0;
+    padding:7px 8px calc(7px + env(safe-area-inset-bottom));
+    background:rgba(251,252,250,.98);
+    box-shadow:0 -10px 30px rgba(19,31,23,.09);
+    opacity:1;
+    pointer-events:auto;
+    transform:none;
+    backdrop-filter:blur(18px);
+  }
+  .library-hover-zone,
+  .pane-brand,
+  .library-pane>.pane-section,
+  .decision-conversations,
+  .workspace-identity { display:none; }
+  .library-pane .new-decision {
+    flex:0 0 24%;
+    min-width:0;
+    min-height:52px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:2px;
+    border:0;
+    border-radius:11px;
+    padding:5px 3px;
+    background:transparent;
+    box-shadow:none;
+    text-align:center;
+  }
+  .library-pane .new-decision:hover,
+  .library-pane .new-decision:focus-visible { transform:none; background:var(--accent-soft); box-shadow:none; }
+  .library-pane .new-decision>svg { width:23px; height:23px; }
+  .library-pane .new-decision .pane-label { display:block; max-width:100%; font-size:0; }
+  .library-pane .new-decision .pane-label::after { content:"New"; font-size:10px; font-weight:750; }
+  .library-nav {
+    flex:1;
+    min-width:0;
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:4px;
+  }
+  .library-nav .nav-item:nth-child(2),
+  .library-nav .nav-item:nth-child(3),
+  .library-nav .nav-item:nth-child(4) { display:none; }
+  .library-pane .nav-item,
+  .library-pane .nav-item.usage-nav {
+    min-width:0;
+    min-height:52px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:2px;
+    margin:0;
+    border:0;
+    border-radius:11px;
+    padding:5px 3px;
+    font-size:10px;
+    line-height:1.1;
+    text-align:center;
+  }
+  .library-pane .nav-item:hover,
+  .library-pane .nav-item:focus-visible { transform:none; }
+  .library-pane .nav-item .pane-label { display:block; overflow:hidden; max-width:100%; text-overflow:ellipsis; white-space:nowrap; }
+  .library-pane .nav-item small { display:none; }
+  .nav-icon { width:24px; height:24px; }
+  .nav-icon svg { width:22px; height:22px; }
+
+  .workflow-toggle { display:none; }
+  .workflow-pane,
+  .workflow-collapsed .workflow-pane {
+    position:relative;
+    z-index:80;
+    flex:0 0 auto;
+    width:100%;
+    height:auto;
+    display:block;
+    overflow-x:auto;
+    border:0;
+    border-bottom:1px solid var(--line);
+    padding:8px 10px;
+    background:rgba(247,249,247,.98);
+    visibility:visible;
+    opacity:1;
+    pointer-events:auto;
+    transform:none;
+  }
+  .library-overview .workflow-pane { display:none; }
+  .workflow-pane-header,
+  .workflow-conversations,
+  .workflow-empty,
+  .workflow-library-link { display:none; }
+  .workflow-steps {
+    min-width:340px;
+    display:grid;
+    grid-template-columns:repeat(4,minmax(78px,1fr));
+    gap:5px;
+  }
+  .workflow-pane .workflow-steps button {
+    min-height:45px;
+    display:grid;
+    grid-template-columns:27px minmax(0,1fr);
+    gap:6px;
+    border-radius:10px;
+    padding:6px;
+  }
+  .workflow-pane .workflow-steps button>span:first-child { width:27px; height:27px; border-radius:8px; }
+  .workflow-pane .workflow-steps .pane-label { display:block; min-width:0; }
+  .workflow-pane .workflow-steps strong { display:block; overflow:hidden; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+  .workflow-pane .workflow-steps small { display:none; }
+
+  .import-card,.revisit-card,.decision-summary,.finalized-summary,.stage-snapshot,
+  .library-empty,.usage-section,.account-section { border-radius:14px; padding:16px; }
+  .library-view,.usage-view { padding-top:2px; }
+  .mobile-library-filters {
+    display:flex;
+    gap:7px;
+    margin-top:-3px;
+    padding-bottom:2px;
+    overflow-x:auto;
+    scrollbar-width:none;
+  }
+  .mobile-library-filters::-webkit-scrollbar { display:none; }
+  .mobile-library-filters button {
+    flex:0 0 auto;
+    min-height:38px;
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:7px 13px;
+    background:#fff;
+    color:var(--muted);
+    font-size:12px;
+    font-weight:700;
+  }
+  .mobile-library-filters button.active { border-color:#a9c4b2; background:var(--accent-soft); color:var(--accent-dark); }
+  .library-summary { gap:8px; padding:14px; }
+  .library-summary p { margin:0; line-height:1.45; }
+  .decision-row { min-height:0; padding:16px 52px 16px 16px; }
+  .decision-row-main h2 { font-size:20px; }
+  .decision-row-stats { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .form-footer .primary,.finalize-bar .primary,.stage-continue .primary { width:100%; min-height:48px; }
+  .field,.composer-input textarea { font-size:16px; }
+  .revisit-composer { bottom:0; margin-inline:-4px; border-radius:16px 16px 0 0; }
+  .model-menu { width:calc(100vw - 20px); max-height:calc(100dvh - 24px); }
+  .radix-dialog { width:calc(100vw - 24px); max-height:calc(100dvh - 24px); overflow-y:auto; }
+  .confirm-modal { width:100%; padding:20px; }
+  .finalize-summary-grid,.finalize-counts { grid-template-columns:1fr; }
+  .finalize-premise-preview article { padding-right:18px; }
+  .finalize-premise-preview em { position:static; display:block; margin-top:10px; }
+  .finalize-actions { align-items:stretch; flex-direction:column-reverse; }
+  .finalize-actions button { min-height:46px; }
+}
