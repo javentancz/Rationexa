@@ -739,6 +739,9 @@ button { cursor:pointer; }
 .account-hint{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px}
 .account-hint svg{width:13px;height:13px}
 .account-secrets{display:grid;gap:14px}
+.account-danger-zone{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,320px) auto;align-items:end;gap:14px;border:1px solid rgba(181,63,63,.28);border-radius:11px;padding:16px;background:rgba(181,63,63,.045)}
+.account-danger-zone>div{align-self:center}.account-danger-zone strong{color:var(--red);font-size:13px}.account-danger-zone p{margin:5px 0 0;color:var(--muted);font-size:11px;line-height:1.5}.account-danger-zone label{display:grid;gap:6px}.account-danger-zone label span{font-size:10px;font-weight:750}.account-danger-zone input{min-height:40px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;font:inherit}.account-danger-zone button{min-height:40px;white-space:nowrap}
+@media (max-width:760px){.account-danger-zone{grid-template-columns:1fr}.account-danger-zone button{width:100%}}
 .byok-heading{display:flex;align-items:flex-start;gap:12px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface-soft)}
 .byok-heading>svg{width:24px;height:24px;flex:0 0 auto;color:var(--green)}
 .byok-heading>div{display:grid;gap:4px}

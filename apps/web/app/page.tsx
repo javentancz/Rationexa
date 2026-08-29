@@ -853,9 +853,11 @@ export default function Home() {
      }
 
   async function handleWorkspaceChanged() {
+    const keepSettingsOpen = view === "settings";
     window.localStorage.removeItem(workspaceSessionKey);
     window.localStorage.removeItem(evidenceDraftsKey);
     resetWorkspace();
+    if (keepSettingsOpen) setView("settings");
     setLibrary({ items: [], total: 0 });
     await bootstrapQuery.refetch();
     await loadLibrary();

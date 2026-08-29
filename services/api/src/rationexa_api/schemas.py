@@ -129,6 +129,10 @@ class AccountUpdateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
 
 
+class AccountDeleteRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=PASSWORD_LENGTH_MAX)
+
+
 class WorkspaceUpdateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
 

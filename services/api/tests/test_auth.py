@@ -120,6 +120,46 @@ def test_password_change_keeps_current_session_and_revokes_others() -> None:
         ).status_code == 200
 
 
+def test_account_deletion_requires_password_and_removes_private_workspace() -> None:
+    with TestClient(app) as client:
+        registered = client.post(
+            "/v1/auth/register",
+            json={"email": "delete-me@rationexa.local", "name": "Delete Me", "password": "delete-pass"},
+        ).json()
+        headers = {"Authorization": f"Bearer {registered['session_token']}"}
+        account_id = registered["account_id"]
+        with SessionLocal() as db:
+            workspace = db.scalar(select(WorkspaceRow).where(WorkspaceRow.owner_account_id == account_id))
+            assert workspace is not None
+            workspace_id = workspace.id
+
+        assert client.post(
+            "/v1/secrets",
+            headers=headers,
+            json={"provider": "openai", "key": "sk-delete-with-workspace"},
+        ).status_code == 201
+        assert client.request(
+            "DELETE",
+            "/v1/account",
+            headers=headers,
+            json={"password": "wrong-password"},
+        ).status_code == 401
+        assert client.request(
+            "DELETE",
+            "/v1/account",
+            headers=headers,
+            json={"password": "delete-pass"},
+        ).status_code == 204
+        assert client.get("/v1/account", headers=headers).status_code == 401
+
+        with SessionLocal() as db:
+            assert db.get(AccountRow, account_id) is None
+            assert db.get(WorkspaceRow, workspace_id) is None
+            assert db.scalar(select(SessionRow).where(SessionRow.account_id == account_id)) is None
+            assert db.scalar(select(SecretRow).where(SecretRow.workspace_id == workspace_id)) is None
+            assert db.get(AccountRow, settings.local_account_id) is not None
+
+
 def test_password_reset_is_single_use_and_revokes_existing_sessions(monkeypatch) -> None:
     monkeypatch.setattr(settings, "password_reset_dev_mode", True)
     with TestClient(app) as client:

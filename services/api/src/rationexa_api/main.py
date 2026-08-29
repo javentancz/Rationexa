@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from pathlib import Path
 from secrets import token_urlsafe
 from time import perf_counter
 from typing import Annotated
@@ -55,6 +56,7 @@ from .providers import (
     get_provider,
 )
 from .schemas import (
+    AccountDeleteRequest,
     AccountRead,
     AccountUpdateRequest,
     ArtifactCreate,
@@ -1580,6 +1582,76 @@ def update_account(payload: AccountUpdateRequest, request: Request, db: Db) -> A
     db.commit()
     db.refresh(account)
     return account_read(account)
+
+
+def delete_private_account_data(db: Session, account: AccountRow, workspace: WorkspaceRow) -> list[Path]:
+    """Delete an account-owned workspace in dependency order and return unreferenced artifact files."""
+    decision_ids = list(db.scalars(select(DecisionRow.id).where(DecisionRow.workspace_id == workspace.id)).all())
+    premise_ids = (
+        list(db.scalars(select(PremiseRow.id).where(PremiseRow.decision_id.in_(decision_ids))).all())
+        if decision_ids
+        else []
+    )
+    artifact_rows = list(db.scalars(select(ArtifactRow).where(ArtifactRow.workspace_id == workspace.id)).all())
+    artifact_locations = {
+        row.storage_uri for row in artifact_rows if row.storage_uri and not row.storage_uri.startswith("database://")
+    }
+
+    if premise_ids:
+        db.execute(delete(SourceAnchorRow).where(SourceAnchorRow.premise_id.in_(premise_ids)))
+    if decision_ids:
+        db.execute(delete(PremiseRow).where(PremiseRow.decision_id.in_(decision_ids)))
+        db.execute(delete(RevisitRow).where(RevisitRow.decision_id.in_(decision_ids)))
+        db.execute(delete(DecisionShareRow).where(DecisionShareRow.decision_id.in_(decision_ids)))
+        db.execute(delete(DecisionRow).where(DecisionRow.id.in_(decision_ids)))
+    db.execute(delete(ExtractionRow).where(ExtractionRow.workspace_id == workspace.id))
+    db.execute(delete(ProductEventRow).where(ProductEventRow.workspace_id == workspace.id))
+    db.execute(delete(SecretRow).where(SecretRow.workspace_id == workspace.id))
+    db.execute(delete(ArtifactRow).where(ArtifactRow.workspace_id == workspace.id))
+    db.execute(delete(WorkspaceRow).where(WorkspaceRow.id == workspace.id))
+    db.execute(delete(PasswordResetRow).where(PasswordResetRow.account_id == account.id))
+    db.execute(delete(SessionRow).where(SessionRow.account_id == account.id))
+    db.execute(delete(AccountRow).where(AccountRow.id == account.id))
+    db.flush()
+
+    still_referenced = set()
+    if artifact_locations:
+        still_referenced = set(db.scalars(
+            select(ArtifactRow.storage_uri).where(ArtifactRow.storage_uri.in_(artifact_locations))
+        ).all())
+    return [Path(location) for location in artifact_locations - still_referenced]
+
+
+@app.delete("/v1/account", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(payload: AccountDeleteRequest, request: Request, db: Db) -> Response:
+    account = authenticated_account(request, db)
+    if account.id == settings.local_account_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The bootstrap local account cannot be deleted",
+        )
+    if (
+        account.password_hash is None
+        or account.password_salt is None
+        or not verify_password(
+            payload.password,
+            account.password_hash,
+            account.password_salt,
+            account.password_iterations or settings.pbkdf2_iterations,
+        )
+    ):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+    workspace = account_workspace(db, account.id)
+    if workspace is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+    artifact_files = delete_private_account_data(db, account, workspace)
+    db.commit()
+    for artifact_file in artifact_files:
+        try:
+            artifact_file.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.patch("/v1/workspace", response_model=WorkspaceRead)

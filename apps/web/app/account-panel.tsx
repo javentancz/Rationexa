@@ -52,6 +52,9 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
   const [providerErrors, setProviderErrors] = useState<Record<string, string>>({});
   const [providerTests, setProviderTests] = useState<Record<string, ProviderTest>>({});
   const [removeProvider, setRemoveProvider] = useState<string | null>(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [confirmingAccountDelete, setConfirmingAccountDelete] = useState(false);
+  const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
 
   async function refresh() {
     setError(null);
@@ -338,6 +341,28 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
     }
   }
 
+  async function handleDeleteAccount() {
+    setAccountDeleteBusy(true);
+    setError(null);
+    try {
+      await apiFetch("/v1/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      setSessionToken(null);
+      setDeletePassword("");
+      setConfirmingAccountDelete(false);
+      await refresh();
+      onConfigurationChanged?.();
+      toast.success("Account and workspace deleted");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not delete the account");
+    } finally {
+      setAccountDeleteBusy(false);
+    }
+  }
+
   if (!account) {
     return (
       <section className="usage-section account-section">
@@ -418,6 +443,11 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
             </ul>
           ) : <p className="account-empty">No hosted-provider keys stored. Local models are ready without one.</p>}</> : <p className="account-empty">BYOK is disabled in the anonymous local workspace to prevent one visitor's key from being shared with other browsers.</p>}
         </div>
+        {authenticated ? <section className="account-danger-zone">
+          <div><strong>Delete account and workspace</strong><p>Permanently removes your decisions, evidence, shares, provider keys, sessions, and account. This cannot be undone.</p></div>
+          <label><span>Current password</span><input type="password" autoComplete="current-password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} placeholder="Required to delete" /></label>
+          <button type="button" className="secondary danger" disabled={!deletePassword || accountDeleteBusy} onClick={() => setConfirmingAccountDelete(true)}><Trash2 aria-hidden="true" />Delete account</button>
+        </section> : null}
         {!authenticated ? (
           <details className="optional-sign-in">
             <summary>Optional: use a private pilot workspace</summary>
@@ -435,6 +465,7 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
         ) : null}
       </div>
       <ConfirmDialog open={Boolean(removeProvider)} title="Remove this provider key?" description="The encrypted key and its activated model will be removed from this workspace. Local Ollama models remain available." confirmLabel="Remove provider" busyLabel="Removing…" busy={secretBusy} onOpenChange={(open) => { if (!open) setRemoveProvider(null); }} onConfirm={() => { if (removeProvider) void handleRemoveKey(removeProvider); }} />
+      <ConfirmDialog open={confirmingAccountDelete} title="Permanently delete this account?" description="Every decision, evidence file, share link, provider key, active session, and workspace record will be deleted. This action cannot be undone." confirmLabel="Delete everything" busyLabel="Deleting…" busy={accountDeleteBusy} onOpenChange={setConfirmingAccountDelete} onConfirm={() => { void handleDeleteAccount(); }} />
     </section>
   );
 }
