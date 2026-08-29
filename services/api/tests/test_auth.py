@@ -5,9 +5,9 @@ from sqlalchemy import select
 from rationexa_api.auth import hash_password, verify_password
 from rationexa_api.config import Settings
 from rationexa_api.db import AccountRow, SecretRow, SessionLocal, SessionRow, WorkspaceRow
-from rationexa_api.main import app, settings
+from rationexa_api.main import app, provider_for, settings
 from rationexa_api.providers import OpenAIResponsesProvider, get_provider
-from rationexa_api.secrets import fernet
+from rationexa_api.secrets import delete_provider_key, fernet, select_provider_model, store_provider_key
 
 
 def _login(client: TestClient, client_obj, email: str, password: str) -> str:
@@ -276,6 +276,36 @@ def test_byok_connections_and_models_do_not_leak_between_workspaces(monkeypatch)
         )
 
 
+def test_anonymous_workspace_cannot_access_or_publish_byok_credentials() -> None:
+    with TestClient(app) as client:
+        assert client.get("/v1/secrets").status_code == 401
+        assert client.post(
+            "/v1/secrets",
+            json={"provider": "openai", "key": "sk-must-stay-private"},
+        ).status_code == 401
+        assert client.get("/v1/secrets/openai/models").status_code == 401
+        assert client.post("/v1/secrets/openai/test").status_code == 401
+        assert client.post("/v1/secrets/openai/model", json={"model": "gpt-private"}).status_code == 401
+        assert client.delete("/v1/secrets/openai").status_code == 401
+
+        with SessionLocal() as db:
+            store_provider_key(db, settings.local_workspace_id, "openai", "sk-legacy-local")
+            select_provider_model(db, settings.local_workspace_id, "openai", "gpt-legacy-local")
+        try:
+            catalog = client.get("/v1/models").json()["models"]
+            assert not any(model["id"] == "openai/gpt-legacy-local" for model in catalog)
+            with SessionLocal() as db:
+                try:
+                    provider_for(db, settings.local_workspace_id, "openai/gpt-legacy-local")
+                except ValueError as exc:
+                    assert "private workspace" in str(exc)
+                else:
+                    raise AssertionError("Anonymous local workspace resolved a hosted BYOK model")
+        finally:
+            with SessionLocal() as db:
+                delete_provider_key(db, settings.local_workspace_id, "openai")
+
+
 def test_byok_secret_is_encrypted_at_rest_and_exposed_only_as_metadata() -> None:
     with TestClient(app) as client:
         account = client.post(
@@ -348,39 +378,45 @@ def test_openrouter_connection_loads_models_and_activates_one(monkeypatch) -> No
     monkeypatch.setattr("rationexa_api.main.httpx.get", lambda *args, **kwargs: ModelResponse())
 
     with TestClient(app) as client:
-        connected = client.post("/v1/secrets", json={"provider": "openrouter", "key": "sk-or-test"})
+        session = client.post(
+            "/v1/auth/register",
+            json={"email": "openrouter@rationexa.local", "name": "OpenRouter Pilot", "password": "openrouter-pass"},
+        ).json()
+        headers = {"Authorization": f"Bearer {session['session_token']}"}
+        connected = client.post("/v1/secrets", headers=headers, json={"provider": "openrouter", "key": "sk-or-test"})
         assert connected.status_code == 201
         assert connected.json()["provider"] == "openrouter"
         assert connected.json()["selected_model"] is None
 
-        catalog = client.get("/v1/secrets/openrouter/models")
+        catalog = client.get("/v1/secrets/openrouter/models", headers=headers)
         assert catalog.status_code == 200
         assert catalog.json()["models"] == ["anthropic/claude-test", "deepseek/deepseek-test"]
 
-        tested = client.post("/v1/secrets/openrouter/test")
+        tested = client.post("/v1/secrets/openrouter/test", headers=headers)
         assert tested.status_code == 200
         assert tested.json()["ok"] is True
         assert tested.json()["model_count"] == 2
 
         selected = client.post(
             "/v1/secrets/openrouter/model",
+            headers=headers,
             json={"model": "anthropic/claude-test"},
         )
         assert selected.status_code == 200
         assert selected.json()["selected_model"] == "anthropic/claude-test"
 
-        workspace_models = client.get("/v1/models").json()["models"]
+        workspace_models = client.get("/v1/models", headers=headers).json()["models"]
         assert any(model["id"] == "openrouter/anthropic/claude-test" for model in workspace_models)
 
-        rotated = client.post("/v1/secrets", json={"provider": "openrouter", "key": "sk-or-rotated"})
+        rotated = client.post("/v1/secrets", headers=headers, json={"provider": "openrouter", "key": "sk-or-rotated"})
         assert rotated.status_code == 201
         assert rotated.json()["selected_model"] is None
         assert not any(
             model["id"] == "openrouter/anthropic/claude-test"
-            for model in client.get("/v1/models").json()["models"]
+            for model in client.get("/v1/models", headers=headers).json()["models"]
         )
 
-        removed = client.delete("/v1/secrets/openrouter")
+        removed = client.delete("/v1/secrets/openrouter", headers=headers)
         assert removed.status_code == 200
 
 
@@ -390,11 +426,17 @@ def test_provider_connection_failure_is_contextual(monkeypatch) -> None:
 
     monkeypatch.setattr("rationexa_api.main.httpx.get", unavailable)
     with TestClient(app) as client:
+        session = client.post(
+            "/v1/auth/register",
+            json={"email": "offline-provider@rationexa.local", "name": "Offline Provider", "password": "offline-pass"},
+        ).json()
+        headers = {"Authorization": f"Bearer {session['session_token']}"}
         assert client.post(
             "/v1/secrets",
+            headers=headers,
             json={"provider": "openrouter", "key": "sk-or-offline"},
         ).status_code == 201
-        tested = client.post("/v1/secrets/openrouter/test")
+        tested = client.post("/v1/secrets/openrouter/test", headers=headers)
         assert tested.status_code == 422
         assert "Could not load models from this provider" in tested.json()["detail"]
 

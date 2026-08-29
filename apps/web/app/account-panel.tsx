@@ -82,8 +82,7 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
         setWorkspace(workspace);
         setSessions([]);
       }
-      const stored = await apiFetch("/v1/secrets");
-      const entries = (stored as SecretRead[]) ?? [];
+      const entries = token ? ((await apiFetch("/v1/secrets")) as SecretRead[]) ?? [] : [];
       setSecrets(entries);
       setProviderModelSelection((current) => entries.reduce<Record<string, string>>((next, entry) => {
         if (entry.selected_model) next[entry.provider] = entry.selected_model;
@@ -96,7 +95,7 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
         setAccount({ id: workspace.id, name: workspace.account_name, has_password: false, created_at: "" });
         setWorkspace(workspace);
         setSessions([]);
-        setSecrets((await apiFetch("/v1/secrets")) as SecretRead[]);
+        setSecrets([]);
         return;
       }
       setAccount(null);
@@ -352,7 +351,7 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
     <section className="usage-section account-section">
       <div className="usage-section-heading">
         <div><span className="overline">Models &amp; provider keys</span><h2>Your AI runtime</h2></div>
-        <span>Local-first · BYOK optional</span>
+        <span>{authenticated ? "Private workspace · encrypted BYOK" : "Local models · sign in for BYOK"}</span>
       </div>
       {error ? <p className="account-error">{error}</p> : null}
       <div className="account-body">
@@ -398,10 +397,10 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
             <KeyRound aria-hidden="true" />
             <div>
               <strong>Bring your own API key</strong>
-              <p>Connect a platform, load its live model catalog, then activate the model you want. Qwen, Gemma, and Ornith remain available through Ollama without a key.</p>
+              <p>{authenticated ? "Connect a platform, load its live model catalog, then activate the model you want. The key is isolated to this signed-in workspace." : "Sign in or create a private workspace before connecting a hosted provider. Anonymous browsers can use local models but cannot store or use BYOK credentials."}</p>
             </div>
           </div>
-          <form onSubmit={handleStoreKey} className="account-key-form">
+          {authenticated ? <><form onSubmit={handleStoreKey} className="account-key-form">
             <label><span>Provider platform</span><select value={providerEntry} onChange={(event) => setProviderEntry(event.target.value)}>{providerOptions.map((provider) => <option key={provider.id} value={provider.id}>{provider.label} — {provider.detail}</option>)}</select></label>
             {providerEntry === "custom" ? <label><span>Compatible API base URL <small>HTTPS, or localhost for development</small></span><input type="url" required value={baseUrlEntry} onChange={(event) => setBaseUrlEntry(event.target.value)} placeholder="https://api.example.com/v1" /></label> : null}
             <label><span>Provider API key <small>Encrypted on this machine</small></span><input type="password" autoComplete="off" value={keyEntry} onChange={(event) => setKeyEntry(event.target.value)} placeholder="Paste this provider's API key" /></label>
@@ -417,7 +416,7 @@ export function AccountPanel({ onConfigurationChanged, onWorkspaceProfileChanged
                 </li>
               ))}
             </ul>
-          ) : <p className="account-empty">No hosted-provider keys stored. Local models are ready without one.</p>}
+          ) : <p className="account-empty">No hosted-provider keys stored. Local models are ready without one.</p>}</> : <p className="account-empty">BYOK is disabled in the anonymous local workspace to prevent one visitor's key from being shared with other browsers.</p>}
         </div>
         {!authenticated ? (
           <details className="optional-sign-in">

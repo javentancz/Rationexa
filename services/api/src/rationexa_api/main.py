@@ -193,9 +193,28 @@ def active_workspace_id(db: Session, token: str | None) -> str:
     return active_workspace(db, token).id
 
 
+def authenticated_private_workspace(db: Session, token: str | None) -> WorkspaceRow:
+    """Resolve a signed-in user's isolated workspace for private credentials."""
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sign in or create a private workspace before connecting a provider key.",
+        )
+    workspace = active_workspace(db, token)
+    if workspace.id == settings.local_workspace_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Provider keys cannot be stored in the shared local workspace.",
+        )
+    return workspace
+
+
 def provider_for(db: Session, workspace_id: str | None, model_id: str | None) -> ExtractionProvider:
     provider_name = model_id.split("/", 1)[0] if model_id and "/" in model_id else None
-    if workspace_id is not None and provider_name in {"openai", "openrouter", "custom"}:
+    private_workspace = workspace_id is not None and workspace_id != settings.local_workspace_id
+    if provider_name in {"openai", "openrouter", "custom"} and not private_workspace:
+        raise ValueError("Sign in to a private workspace before using a hosted model")
+    if private_workspace and provider_name in {"openai", "openrouter", "custom"}:
         configuration = get_provider_config(db, workspace_id, provider_name)
         if configuration is None:
             raise ValueError("Connect this hosted provider before using its model")
@@ -213,7 +232,7 @@ def provider_for(db: Session, workspace_id: str | None, model_id: str | None) ->
             str(configuration["key"]),
             str(configuration["base_url"]),
         )
-    byok_key = get_provider_key(db, workspace_id, "openai") if workspace_id is not None else None
+    byok_key = get_provider_key(db, workspace_id, "openai") if private_workspace else None
     return get_provider(settings, model_id, byok_key=byok_key)
 
 
@@ -253,8 +272,11 @@ def record_product_event(
 
 @app.get("/v1/models", response_model=ModelCatalogRead)
 def list_models(request: Request, db: Db) -> ModelCatalogRead:
-    workspace = active_workspace(db, extract_session_token(request))
+    token = extract_session_token(request)
+    workspace = active_workspace(db, token)
     models = available_models(settings)
+    if workspace.id == settings.local_workspace_id:
+        models = [model for model in models if model.location != "hosted"]
     ollama_installed, ollama_error = _ollama_model_status()
     models = [
         model.model_copy(update={
@@ -271,7 +293,10 @@ def list_models(request: Request, db: Db) -> ModelCatalogRead:
         for model in models
     ]
     existing_ids = {model.id for model in models}
-    for entry in db.scalars(select(SecretRow).where(SecretRow.workspace_id == workspace.id)).all():
+    private_entries = [] if workspace.id == settings.local_workspace_id else db.scalars(
+        select(SecretRow).where(SecretRow.workspace_id == workspace.id)
+    ).all()
+    for entry in private_entries:
         configuration = get_provider_config(db, workspace.id, entry.provider)
         selected_model = configuration.get("selected_model") if configuration else None
         if not selected_model:
@@ -1720,7 +1745,7 @@ def confirm_password_reset(payload: PasswordResetConfirmRequest, db: Db) -> Sess
 
 @app.get("/v1/secrets", response_model=list[SecretRead])
 def list_provider_secrets(request: Request, db: Db) -> list[SecretRead]:
-    workspace = active_workspace(db, extract_session_token(request))
+    workspace = authenticated_private_workspace(db, extract_session_token(request))
     entries = db.scalars(
         select(SecretRow).where(SecretRow.workspace_id == workspace.id).order_by(SecretRow.provider)
      ).all()
@@ -1765,7 +1790,7 @@ def _fetch_provider_model_ids(configuration: dict) -> list[str]:
 
 @app.get("/v1/secrets/{provider}/models")
 def list_provider_models(route: Request, provider: str, db: Db) -> dict[str, list[str]]:
-    workspace = active_workspace(db, extract_session_token(route))
+    workspace = authenticated_private_workspace(db, extract_session_token(route))
     configuration = get_provider_config(db, workspace.id, provider)
     if configuration is None:
         raise HTTPException(status_code=404, detail="Connect this provider before loading its models")
@@ -1777,7 +1802,7 @@ def list_provider_models(route: Request, provider: str, db: Db) -> dict[str, lis
 
 @app.post("/v1/secrets/{provider}/test", response_model=SecretConnectionTestRead)
 def test_provider_connection(route: Request, provider: str, db: Db) -> SecretConnectionTestRead:
-    workspace = active_workspace(db, extract_session_token(route))
+    workspace = authenticated_private_workspace(db, extract_session_token(route))
     configuration = get_provider_config(db, workspace.id, provider)
     if configuration is None:
         raise HTTPException(status_code=404, detail="Connect this provider before testing it")
@@ -1795,7 +1820,7 @@ def test_provider_connection(route: Request, provider: str, db: Db) -> SecretCon
 
 @app.post("/v1/secrets/{provider}/model", response_model=SecretRead)
 def choose_provider_model(route: Request, provider: str, payload: SecretModelSelectRequest, db: Db) -> SecretRead:
-    workspace = active_workspace(db, extract_session_token(route))
+    workspace = authenticated_private_workspace(db, extract_session_token(route))
     configuration = get_provider_config(db, workspace.id, provider)
     if configuration is None:
         raise HTTPException(status_code=404, detail="Connect this provider before selecting its model")
@@ -1815,7 +1840,7 @@ def store_provider_secret(
     payload: SecretStoreRequest,
     db: Db,
 ) -> SecretRead:
-    workspace = active_workspace(db, extract_session_token(route))
+    workspace = authenticated_private_workspace(db, extract_session_token(route))
     try:
         row = store_provider_key(db, workspace.id, payload.provider, payload.key, base_url=payload.base_url)
     except ValueError as exc:
@@ -1825,7 +1850,7 @@ def store_provider_secret(
 
 @app.delete("/v1/secrets/{provider}", response_model=SecretRead)
 def remove_provider_secret(route: Request, provider: str, db: Db) -> SecretRead:
-    workspace = active_workspace(db, extract_session_token(route))
+    workspace = authenticated_private_workspace(db, extract_session_token(route))
     if delete_provider_key(db, workspace.id, provider):
         return SecretRead(provider=provider, configured=False, source="workspace_store")
     raise HTTPException(status_code=404, detail="No stored secret for this provider")
