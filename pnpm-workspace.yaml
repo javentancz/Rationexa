@@ -10,6 +10,7 @@ overrides:
 supportedArchitectures:
   os:
     - darwin
+    - linux
   cpu:
     - arm64
     - x64
