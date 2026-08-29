@@ -72,13 +72,17 @@ button { cursor:pointer; }
 .library-panel-toggle:hover,.library-panel-toggle:focus-visible { border-color:#b9cabf; background:var(--accent-soft); color:var(--accent-dark); }
 .library-panel-toggle:focus-visible { outline:2px solid #7da58a; outline-offset:2px; }
 .library-panel-toggle svg { width:19px; height:19px; stroke-width:2.1; }
-.library-hover-zone { position:fixed; z-index:69; inset:0 auto 0 0; width:16px; border:0; padding:0; background:transparent; cursor:e-resize; }
-.library-hover-zone::after { content:""; position:absolute; top:38%; bottom:38%; left:3px; width:3px; border-radius:999px; background:var(--accent); opacity:0; transition:opacity .15s ease; }
-.library-hover-zone:hover::after,.library-hover-zone:focus-visible::after { opacity:.45; }
-.library-hover-zone:focus-visible { outline:2px solid #7da58a; outline-offset:-2px; }
+.library-edge-reveal { position:fixed; z-index:68; inset:0 auto 0 0; width:12px; }
+.library-hover-zone { position:fixed; z-index:69; top:20px; left:16px; display:grid; place-items:center; width:38px; height:38px; border:1px solid #b7cabe; border-radius:11px; padding:0; background:rgba(255,255,255,.96); color:var(--accent-dark); box-shadow:0 8px 24px rgba(19,31,23,.12); transition:opacity .15s ease,transform .18s ease,background .15s,border-color .15s; }
+.library-hover-zone:hover,.library-hover-zone:focus-visible { border-color:#8fad99; background:var(--accent-soft); transform:translateY(-1px); }
+.library-hover-zone:focus-visible { outline:2px solid #7da58a; outline-offset:2px; }
+.library-hover-zone svg { width:21px; height:21px; stroke-width:2; }
+.library-peeking .library-hover-zone { opacity:0; pointer-events:none; }
 .mobile-library-scrim { display:none; }
 .pane-label { opacity:1; transform:translateX(0); transition:opacity .18s ease,transform .26s cubic-bezier(.22,1,.36,1),visibility 0s; }
 .pane-brand,.workflow-pane-header { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:38px; }
+.library-collapsed .workflow-pane-header { padding-left:44px; }
+.library-collapsed .library-overview .topbar { padding-left:48px; }
 .brand { display:flex; align-items:center; gap:10px; min-width:0; padding:0 3px; font:700 18px Georgia,serif; letter-spacing:-.01em; }
 .brand-mark { display:grid; place-items:center; width:31px; height:31px; border-radius:9px; background:var(--ink); color:#fff; font:700 17px Georgia,serif; }
 .new-decision { display:flex; align-items:center; gap:8px; width:100%; border:1px solid var(--line); border-radius:9px; padding:10px 11px; background:var(--surface); color:var(--ink); text-align:left; font-size:12px; font-weight:700; box-shadow:0 1px 2px rgba(0,0,0,.03); white-space:nowrap; transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease,background .18s ease; }
@@ -865,27 +869,13 @@ button { cursor:pointer; }
     background:rgba(19,31,23,.3);
     backdrop-filter:blur(2px);
   }
-  .library-hover-zone {
-    position:fixed;
-    z-index:480;
-    inset:14px auto auto 10px;
-    display:grid;
-    place-items:center;
-    width:44px;
-    height:44px;
-    border:1px solid #b7cabe;
-    border-radius:12px;
-    padding:0;
-    background:rgba(255,255,255,.96);
-    color:var(--accent-dark);
-    box-shadow:0 8px 24px rgba(19,31,23,.14);
-    cursor:pointer;
-  }
-  .library-hover-zone::after { display:none; }
+  .library-edge-reveal { z-index:479; width:10px; }
+  .library-hover-zone { z-index:480; top:14px; left:12px; width:44px; height:44px; border-radius:12px; box-shadow:0 8px 24px rgba(19,31,23,.14); }
   .library-hover-zone svg { width:23px; height:23px; stroke-width:2; }
   .library-hover-zone:hover,
   .library-hover-zone:focus-visible { background:var(--accent-soft); }
-  .pane-brand { display:flex; }
+  .library-pane .pane-brand { display:flex; flex-direction:row; justify-content:space-between; }
+  .library-pane .pane-brand .pane-label { display:inline; }
   .library-pane>.pane-section,
   .decision-conversations,
   .workspace-identity { display:flex; }
@@ -959,6 +949,7 @@ button { cursor:pointer; }
     pointer-events:auto;
     transform:none;
   }
+  .library-collapsed .workflow-pane { padding-left:62px; }
   .library-overview .workflow-pane { display:none; }
   .workflow-pane-header,
   .workflow-conversations,
