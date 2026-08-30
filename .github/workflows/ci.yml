@@ -23,7 +23,7 @@ jobs:
       PASSWORD_RESET_DEV_MODE: "true"
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.23.0
       - uses: actions/setup-node@v5
