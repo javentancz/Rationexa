@@ -26,16 +26,38 @@ const workspace = {
   created_at: "2026-08-28T00:00:00Z",
 };
 
-async function mockBootstrap(page: Page, decisions: unknown[] = []) {
+async function mockBootstrap(page: Page, decisions: unknown[] = [], activeWorkspace = workspace) {
   await page.route(/\/v1\/bootstrap(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: {
     models,
-    workspace,
+    workspace: activeWorkspace,
     library: { items: decisions, total: decisions.length },
   } }));
   await page.route(/\/v1\/models(?:\?.*)?$/, (route) => route.fulfill({ json: models, headers: corsHeaders }));
-  await page.route(/\/v1\/workspace(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: workspace }));
+  await page.route(/\/v1\/workspace(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: activeWorkspace }));
   await page.route(/\/v1\/decisions(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: { items: decisions, total: decisions.length } }));
 }
+
+test("does not restore another workspace's browser draft", async ({ page }) => {
+  const privateWorkspace = {
+    ...workspace,
+    id: "workspace-b",
+    account_id: "account-b",
+    account_name: "Reviewer B",
+    mode: "authenticated_personal",
+  };
+  await mockBootstrap(page, [], privateWorkspace);
+  await page.addInitScript(() => localStorage.setItem("rationexa-workspace-draft-v1", JSON.stringify({
+    workspaceId: "workspace-a",
+    source: "Private draft belonging to reviewer A",
+    workflowView: 1,
+    view: "workspace",
+  })));
+
+  await page.goto("/");
+
+  await expect(page.getByLabel("Decision source")).toHaveValue("");
+  await expect(page.getByText("Private draft belonging to reviewer A")).toHaveCount(0);
+});
 
 test("clears a deleted decision from restored workspace state", async ({ page }) => {
   await mockBootstrap(page);

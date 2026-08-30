@@ -123,6 +123,7 @@ type UsageModel = { provider: string; model: string; location: "local" | "hosted
 type UsageSummary = { total_runs: number; extraction_runs: number; revisit_runs: number; challenge_runs: number; local_runs: number; hosted_runs: number; unknown_location_runs: number; total_tokens: number; tokenized_run_count: number; known_cost_usd: number; unpriced_run_count: number; models: UsageModel[]; recent_runs: UsageRun[] };
 type PilotMetrics = { decision_count: number; revisit_count: number; judgment_count: number; share_count: number; export_count: number; challenge_confirmation_count: number; active_days: number; repeat_use_observed: boolean; latest_activity_at?: string };
 type PersistedWorkspaceSession = {
+  workspaceId?: string;
   source?: string;
   evidence?: string;
   sourceMode?: "paste" | "file";
@@ -138,16 +139,18 @@ type PersistedWorkspaceSession = {
   criticality?: Criticality;
   selectedPremise?: string;
 };
-type EvidenceDraft = { content: string; selectedModelId: string; comparisonModelId: string; compareMode: boolean; updatedAt: string };
+type EvidenceDraft = { workspaceId: string; content: string; selectedModelId: string; comparisonModelId: string; compareMode: boolean; updatedAt: string };
 
 const workspaceSessionKey = "rationexa-workspace-draft-v1";
 const evidenceDraftsKey = "rationexa-evidence-drafts-v1";
 
-function readEvidenceDraft(decisionId: string): EvidenceDraft | null {
+function readEvidenceDraft(decisionId: string, workspaceId?: string): EvidenceDraft | null {
   try {
+    if (!workspaceId) return null;
     const saved = window.localStorage.getItem(evidenceDraftsKey);
     if (!saved) return null;
-    return (JSON.parse(saved) as Record<string, EvidenceDraft>)[decisionId] ?? null;
+    const draft = (JSON.parse(saved) as Record<string, EvidenceDraft>)[decisionId];
+    return draft?.workspaceId === workspaceId ? draft : null;
   } catch {
     return null;
   }
@@ -363,6 +366,7 @@ export default function Home() {
 
   useEffect(() => {
     if (restoredSession.current) return;
+    if (bootstrapQuery.isLoading) return;
     restoredSession.current = true;
     const restore = async () => {
       try {
@@ -370,9 +374,21 @@ export default function Home() {
           setView("settings");
           return;
         }
+        const activeWorkspace = bootstrapQuery.data?.workspace;
+        if (!activeWorkspace) {
+          window.localStorage.removeItem(workspaceSessionKey);
+          window.localStorage.removeItem(evidenceDraftsKey);
+          return;
+        }
         const saved = window.localStorage.getItem(workspaceSessionKey);
         if (!saved) return;
         const state = JSON.parse(saved) as PersistedWorkspaceSession;
+        const legacyLocalDraft = !state.workspaceId && activeWorkspace.mode === "local_personal";
+        if (!legacyLocalDraft && state.workspaceId !== activeWorkspace.id) {
+          window.localStorage.removeItem(workspaceSessionKey);
+          window.localStorage.removeItem(evidenceDraftsKey);
+          return;
+        }
         setSource(state.source ?? "");
         setSourceMode(state.sourceMode === "file" ? "paste" : state.sourceMode ?? "paste");
         if (state.selectedModelId) setSelectedModelId(state.selectedModelId);
@@ -403,22 +419,22 @@ export default function Home() {
       }
     };
     void restore();
-  }, []);
+  }, [bootstrapQuery.data, bootstrapQuery.isLoading]);
 
   useEffect(() => {
-    if (!sessionRestored) return;
+    if (!sessionRestored || !personalWorkspace) return;
     const savedAt = new Date().toISOString();
-    const state: PersistedWorkspaceSession = { source, evidence: decision ? undefined : evidence, sourceMode, view, workflowView, selectedModelId, comparisonModelId, compareMode, decisionId: decision?.id, extraction: decision ? undefined : extraction ?? undefined, draft: decision ? undefined : draft ?? undefined, reviews: decision ? undefined : reviews, criticality, selectedPremise: selectedPremise ?? undefined };
+    const state: PersistedWorkspaceSession = { workspaceId: personalWorkspace?.id, source, evidence: decision ? undefined : evidence, sourceMode, view, workflowView, selectedModelId, comparisonModelId, compareMode, decisionId: decision?.id, extraction: decision ? undefined : extraction ?? undefined, draft: decision ? undefined : draft ?? undefined, reviews: decision ? undefined : reviews, criticality, selectedPremise: selectedPremise ?? undefined };
     window.localStorage.setItem(workspaceSessionKey, JSON.stringify(state));
     setDraftSavedAt(savedAt);
-  }, [compareMode, comparisonModelId, criticality, decision, draft, evidence, extraction, reviews, selectedModelId, selectedPremise, sessionRestored, source, sourceMode, view, workflowView]);
+  }, [compareMode, comparisonModelId, criticality, decision, draft, evidence, extraction, personalWorkspace, reviews, selectedModelId, selectedPremise, sessionRestored, source, sourceMode, view, workflowView]);
 
   useEffect(() => {
     if (!sessionRestored || !decision) return;
     const savedAt = new Date().toISOString();
-    writeEvidenceDraft(decision.id, evidence.trim() ? { content: evidence, selectedModelId, comparisonModelId, compareMode, updatedAt: savedAt } : null);
+    writeEvidenceDraft(decision.id, evidence.trim() && personalWorkspace ? { workspaceId: personalWorkspace.id, content: evidence, selectedModelId, comparisonModelId, compareMode, updatedAt: savedAt } : null);
     if (evidence.trim()) setDraftSavedAt(savedAt);
-  }, [compareMode, comparisonModelId, decision, evidence, selectedModelId, sessionRestored]);
+  }, [compareMode, comparisonModelId, decision, evidence, personalWorkspace, selectedModelId, sessionRestored]);
 
   useEffect(() => {
     const hasUnsavedWork = !decision && Boolean(source.trim() || evidence.trim() || extraction || draft);
@@ -824,7 +840,7 @@ export default function Home() {
        setComparisonRuns([]);
        setRevisitCompleted(false);
        setActiveRevisitId(null);
-       const evidenceDraft = readEvidenceDraft(decisionId);
+       const evidenceDraft = readEvidenceDraft(decisionId, personalWorkspace?.id);
        setEvidence(evidenceDraft?.content ?? restore?.legacyEvidence ?? "");
        if (evidenceDraft?.selectedModelId) setSelectedModelId(evidenceDraft.selectedModelId);
        if (evidenceDraft?.comparisonModelId) setComparisonModelId(evidenceDraft.comparisonModelId);
