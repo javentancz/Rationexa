@@ -218,6 +218,13 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat().format(value);
 }
 
+function browserShareUrl(share: Pick<Share, "token" | "url">) {
+  if (typeof window !== "undefined") {
+    return new URL(`/share/${encodeURIComponent(share.token)}`, window.location.origin).toString();
+  }
+  return share.url ?? `/share/${encodeURIComponent(share.token)}`;
+}
+
 type ActionIconName = "markdown" | "pdf" | "delete" | "back";
 
 function ActionIcon({ name }: { name: ActionIconName }) {
@@ -997,7 +1004,7 @@ export default function Home() {
         body: JSON.stringify({}),
         })) as Share;
       await loadShares(decision.id);
-      await copyLink(created.url ?? created.token, false);
+      await copyLink(browserShareUrl(created), false);
       toast.success("Share link created", { description: "Copied to the clipboard." });
      } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not create a share link");
@@ -1131,7 +1138,7 @@ export default function Home() {
       <button className="primary" disabled={shareBusy} onClick={createShare}>{shareBusy ? <><span className="spinner" />Creating link…</> : <><Plus aria-hidden="true" />Create share link</>}</button>
       {shares.length ? <div className="share-list">{shares.map((share) => <div key={share.id} className={`share-item ${share.status}`}>
         <div><strong>{share.status === "active" ? "Active link" : "Revoked"}</strong><small>{formatDate(share.created_at)}{share.expires_at ? ` · expires ${formatDate(share.expires_at)}` : " · no expiry"}</small></div>
-         {share.status === "active" ? <div className="share-link"><code>{share.url}</code><div><button className="text-button" onClick={() => copyLink(share.url)}>{copiedToken === share.url ? "Copied ✓" : "Copy"}</button><button className="text-button danger" disabled={shareBusy} onClick={() => revokeShare(share.id, share.token)}>Revoke</button></div></div> : <div className="share-retired-actions"><span className="share-expired">No longer usable</span><Hint label="Delete share record" side="left"><button type="button" className="share-delete icon-action" aria-label="Delete revoked share record" onClick={() => setConfirmingShareDelete(share)}><ActionIcon name="delete" /></button></Hint></div>}
+         {share.status === "active" ? <div className="share-link"><code>{browserShareUrl(share)}</code><div><button className="text-button" onClick={() => copyLink(browserShareUrl(share))}>{copiedToken === browserShareUrl(share) ? "Copied ✓" : "Copy"}</button><button className="text-button danger" disabled={shareBusy} onClick={() => revokeShare(share.id, share.token)}>Revoke</button></div></div> : <div className="share-retired-actions"><span className="share-expired">No longer usable</span><Hint label="Delete share record" side="left"><button type="button" className="share-delete icon-action" aria-label="Delete revoked share record" onClick={() => setConfirmingShareDelete(share)}><ActionIcon name="delete" /></button></Hint></div>}
        </div>)}</div> : null}
      </section>
     ) : null;

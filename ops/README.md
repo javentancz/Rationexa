@@ -37,6 +37,10 @@ Set `HOSTED_MODE=true`, `SESSION_COOKIE_SECURE=true`, and
 browser sessions use an HttpOnly cookie, while raw bearer tokens remain available
 for explicit API clients. Session tokens are stored only as hashes.
 
+Set `PUBLIC_BASE_URL` to the canonical web-project origin, not the API-project
+origin. The browser always copies share links using its current web origin, while
+password-reset email links and direct API consumers use `PUBLIC_BASE_URL`.
+
 ## Password recovery
 
 Configure SMTP and keep `PASSWORD_RESET_DEV_MODE=false`. Reset tokens are
