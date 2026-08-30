@@ -117,6 +117,8 @@ button { cursor:pointer; }
 .conversation-dot { width:7px; height:7px; border-radius:50%; background:var(--accent); }
 .conversation-dot.critical { background:var(--red); }
 .conversation-dot.important { background:var(--amber); }
+.conversation-dot.draft { background:#5576a8; }
+.conversation-row.draft-row em { width:auto; border-radius:999px; padding:0 7px; background:#e9eff8; color:#38577f; }
 .workspace-identity { display:flex; align-items:center; gap:9px; min-height:47px; margin-top:auto; border-top:1px solid var(--line); padding:12px 8px 0; color:var(--muted); }
 .workspace-avatar { display:grid; place-items:center; flex:0 0 29px; width:29px; height:29px; border-radius:9px; background:var(--accent-soft); color:var(--accent-dark); }
 .workspace-avatar svg { width:17px; height:17px; stroke-width:2; }
@@ -524,6 +526,15 @@ button { cursor:pointer; }
 .library-search span { color:var(--subtle); font-size:18px; }
 .library-search input { width:100%; border:0; outline:0; background:transparent; color:var(--ink); font-size:12px; }
 .mobile-library-filters { display:none; }
+.library-draft-resume { display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:center; gap:12px; width:100%; border:1px solid #c8d5e6; border-radius:12px; padding:13px 16px; background:#f1f5fb; color:var(--ink); text-align:left; transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease; }
+.library-draft-resume:hover,.library-draft-resume:focus-visible { transform:translateY(-1px); border-color:#8fa9ca; box-shadow:0 8px 20px rgba(56,87,127,.09); }
+.library-draft-resume>span { display:grid; place-items:center; width:36px; height:36px; border-radius:10px; background:#dfe8f5; color:#38577f; }
+.library-draft-resume>span svg { width:19px; height:19px; }
+.library-draft-resume>div { display:grid; min-width:0; gap:3px; }
+.library-draft-resume strong,.library-draft-resume small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.library-draft-resume strong { font-size:13px; }
+.library-draft-resume small { color:var(--muted); font-size:11px; }
+.library-draft-resume em { color:#38577f; font-size:11px; font-style:normal; font-weight:700; }
 .library-summary { display:flex; align-items:center; justify-content:space-between; gap:24px; border:1px solid #cde0d3; border-radius:12px; padding:16px 18px; background:var(--accent-soft); }
 .library-summary>div { display:flex; align-items:baseline; gap:7px; white-space:nowrap; }
 .library-summary strong { color:var(--accent-dark); font:500 25px Georgia,serif; }

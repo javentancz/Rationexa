@@ -59,6 +59,18 @@ test("does not restore another workspace's browser draft", async ({ page }) => {
   await expect(page.getByText("Private draft belonging to reviewer A")).toHaveCount(0);
 });
 
+test("keeps an unfinished decision available after visiting the library", async ({ page }) => {
+  await mockBootstrap(page);
+  await page.goto("/");
+  await page.getByLabel("Decision source").fill("Draft decision that still needs review");
+
+  await page.getByRole("button", { name: "All decisions" }).click();
+  await expect(page.getByRole("button", { name: /Continue current draft/ })).toBeVisible();
+  await page.getByRole("button", { name: /Continue current draft/ }).click();
+
+  await expect(page.getByLabel("Decision source")).toHaveValue("Draft decision that still needs review");
+});
+
 test("clears a deleted decision from restored workspace state", async ({ page }) => {
   await mockBootstrap(page);
   await page.route(/\/v1\/decisions\/deleted-decision$/, (route) => route.fulfill({ status: 404, headers: corsHeaders, json: { detail: "Decision not found" } }));

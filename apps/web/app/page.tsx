@@ -543,6 +543,9 @@ export default function Home() {
     });
   }, [comparisonRuns, decision]);
   const stage = decision ? 4 : extraction ? 2 : 1;
+  const hasCurrentDraft = !decision && Boolean(source.trim() || extraction || draft);
+  const currentDraftTitle = draft?.title?.trim() || file?.name || source.trim().split("\n")[0]?.slice(0, 56) || "Untitled decision";
+  const currentDraftStep = extraction ? (workflowView === 3 ? "Finalize" : "Review") : "Import";
   function initializeExtraction(next: Extraction) {
     setExtraction(next);
     setDraft({ title: next.result.title, question: next.result.decision_question, context: next.result.context ?? "", chosenOption: next.result.chosen_option ?? "", rationale: next.result.rationale ?? "" });
@@ -1131,7 +1134,11 @@ export default function Home() {
         </nav>
         <section className="decision-conversations pane-label" aria-label="Saved decisions">
           <div className="pane-section-heading"><span>Decision conversations</span>{libraryLoading ? <span className="spinner dark" /> : null}</div>
-          <div className="conversation-list">{library.items.length ? library.items.map((item) => <button type="button" key={item.id} className={`conversation-row ${decision?.id === item.id ? "active" : ""}`} onClick={() => openDecision(item.id)}><span className={`conversation-dot ${item.criticality}`} /><span><strong>{item.title}</strong><small>{item.last_revisited_at ? formatDateTime(item.last_revisited_at) : `${item.premise_count} premises · not revisited`}</small></span>{item.pending_revisit_count ? <em>{item.pending_revisit_count}</em> : null}</button>) : <p>No saved decisions in this library.</p>}</div>
+          <div className="conversation-list">
+            {hasCurrentDraft ? <button type="button" className={`conversation-row draft-row ${view === "workspace" ? "active" : ""}`} onClick={() => setView("workspace")}><span className="conversation-dot draft" /><span><strong>{currentDraftTitle}</strong><small>{currentDraftStep} draft · saved on this device</small></span><em>Draft</em></button> : null}
+            {library.items.map((item) => <button type="button" key={item.id} className={`conversation-row ${decision?.id === item.id ? "active" : ""}`} onClick={() => openDecision(item.id)}><span className={`conversation-dot ${item.criticality}`} /><span><strong>{item.title}</strong><small>{item.last_revisited_at ? formatDateTime(item.last_revisited_at) : `${item.premise_count} premises · not revisited`}</small></span>{item.pending_revisit_count ? <em>{item.pending_revisit_count}</em> : null}</button>)}
+            {!hasCurrentDraft && !library.items.length ? <p>No saved decisions in this library.</p> : null}
+          </div>
         </section>
         <section className="workspace-identity" aria-label={personalWorkspace ? `${personalWorkspace.name}, owned by ${personalWorkspace.account_name}` : "Loading personal workspace"}>
           <span className="workspace-avatar"><UserRound aria-hidden="true" /></span>
@@ -1168,6 +1175,7 @@ export default function Home() {
           <div className="mobile-library-filters" aria-label="Filter decisions by criticality">
             {(["all", "critical", "important", "routine"] as ("all" | Criticality)[]).map((value) => <button type="button" key={value} className={libraryCriticality === value ? "active" : ""} aria-pressed={libraryCriticality === value} onClick={() => setLibraryCriticality(value)}>{value === "all" ? "All" : value[0].toUpperCase() + value.slice(1)}</button>)}
           </div>
+          {hasCurrentDraft ? <button type="button" className="library-draft-resume" onClick={() => setView("workspace")}><span><Save aria-hidden="true" /></span><div><strong>Continue current draft</strong><small>{currentDraftTitle} · {currentDraftStep}</small></div><em>Resume →</em></button> : null}
           <div className="library-summary"><div><strong>{library.total}</strong><span>saved decisions</span></div><p>Reopen a record to review its premises, add new evidence, or inspect previous revisit checks.</p></div>
 {libraryLoading ? <div className="library-empty"><span className="spinner dark" /><strong>Loading decision memory…</strong></div> : library.items.length ? <div className="decision-list">{library.items.map((item) => <div className="decision-card" key={item.id}>
             <button type="button" className="decision-row" onClick={() => openDecision(item.id)}>
