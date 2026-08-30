@@ -9,7 +9,7 @@ import { apiFetch, apiResponse, confirmPasswordReset, login, logout, register, r
 import { ConfirmDialog } from "./ui";
 
 type AccountRead = { id: string; name: string; email?: string; has_password: boolean; created_at: string };
-type WorkspaceRead = { id: string; name: string; account_name: string };
+type WorkspaceRead = { id: string; name: string; account_name: string; mode?: "local_personal" | "guest_personal" | "authenticated_personal" };
 type SessionSummary = { id: string; created_at: string; expires_at: string; current: boolean };
 type SecretRead = { provider: string; configured: boolean; label?: string; base_url?: string; selected_model?: string; protocol?: string; last_updated_at?: string; source: string };
 type ProviderModels = { models: string[] };
@@ -24,7 +24,7 @@ const providerOptions = [
 
 type AccountPanelProps = {
   workspaceId?: string;
-  onConfigurationChanged?: () => void;
+  onConfigurationChanged?: (preserveGuestDraft?: boolean) => void;
   onModelConfigurationChanged?: () => void;
   onWorkspaceProfileChanged?: () => void;
 };
@@ -145,7 +145,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
     try {
       await login(email, password);
       await refresh(true);
-      onConfigurationChanged?.();
+      onConfigurationChanged?.(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Login failed");
     } finally {
@@ -163,7 +163,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
       setEmail("");
       setPassword("");
       await refresh(true);
-      onConfigurationChanged?.();
+      onConfigurationChanged?.(true);
       toast.success("Pilot workspace created");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Account creation failed");
@@ -200,7 +200,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
       setAuthMode("login");
       router.replace("/settings");
       await refresh(true);
-      onConfigurationChanged?.();
+      onConfigurationChanged?.(false);
       toast.success("Password reset complete");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Password reset failed");
@@ -260,7 +260,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
   async function handleLogout() {
     await logout();
     await refresh(true);
-    onConfigurationChanged?.();
+    onConfigurationChanged?.(false);
   }
 
   async function handleStoreKey(event: FormEvent) {
@@ -371,7 +371,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
       setDeletePassword("");
       setConfirmingAccountDelete(false);
       await refresh(true);
-      onConfigurationChanged?.();
+      onConfigurationChanged?.(false);
       toast.success("Account and workspace deleted");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not delete the account");
@@ -393,7 +393,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
     <section className="usage-section account-section">
       <div className="usage-section-heading">
         <div><span className="overline">Models &amp; provider keys</span><h2>Your AI runtime</h2></div>
-        <span>{authenticated ? "Private workspace · encrypted BYOK" : workspace ? "Local development workspace" : "Sign in required · private workspace"}</span>
+        <span>{authenticated ? "Private workspace · encrypted BYOK" : workspace?.mode === "guest_personal" ? "Temporary private guest workspace" : workspace ? "Local development workspace" : "Sign in required · private workspace"}</span>
       </div>
       {error ? <p className="account-error">{error}</p> : null}
       <div className="account-body">
@@ -403,8 +403,10 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
             <strong>{account.name}</strong>
             <small>{authenticated
               ? account.email ?? "Signed-in workspace"
-              : workspace
-                ? "Local workspace · no signup required"
+              : workspace?.mode === "guest_personal"
+                ? "Isolated browser trial · expires after 24 hours"
+                : workspace
+                  ? "Local workspace · no signup required"
                 : "Sign in to open a private workspace"}</small>
           </div>
         </div>
@@ -443,7 +445,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
             <KeyRound aria-hidden="true" />
             <div>
               <strong>Bring your own API key</strong>
-              <p>{authenticated ? "Choose the platform that issued your key, load its live model catalog, then activate one model. Keys cannot be safely auto-detected because provider formats overlap." : workspace ? "Local development can use built-in models without storing a shared key." : "Sign in or create a private workspace before connecting a provider. Every account receives an isolated decision library and encrypted BYOK storage."}</p>
+              <p>{authenticated ? "Choose the platform that issued your key, load its live model catalog, then activate one model. Keys cannot be safely auto-detected because provider formats overlap." : workspace?.mode === "guest_personal" ? "Deterministic rules are available in this temporary browser workspace. Create an account to preserve its decisions and unlock encrypted BYOK." : workspace ? "Local development can use built-in models without storing a shared key." : "Sign in or create a private workspace before connecting a provider. Every account receives an isolated decision library and encrypted BYOK storage."}</p>
             </div>
           </div>
           {authenticated ? <><form onSubmit={handleStoreKey} className="account-key-form">
@@ -462,7 +464,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
                 </li>
               ))}
             </ul>
-          ) : <p className="account-empty">No hosted-provider keys stored. Built-in deterministic rules remain available without one.</p>}</> : <p className="account-empty">{workspace ? "BYOK is disabled in the local guest workspace." : "No shared guest workspace is available on the hosted service. Sign in to access only your own library."}</p>}
+          ) : <p className="account-empty">No hosted-provider keys stored. Built-in deterministic rules remain available without one.</p>}</> : <p className="account-empty">{workspace?.mode === "guest_personal" ? "BYOK is disabled during the temporary trial. Create this workspace permanently below to connect a provider without losing your trial decisions." : workspace ? "BYOK is disabled in the local development workspace." : "Sign in to access your private library and provider keys."}</p>}
         </div>
         {authenticated ? <section className="account-danger-zone">
           <div><strong>Delete account and workspace</strong><p>Permanently removes your decisions, evidence, shares, provider keys, sessions, and account. This cannot be undone.</p></div>
@@ -470,8 +472,8 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
           <button type="button" className="secondary danger" disabled={!deletePassword || accountDeleteBusy} onClick={() => setConfirmingAccountDelete(true)}><Trash2 aria-hidden="true" />Delete account</button>
         </section> : null}
         {!authenticated ? (
-          <details className="optional-sign-in" open={!workspace}>
-            <summary>{workspace ? "Optional: use a private pilot workspace" : "Sign in or create your private workspace"}</summary>
+          <details className="optional-sign-in" open={!workspace || workspace.mode === "guest_personal"}>
+            <summary>{workspace?.mode === "guest_personal" ? "Keep this trial workspace and add BYOK" : workspace ? "Optional: use a private pilot workspace" : "Sign in or create your private workspace"}</summary>
             <div className="auth-mode-toggle" role="tablist" aria-label="Account action"><button type="button" role="tab" aria-selected={authMode === "login"} className={authMode === "login" ? "active" : ""} onClick={() => setAuthMode("login")}>Sign in</button><button type="button" role="tab" aria-selected={authMode === "register"} className={authMode === "register" ? "active" : ""} onClick={() => setAuthMode("register")}>Create workspace</button><button type="button" role="tab" aria-selected={authMode === "reset"} className={authMode === "reset" ? "active" : ""} onClick={() => setAuthMode("reset")}>Reset password</button></div>
             <form onSubmit={authMode === "login" ? handleLogin : authMode === "register" ? handleRegister : resetToken ? handleResetConfirm : handleResetRequest} className="account-login">
               {authMode === "register" ? <label><span>Display name</span><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Pilot reviewer" /></label> : null}

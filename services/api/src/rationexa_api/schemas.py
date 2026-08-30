@@ -83,7 +83,7 @@ class WorkspaceRead(BaseModel):
     name: str
     account_id: str
     account_name: str
-    mode: Literal["local_personal", "authenticated_personal"] = "local_personal"
+    mode: Literal["local_personal", "guest_personal", "authenticated_personal"] = "local_personal"
     created_at: datetime
 
 

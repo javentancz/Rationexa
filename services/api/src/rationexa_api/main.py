@@ -229,11 +229,12 @@ def report_client_error(route: Request, payload: ClientErrorReport, db: Db) -> R
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def set_session_cookie(response: Response, token: str) -> None:
+def set_session_cookie(response: Response, token: str, *, ttl_hours: int | None = None) -> None:
+    lifetime = ttl_hours if ttl_hours is not None else settings.auth_session_ttl_hours
     response.set_cookie(
         settings.session_cookie_name,
         token,
-        max_age=settings.auth_session_ttl_hours * 3600,
+        max_age=lifetime * 3600,
         httponly=True,
         secure=settings.session_cookie_secure,
         samesite=settings.session_cookie_samesite,
@@ -279,6 +280,10 @@ def account_workspace(db: Session, account_id: str) -> WorkspaceRow | None:
     return db.scalar(select(WorkspaceRow).where(WorkspaceRow.owner_account_id == account_id))
 
 
+def is_guest_account(account: AccountRow | None) -> bool:
+    return account is not None and account.id != settings.local_account_id and account.email is None
+
+
 def active_workspace(db: Session, token: str | None) -> WorkspaceRow:
     """Prefer an authenticated session's workspace; fall back to the local personal workspace."""
     if token:
@@ -319,6 +324,12 @@ def authenticated_private_workspace(db: Session, token: str | None) -> Workspace
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sign in or create a private workspace before connecting a provider key.",
+        )
+    account = resolve_session(token, db)
+    if is_guest_account(account):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Create or sign in to a permanent workspace before connecting a provider key.",
         )
     workspace = active_workspace(db, token)
     if workspace.id == settings.local_workspace_id:
@@ -401,13 +412,11 @@ def record_product_event(
     )
 
 
-@app.get("/v1/models", response_model=ModelCatalogRead)
-def list_models(request: Request, db: Db) -> ModelCatalogRead:
-    token = extract_session_token(request)
-    workspace = None if settings.hosted_mode and token is None else active_workspace(db, token)
+def model_catalog(db: Session, workspace: WorkspaceRow | None) -> ModelCatalogRead:
+    account = db.get(AccountRow, workspace.owner_account_id) if workspace is not None else None
     models = (
         available_models(settings.model_copy(update={"ai_provider": "deterministic"}))
-        if workspace is None
+        if workspace is None or is_guest_account(account)
         else available_models(settings)
     )
     if workspace is not None and workspace.id == settings.local_workspace_id:
@@ -433,7 +442,7 @@ def list_models(request: Request, db: Db) -> ModelCatalogRead:
     existing_ids = {model.id for model in models}
     private_entries = (
         []
-        if workspace is None or workspace.id == settings.local_workspace_id
+        if workspace is None or workspace.id == settings.local_workspace_id or is_guest_account(account)
         else db.scalars(select(SecretRow).where(SecretRow.workspace_id == workspace.id)).all()
     )
     for entry in private_entries:
@@ -458,6 +467,13 @@ def list_models(request: Request, db: Db) -> ModelCatalogRead:
     configured_default = default_model_id(settings)
     available_default = next((model.id for model in models if model.available), configured_default)
     return ModelCatalogRead(default_model_id=available_default, models=models)
+
+
+@app.get("/v1/models", response_model=ModelCatalogRead)
+def list_models(request: Request, db: Db) -> ModelCatalogRead:
+    token = extract_session_token(request)
+    workspace = None if settings.hosted_mode and token is None else active_workspace(db, token)
+    return model_catalog(db, workspace)
 
 
 def _ollama_model_status() -> tuple[set[str], str | None]:
@@ -497,12 +513,23 @@ def get_workspace(request: Request, db: Db) -> WorkspaceRead:
     account = db.get(AccountRow, workspace.owner_account_id)
     if account is None:
         raise HTTPException(status_code=503, detail="Personal workspace is not initialized")
+    return workspace_read(workspace, account)
+
+
+def workspace_read(workspace: WorkspaceRow, account: AccountRow) -> WorkspaceRead:
+    mode = (
+        "local_personal"
+        if workspace.id == settings.local_workspace_id
+        else "guest_personal"
+        if is_guest_account(account)
+        else "authenticated_personal"
+    )
     return WorkspaceRead(
         id=workspace.id,
         name=workspace.name,
         account_id=account.id,
         account_name=account.name,
-        mode="local_personal" if workspace.id == settings.local_workspace_id else "authenticated_personal",
+        mode=mode,
         created_at=as_utc(workspace.created_at),
     )
 
@@ -1198,21 +1225,69 @@ def list_decisions(
     )
 
 
+def cleanup_expired_guest_workspaces(db: Session) -> None:
+    cutoff = now_utc() - timedelta(hours=settings.guest_workspace_ttl_hours)
+    expired = db.scalars(
+        select(AccountRow)
+        .where(
+            AccountRow.id != settings.local_account_id,
+            AccountRow.email.is_(None),
+            AccountRow.created_at < cutoff,
+        )
+        .limit(20)
+    ).all()
+    artifact_files: list[Path] = []
+    for account in expired:
+        workspace = account_workspace(db, account.id)
+        if workspace is not None:
+            artifact_files.extend(delete_private_account_data(db, account, workspace))
+    if expired:
+        db.commit()
+    for artifact_file in artifact_files:
+        try:
+            artifact_file.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def create_guest_workspace(response: Response, db: Session) -> WorkspaceRow:
+    cleanup_expired_guest_workspaces(db)
+    account = AccountRow(name="Guest reviewer")
+    db.add(account)
+    db.flush()
+    workspace = WorkspaceRow(owner_account_id=account.id, name="Guest workspace")
+    db.add(workspace)
+    db.commit()
+    db.refresh(workspace)
+    _, token = issue_session(db, account.id, ttl_hours=settings.guest_workspace_ttl_hours)
+    set_session_cookie(response, token, ttl_hours=settings.guest_workspace_ttl_hours)
+    return workspace
+
+
 @app.get("/v1/bootstrap", response_model=WorkspaceBootstrapRead)
-def workspace_bootstrap(route: Request, db: Db) -> WorkspaceBootstrapRead:
+def workspace_bootstrap(route: Request, response: Response, db: Db) -> WorkspaceBootstrapRead:
     """Load the initial workspace in one serverless round trip."""
     token = extract_session_token(route)
-    if settings.hosted_mode and token is None:
+    if settings.hosted_mode and resolve_session(token, db) is None:
+        workspace = create_guest_workspace(response, db)
+        account = db.get(AccountRow, workspace.owner_account_id)
+        if account is None:
+            raise HTTPException(status_code=503, detail="Guest workspace could not be initialized")
         return WorkspaceBootstrapRead(
-            models=list_models(route, db),
-            workspace=None,
+            models=model_catalog(db, workspace),
+            workspace=workspace_read(workspace, account),
             library=DecisionListRead(items=[], total=0),
             guest=True,
         )
+    workspace = active_workspace(db, token)
+    account = db.get(AccountRow, workspace.owner_account_id)
+    if account is None:
+        raise HTTPException(status_code=503, detail="Workspace account is unavailable")
     return WorkspaceBootstrapRead(
-        models=list_models(route, db),
-        workspace=get_workspace(route, db),
+        models=model_catalog(db, workspace),
+        workspace=workspace_read(workspace, account),
         library=list_decisions(route, db),
+        guest=is_guest_account(account),
     )
 
 
@@ -1767,6 +1842,32 @@ def _create_account(payload: CredentialCreate, db: Session) -> AccountRow:
     return account
 
 
+def _upgrade_guest_account(payload: CredentialCreate, account: AccountRow, db: Session) -> AccountRow:
+    email = payload.email.strip().lower()
+    if find_account_by_email(email, db) is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
+    account.name = payload.name.strip() or email
+    account.email = email
+    account.password_hash, account.password_salt, account.password_iterations = hash_password(
+        payload.password,
+        settings.pbkdf2_iterations,
+    )
+    workspace = account_workspace(db, account.id)
+    if workspace is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guest workspace not found")
+    workspace.name = f"{account.name}'s workspace"
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists",
+        ) from exc
+    db.refresh(account)
+    return account
+
+
 def session_read(account: AccountRow, session: SessionRow, token: str) -> SessionRead:
     return SessionRead(
         account_id=account.id,
@@ -1780,7 +1881,7 @@ def session_read(account: AccountRow, session: SessionRow, token: str) -> Sessio
 
 def authenticated_account(request: Request, db: Session) -> AccountRow:
     account = resolve_session(extract_session_token(request), db)
-    if account is None:
+    if account is None or is_guest_account(account):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return account
 
@@ -1802,7 +1903,10 @@ def revoke_account_sessions(db: Session, account_id: str, *, except_token: str |
 @app.post("/v1/auth/register", response_model=SessionRead, status_code=status.HTTP_201_CREATED)
 def register(payload: CredentialCreate, request: Request, response: Response, db: Db) -> SessionRead:
     enforce_auth_rate_limit(request, db, "register", payload.email)
-    account = _create_account(payload, db)
+    guest = resolve_session(extract_session_token(request), db)
+    account = _upgrade_guest_account(payload, guest, db) if is_guest_account(guest) else _create_account(payload, db)
+    revoke_account_sessions(db, account.id)
+    db.commit()
     session, token = issue_session(db, account.id)
     set_session_cookie(response, token)
     return session_read(account, session, token)
@@ -1933,6 +2037,17 @@ def login(payload: SessionRequest, request: Request, response: Response, db: Db)
         account.password_iterations or settings.pbkdf2_iterations,
     ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+    guest = resolve_session(extract_session_token(request), db)
+    if is_guest_account(guest) and guest.id != account.id:
+        guest_workspace = account_workspace(db, guest.id)
+        if guest_workspace is not None:
+            artifact_files = delete_private_account_data(db, guest, guest_workspace)
+            db.commit()
+            for artifact_file in artifact_files:
+                try:
+                    artifact_file.unlink(missing_ok=True)
+                except OSError:
+                    pass
     session, token = issue_session(db, account.id)
     set_session_cookie(response, token)
     return session_read(account, session, token)

@@ -74,27 +74,52 @@ def test_browser_session_uses_an_httponly_cookie_and_hashed_storage() -> None:
             assert len(stored.token) == 64
 
 
-def test_hosted_mode_requires_a_private_authenticated_workspace(monkeypatch) -> None:
+def test_hosted_guests_get_isolated_temporary_workspaces(monkeypatch) -> None:
     from rationexa_api import main
 
-    monkeypatch.setattr(main, "settings", Settings(hosted_mode=True, session_cookie_secure=True))
-    with TestClient(app) as client:
-        assert client.get("/v1/workspace").status_code == 401
-        bootstrap = client.get("/v1/bootstrap")
-        assert bootstrap.status_code == 200
-        assert bootstrap.json()["guest"] is True
-        assert bootstrap.json()["workspace"] is None
-        assert bootstrap.json()["library"] == {"items": [], "total": 0}
-        assert [model["id"] for model in bootstrap.json()["models"]["models"]] == ["deterministic/rules-v1"]
-        assert client.get("/v1/decisions").status_code == 401
-        assert client.get("/v1/usage").status_code == 401
-        assert (
-            client.post(
-                "/v1/telemetry/client-errors",
-                json={"category": "react_error", "route": "/workspace", "digest": "a" * 64},
-            ).status_code
-            == 401
+    monkeypatch.setattr(main, "settings", Settings(hosted_mode=True, session_cookie_secure=False))
+    with TestClient(app) as first, TestClient(app) as second:
+        first_bootstrap = first.get("/v1/bootstrap")
+        second_bootstrap = second.get("/v1/bootstrap")
+        first_workspace = first_bootstrap.json()["workspace"]
+        second_workspace = second_bootstrap.json()["workspace"]
+
+        assert first_bootstrap.status_code == 200
+        assert first_bootstrap.json()["guest"] is True
+        assert first_workspace["mode"] == "guest_personal"
+        assert first_workspace["id"] != second_workspace["id"]
+        assert [model["id"] for model in first_bootstrap.json()["models"]["models"]] == [
+            "deterministic/rules-v1"
+        ]
+        assert first.get("/v1/account").status_code == 401
+        assert first.get("/v1/decisions").json() == {"items": [], "total": 0}
+        assert first.get("/v1/usage").status_code == 200
+        assert first.post("/v1/secrets", json={"provider": "openai", "key": "guest-key"}).status_code == 403
+
+        artifact = first.post(
+            "/v1/artifacts",
+            json={"filename": "guest.txt", "media_type": "text/plain", "content": "We chose option A."},
         )
+        assert artifact.status_code == 201
+        extraction = first.post(
+            "/v1/decisions/extractions",
+            json={"artifact_id": artifact.json()["id"], "model_id": "deterministic/rules-v1"},
+        )
+        assert extraction.status_code == 201
+        assert second.post(
+            "/v1/decisions/extractions",
+            json={"artifact_id": artifact.json()["id"], "model_id": "deterministic/rules-v1"},
+        ).status_code == 404
+
+        upgraded = first.post(
+            "/v1/auth/register",
+            json={"email": "guest-upgrade@rationexa.local", "name": "Trial Reviewer", "password": "trial-pass"},
+        )
+        assert upgraded.status_code == 201
+        permanent_workspace = first.get("/v1/workspace").json()
+        assert permanent_workspace["id"] == first_workspace["id"]
+        assert permanent_workspace["mode"] == "authenticated_personal"
+        assert first.get(f"/v1/extractions/{extraction.json()['id']}").status_code == 200
 
 
 def test_login_rate_limit_is_persistent_and_contextual(monkeypatch) -> None:

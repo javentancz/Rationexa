@@ -33,15 +33,16 @@ Local Ollama is free and requires no account. The configured local models are:
 - Gemma 4 E4B
 - Ornith 1.5 9B
 
-The Account & keys screen also supports OpenRouter, OpenAI direct, and custom OpenAI-compatible endpoints. After connecting a key, load that provider's model catalog and activate the model you want to expose in Rationexa. Keys are encrypted per workspace before database storage and are never returned by the API or included in shared records. Hosted deployments require sign-in before any workspace data or BYOK configuration is available.
+The Account & keys screen also supports OpenRouter, OpenAI direct, and custom OpenAI-compatible endpoints. After connecting a key, load that provider's model catalog and activate the model you want to expose in Rationexa. Keys are encrypted per workspace before database storage and are never returned by the API or included in shared records. Hosted visitors receive an isolated, cookie-bound 24-hour guest workspace for deterministic-rule trials. Different browser profiles and devices receive different libraries. Creating an account upgrades the same guest workspace and preserves its decisions; BYOK remains unavailable until that upgrade is complete.
 
 There is intentionally no misleading universal API-key field. Providers with incompatible native protocols require dedicated adapters; OpenRouter or a custom OpenAI-compatible endpoint provides the broadest current hosted-model coverage.
 
 ### Hosted workspace isolation
 
-Hosted deployments are private-workspace only: `HOSTED_MODE` defaults to
-`true`, so a missing environment variable cannot expose the shared local
-development library. Each account owns one workspace, and every artifact,
+`HOSTED_MODE` defaults to `true`, so a missing environment variable cannot
+expose the shared local development library. Hosted visitors receive separate
+temporary guest workspaces; registered accounts receive permanent workspaces.
+Every artifact,
 extraction, decision, job, provider key, and usage query is filtered by that
 workspace. Separate physical databases per user are not required for pilot
 isolation; PostgreSQL stores all tenants while the API returns `404` for a

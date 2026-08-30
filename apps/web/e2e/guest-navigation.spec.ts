@@ -6,7 +6,14 @@ test("lets a hosted guest explore tabs and preserves the draft until a private a
       contentType: "application/json",
       body: JSON.stringify({
         guest: true,
-        workspace: null,
+        workspace: {
+          id: "browser-guest-workspace",
+          name: "Guest workspace",
+          account_id: "browser-guest-account",
+          account_name: "Guest reviewer",
+          mode: "guest_personal",
+          created_at: new Date().toISOString(),
+        },
         library: { items: [], total: 0 },
         models: {
           default_model_id: "deterministic/rules-v1",
@@ -30,18 +37,16 @@ test("lets a hosted guest explore tabs and preserves the draft until a private a
 
   await page.getByRole("button", { name: "All decisions" }).click();
   await expect(page).toHaveURL(/\/library$/);
-  await expect(page.getByText("Your private library starts after sign-in")).toBeVisible();
+  await expect(page.getByText("Your temporary library is private to this browser")).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue current draft" })).toBeVisible();
 
   await page.getByRole("button", { name: "Usage and cost" }).click();
   await expect(page).toHaveURL(/\/usage$/);
-  await expect(page.getByText("Explore usage without being redirected")).toBeVisible();
+  await expect(page.getByText("Temporary guest usage")).toBeVisible();
 
   await page.getByRole("button", { name: /A guest draft that should survive navigation/ }).click();
   await expect(page).toHaveURL(/\/workspace$/);
   await expect(page.getByLabel("Decision source")).toHaveValue("A guest draft that should survive navigation.");
 
-  await page.getByRole("button", { name: "Create workspace to extract →" }).click();
-  await expect(page).toHaveURL(/\/settings$/);
-  await expect(page.getByText("Your draft is safe on this device")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try deterministic extraction →" })).toBeEnabled();
 });

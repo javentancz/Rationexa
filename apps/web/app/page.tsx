@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft,
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ConfirmDialog, Disclosure, Hint } from "./ui";
-import { ApiError, apiResponse as req, responseJson } from "./api";
+import { ApiError, apiResponse as req, responseJson, setAuthenticatedState } from "./api";
 import { ModelPicker } from "./model-picker";
 import { FinalizeConfirmation } from "./finalize-stage";
 import { DecisionLibraryView } from "./decision-library-view";
@@ -213,6 +213,7 @@ export default function Home() {
     }
     if (!bootstrapQuery.data) return;
     const { models: catalog, workspace, library: initialLibrary } = bootstrapQuery.data;
+    if (bootstrapQuery.data.guest) setAuthenticatedState(false);
     setModels(catalog.models);
     setPersonalWorkspace(workspace);
     if (workspace) queryClient.setQueryData<DecisionLibrary>(["decisions", workspace.id, ""], (current) => current ?? initialLibrary);
@@ -501,11 +502,6 @@ export default function Home() {
 
   async function extract(event: FormEvent) {
     event.preventDefault();
-    if (guestMode) {
-      navigateTo("settings");
-      toast.info("Your draft is safe on this device", { description: "Create or sign in to a private workspace to run extraction and save the record." });
-      return;
-    }
     setBusyPhase("extract");
     setError(null);
     try {
@@ -835,9 +831,9 @@ export default function Home() {
     setEvidence("");
      }
 
-  async function handleWorkspaceChanged() {
+  async function handleWorkspaceChanged(preserveGuestDraft = false) {
     const keepSettingsOpen = view === "settings";
-    if (!guestMode) {
+    if (!guestMode || !preserveGuestDraft) {
       window.localStorage.removeItem(workspaceSessionKey);
       window.localStorage.removeItem(evidenceDraftsKey);
       resetWorkspace();
@@ -1064,7 +1060,7 @@ export default function Home() {
         </section>
         <section className="workspace-identity" aria-label={personalWorkspace ? `${personalWorkspace.name}, owned by ${personalWorkspace.account_name}` : "Guest workspace"}>
           <span className="workspace-avatar"><UserRound aria-hidden="true" /></span>
-          <span className="workspace-identity-copy pane-label"><strong>{personalWorkspace?.name || "Guest workspace"}</strong><small>{personalWorkspace ? `${personalWorkspace.account_name} · ${personalWorkspace.mode === "authenticated_personal" ? "Private pilot" : "Local profile"}` : "Browse freely · sign in to save"}</small></span>
+          <span className="workspace-identity-copy pane-label"><strong>{personalWorkspace?.name || "Guest workspace"}</strong><small>{personalWorkspace ? `${personalWorkspace.account_name} · ${personalWorkspace.mode === "authenticated_personal" ? "Private pilot" : personalWorkspace.mode === "guest_personal" ? "Private 24-hour trial" : "Local profile"}` : "Preparing private trial…"}</small></span>
         </section>
       </aside>
 
@@ -1093,8 +1089,7 @@ export default function Home() {
         {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} onDiscardDraft={() => setConfirmingDraftDiscard(true)} library={library} loading={libraryLoading} refreshing={decisionLibraryQuery.isFetching && !decisionLibraryQuery.isPending} guest={guestMode} onOpenAccount={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} onPrefetchDecision={prefetchDecision} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={() => { resetWorkspace(); navigateTo("workspace"); }} formatDateTime={formatDateTime} /> : null}
 
         {view === "usage" ? <section className="usage-view">
-          {guestMode ? <div className="guest-access-card"><div><strong>Explore usage without being redirected</strong><p>Usage and cost belong to a private workspace, so no account data is shown in guest mode. Sign in only when you want to start recording model runs.</p></div><button className="primary" onClick={() => navigateTo("settings")}>Create or sign in →</button></div> : null}
-          {!guestMode ? <>
+          {guestMode ? <div className="guest-access-card"><div><strong>Temporary guest usage</strong><p>Only deterministic runs from this browser’s isolated guest workspace appear here. Create a permanent workspace to retain history and connect BYOK models.</p></div><button className="primary" onClick={() => navigateTo("settings")}>Keep history &amp; add BYOK →</button></div> : null}
           <div className="usage-intro"><span className="usage-intro-icon"><ChartNoAxesColumn aria-hidden="true" /></span><div><strong>Workspace AI activity</strong><p>Usage is calculated from persisted extraction, revisit, and challenge provenance. Known cost excludes runs whose provider did not report a price.</p></div><button type="button" className="text-button" disabled={usageLoading} onClick={loadUsage}>{usageLoading ? "Refreshing…" : "Refresh usage"}</button></div>
           {usageLoading && !usage ? <div className="library-empty"><span className="spinner dark" /><strong>Calculating workspace usage…</strong></div> : usage ? <>
             <div className="usage-summary-grid">
@@ -1109,10 +1104,10 @@ export default function Home() {
             })}</div> : <div className="library-empty"><strong>No AI usage recorded yet</strong><p>Complete an extraction, revisit, or challenge to create the first usage record.</p></div>}</section>
             {pilotMetrics ? <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Supervised pilot</span><h2>Repeat-use signals</h2></div><span>{pilotMetrics.repeat_use_observed ? "Repeat use observed" : "More real-user sessions needed"}</span></div><div className="pilot-metrics-grid"><article><strong>{pilotMetrics.decision_count}</strong><span>decisions</span></article><article><strong>{pilotMetrics.revisit_count}</strong><span>evidence checks</span></article><article><strong>{pilotMetrics.judgment_count}</strong><span>human judgments</span></article><article><strong>{pilotMetrics.share_count + pilotMetrics.export_count}</strong><span>shares &amp; exports</span></article><article><strong>{pilotMetrics.challenge_confirmation_count}</strong><span>confirmed challenges</span></article><article><strong>{pilotMetrics.active_days}</strong><span>active days</span></article></div><p className="pilot-note">Pilot readiness requires activity from real reviewers across multiple days; these measurements describe behavior and do not claim model accuracy.</p></section> : null}
             <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Recent activity</span><h2>Latest model runs</h2></div><span>Newest first</span></div>{usage.recent_runs.length ? <div className="usage-runs">{usage.recent_runs.map((run) => <button type="button" key={`${run.kind}-${run.id}`} disabled={!run.decision_id} onClick={() => run.decision_id && openDecision(run.decision_id)}><span className={`usage-kind ${run.kind}`}>{run.kind}</span><span className="usage-run-model"><strong>{run.model}</strong><small>{run.provider} · {run.prompt_version}</small></span><span><strong>{formatNumber((run.input_tokens ?? 0) + (run.output_tokens ?? 0))}</strong><small>tokens</small></span><span><strong>{run.latency_ms == null ? "—" : `${formatNumber(run.latency_ms)} ms`}</strong><small>latency</small></span><span><strong>{run.estimated_cost_usd == null ? "Unavailable" : `$${run.estimated_cost_usd.toFixed(4)}`}</strong><small>cost</small></span><time dateTime={run.created_at}>{formatDateTime(run.created_at)}</time></button>)}</div> : null}</section>
-          </> : null}</> : null}
+          </> : null}
         </section> : null}
 
-        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use built-in deterministic rules without a key, or add a hosted-provider key to your private workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel workspaceId={activeWorkspaceId} onConfigurationChanged={() => { void handleWorkspaceChanged(); }} onModelConfigurationChanged={() => { void handleModelConfigurationChanged(); }} onWorkspaceProfileChanged={() => { void workspaceQuery.refetch(); }} /></section> : null}
+        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use built-in deterministic rules without a key, or add a hosted-provider key to your private workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel workspaceId={activeWorkspaceId} onConfigurationChanged={(preserveGuestDraft) => { void handleWorkspaceChanged(preserveGuestDraft); }} onModelConfigurationChanged={() => { void handleModelConfigurationChanged(); }} onWorkspaceProfileChanged={() => { void workspaceQuery.refetch(); }} /></section> : null}
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
 

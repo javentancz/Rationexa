@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     local_account_email: str = "demo@rationexa.local"
     local_account_password: str | None = None
     auth_session_ttl_hours: int = 168
+    guest_workspace_ttl_hours: int = 24
     session_cookie_name: str = "rationexa_session"
     session_cookie_secure: bool = False
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
