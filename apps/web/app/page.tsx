@@ -16,6 +16,7 @@ import type { AuditEvent, ComparisonRun, Criticality, Decision, DecisionChalleng
 
 const workspaceSessionKey = "rationexa-workspace-draft-v1";
 const evidenceDraftsKey = "rationexa-evidence-drafts-v1";
+const guestWorkspaceId = "guest-browser";
 const workspacePaths: Record<WorkspaceView, string> = {
   workspace: "/workspace",
   library: "/library",
@@ -214,7 +215,7 @@ export default function Home() {
     const { models: catalog, workspace, library: initialLibrary } = bootstrapQuery.data;
     setModels(catalog.models);
     setPersonalWorkspace(workspace);
-    queryClient.setQueryData<DecisionLibrary>(["decisions", workspace.id, ""], (current) => current ?? initialLibrary);
+    if (workspace) queryClient.setQueryData<DecisionLibrary>(["decisions", workspace.id, ""], (current) => current ?? initialLibrary);
     setRecommendedModelId(catalog.default_model_id);
     setSelectedModelId((current) => catalog.models.some((model) => model.id === current) ? current : catalog.default_model_id);
     setComparisonModelId((current) => catalog.models.some((model) => model.id === current)
@@ -228,7 +229,9 @@ export default function Home() {
     if (libraryCriticality !== "all") params.set("criticality", libraryCriticality);
     return params.toString();
   }, [debouncedLibraryQuery, libraryCriticality]);
-  const activeWorkspaceId = bootstrapQuery.data?.workspace.id ?? personalWorkspace?.id;
+  const activeWorkspaceId = bootstrapQuery.data?.workspace?.id ?? personalWorkspace?.id;
+  const guestMode = bootstrapQuery.data?.guest === true;
+  const draftWorkspaceId = activeWorkspaceId ?? guestWorkspaceId;
   const decisionLibraryQuery = useQuery({
     queryKey: ["decisions", activeWorkspaceId ?? "pending", libraryParams],
     queryFn: async ({ signal }) => responseJson(await req(`/v1/decisions${libraryParams ? `?${libraryParams}` : ""}`, { signal })) as Promise<DecisionLibrary>,
@@ -279,10 +282,9 @@ export default function Home() {
       resetWorkspace();
       queryClient.removeQueries({ queryKey: ["decisions"] });
       queryClient.removeQueries({ queryKey: ["decision"] });
-      void bootstrapQuery.refetch();
+      void req("/v1/auth/logout", { method: "POST" }).finally(() => { void bootstrapQuery.refetch(); });
       if (pathname.startsWith("/account/reset")) setView("settings");
-      else navigateTo("settings", true);
-      toast.info("Your session expired. Sign in again to continue.");
+      toast.info("Your session expired. You can keep browsing as a guest or sign in again.");
     };
     window.addEventListener("rationexa-auth-expired", recoverLocalWorkspace);
     return () => window.removeEventListener("rationexa-auth-expired", recoverLocalWorkspace);
@@ -299,16 +301,13 @@ export default function Home() {
           return;
         }
         const activeWorkspace = bootstrapQuery.data?.workspace;
-        if (!activeWorkspace) {
-          window.localStorage.removeItem(workspaceSessionKey);
-          window.localStorage.removeItem(evidenceDraftsKey);
-          return;
-        }
+        const restoredWorkspaceId = activeWorkspace?.id ?? (bootstrapQuery.data?.guest ? guestWorkspaceId : null);
+        if (!restoredWorkspaceId) return;
         const saved = window.localStorage.getItem(workspaceSessionKey);
         if (!saved) return;
         const state = JSON.parse(saved) as PersistedWorkspaceSession;
-        const legacyLocalDraft = !state.workspaceId && activeWorkspace.mode === "local_personal";
-        if (!legacyLocalDraft && state.workspaceId !== activeWorkspace.id) {
+        const legacyLocalDraft = !state.workspaceId && activeWorkspace?.mode === "local_personal";
+        if (!legacyLocalDraft && state.workspaceId !== restoredWorkspaceId) {
           window.localStorage.removeItem(workspaceSessionKey);
           window.localStorage.removeItem(evidenceDraftsKey);
           return;
@@ -346,12 +345,12 @@ export default function Home() {
   }, [bootstrapQuery.data, bootstrapQuery.isLoading, navigateTo]);
 
   useEffect(() => {
-    if (!sessionRestored || !personalWorkspace) return;
+    if (!sessionRestored || !bootstrapQuery.data) return;
     const savedAt = new Date().toISOString();
-    const state: PersistedWorkspaceSession = { workspaceId: personalWorkspace?.id, source, evidence: decision ? undefined : evidence, sourceMode, view, workflowView, selectedModelId, comparisonModelId, compareMode, decisionId: decision?.id, extraction: decision ? undefined : extraction ?? undefined, draft: decision ? undefined : draft ?? undefined, reviews: decision ? undefined : reviews, criticality, selectedPremise: selectedPremise ?? undefined };
+    const state: PersistedWorkspaceSession = { workspaceId: draftWorkspaceId, source, evidence: decision ? undefined : evidence, sourceMode, view, workflowView, selectedModelId, comparisonModelId, compareMode, decisionId: decision?.id, extraction: decision ? undefined : extraction ?? undefined, draft: decision ? undefined : draft ?? undefined, reviews: decision ? undefined : reviews, criticality, selectedPremise: selectedPremise ?? undefined };
     window.localStorage.setItem(workspaceSessionKey, JSON.stringify(state));
     setDraftSavedAt(savedAt);
-  }, [compareMode, comparisonModelId, criticality, decision, draft, evidence, extraction, personalWorkspace, reviews, selectedModelId, selectedPremise, sessionRestored, source, sourceMode, view, workflowView]);
+  }, [bootstrapQuery.data, compareMode, comparisonModelId, criticality, decision, draft, draftWorkspaceId, evidence, extraction, reviews, selectedModelId, selectedPremise, sessionRestored, source, sourceMode, view, workflowView]);
 
   useEffect(() => {
     if (!sessionRestored || !decision) return;
@@ -377,8 +376,8 @@ export default function Home() {
   }, [compareMode, models, selectedModelId]);
 
   useEffect(() => {
-    if (view === "usage" && !usage) void loadUsage();
-  }, [usage, view]);
+    if (view === "usage" && activeWorkspaceId && !usage) void loadUsage();
+  }, [activeWorkspaceId, usage, view]);
 
   const premises = extraction?.result.premises ?? [];
   const counts = useMemo(() => {
@@ -502,6 +501,11 @@ export default function Home() {
 
   async function extract(event: FormEvent) {
     event.preventDefault();
+    if (guestMode) {
+      navigateTo("settings");
+      toast.info("Your draft is safe on this device", { description: "Create or sign in to a private workspace to run extraction and save the record." });
+      return;
+    }
     setBusyPhase("extract");
     setError(null);
     try {
@@ -833,9 +837,11 @@ export default function Home() {
 
   async function handleWorkspaceChanged() {
     const keepSettingsOpen = view === "settings";
-    window.localStorage.removeItem(workspaceSessionKey);
-    window.localStorage.removeItem(evidenceDraftsKey);
-    resetWorkspace();
+    if (!guestMode) {
+      window.localStorage.removeItem(workspaceSessionKey);
+      window.localStorage.removeItem(evidenceDraftsKey);
+      resetWorkspace();
+    }
     if (keepSettingsOpen) setView("settings");
     queryClient.clear();
     await bootstrapQuery.refetch();
@@ -1056,9 +1062,9 @@ export default function Home() {
             {!hasCurrentDraft && !library.items.length ? <p>No saved decisions in this library.</p> : null}
           </div>
         </section>
-        <section className="workspace-identity" aria-label={personalWorkspace ? `${personalWorkspace.name}, owned by ${personalWorkspace.account_name}` : "Loading personal workspace"}>
+        <section className="workspace-identity" aria-label={personalWorkspace ? `${personalWorkspace.name}, owned by ${personalWorkspace.account_name}` : "Guest workspace"}>
           <span className="workspace-avatar"><UserRound aria-hidden="true" /></span>
-          <span className="workspace-identity-copy pane-label"><strong>{personalWorkspace?.name || "Personal workspace"}</strong><small>{personalWorkspace ? `${personalWorkspace.account_name} · ${personalWorkspace.mode === "authenticated_personal" ? "Private pilot" : "Local profile"}` : "Loading profile…"}</small></span>
+          <span className="workspace-identity-copy pane-label"><strong>{personalWorkspace?.name || "Guest workspace"}</strong><small>{personalWorkspace ? `${personalWorkspace.account_name} · ${personalWorkspace.mode === "authenticated_personal" ? "Private pilot" : "Local profile"}` : "Browse freely · sign in to save"}</small></span>
         </section>
       </aside>
 
@@ -1084,9 +1090,11 @@ export default function Home() {
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
 
-        {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} onDiscardDraft={() => setConfirmingDraftDiscard(true)} library={library} loading={libraryLoading} refreshing={decisionLibraryQuery.isFetching && !decisionLibraryQuery.isPending} onOpenDecision={(id) => { void openDecision(id); }} onPrefetchDecision={prefetchDecision} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={() => { resetWorkspace(); navigateTo("workspace"); }} formatDateTime={formatDateTime} /> : null}
+        {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} onDiscardDraft={() => setConfirmingDraftDiscard(true)} library={library} loading={libraryLoading} refreshing={decisionLibraryQuery.isFetching && !decisionLibraryQuery.isPending} guest={guestMode} onOpenAccount={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} onPrefetchDecision={prefetchDecision} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={() => { resetWorkspace(); navigateTo("workspace"); }} formatDateTime={formatDateTime} /> : null}
 
         {view === "usage" ? <section className="usage-view">
+          {guestMode ? <div className="guest-access-card"><div><strong>Explore usage without being redirected</strong><p>Usage and cost belong to a private workspace, so no account data is shown in guest mode. Sign in only when you want to start recording model runs.</p></div><button className="primary" onClick={() => navigateTo("settings")}>Create or sign in →</button></div> : null}
+          {!guestMode ? <>
           <div className="usage-intro"><span className="usage-intro-icon"><ChartNoAxesColumn aria-hidden="true" /></span><div><strong>Workspace AI activity</strong><p>Usage is calculated from persisted extraction, revisit, and challenge provenance. Known cost excludes runs whose provider did not report a price.</p></div><button type="button" className="text-button" disabled={usageLoading} onClick={loadUsage}>{usageLoading ? "Refreshing…" : "Refresh usage"}</button></div>
           {usageLoading && !usage ? <div className="library-empty"><span className="spinner dark" /><strong>Calculating workspace usage…</strong></div> : usage ? <>
             <div className="usage-summary-grid">
@@ -1101,14 +1109,14 @@ export default function Home() {
             })}</div> : <div className="library-empty"><strong>No AI usage recorded yet</strong><p>Complete an extraction, revisit, or challenge to create the first usage record.</p></div>}</section>
             {pilotMetrics ? <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Supervised pilot</span><h2>Repeat-use signals</h2></div><span>{pilotMetrics.repeat_use_observed ? "Repeat use observed" : "More real-user sessions needed"}</span></div><div className="pilot-metrics-grid"><article><strong>{pilotMetrics.decision_count}</strong><span>decisions</span></article><article><strong>{pilotMetrics.revisit_count}</strong><span>evidence checks</span></article><article><strong>{pilotMetrics.judgment_count}</strong><span>human judgments</span></article><article><strong>{pilotMetrics.share_count + pilotMetrics.export_count}</strong><span>shares &amp; exports</span></article><article><strong>{pilotMetrics.challenge_confirmation_count}</strong><span>confirmed challenges</span></article><article><strong>{pilotMetrics.active_days}</strong><span>active days</span></article></div><p className="pilot-note">Pilot readiness requires activity from real reviewers across multiple days; these measurements describe behavior and do not claim model accuracy.</p></section> : null}
             <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Recent activity</span><h2>Latest model runs</h2></div><span>Newest first</span></div>{usage.recent_runs.length ? <div className="usage-runs">{usage.recent_runs.map((run) => <button type="button" key={`${run.kind}-${run.id}`} disabled={!run.decision_id} onClick={() => run.decision_id && openDecision(run.decision_id)}><span className={`usage-kind ${run.kind}`}>{run.kind}</span><span className="usage-run-model"><strong>{run.model}</strong><small>{run.provider} · {run.prompt_version}</small></span><span><strong>{formatNumber((run.input_tokens ?? 0) + (run.output_tokens ?? 0))}</strong><small>tokens</small></span><span><strong>{run.latency_ms == null ? "—" : `${formatNumber(run.latency_ms)} ms`}</strong><small>latency</small></span><span><strong>{run.estimated_cost_usd == null ? "Unavailable" : `$${run.estimated_cost_usd.toFixed(4)}`}</strong><small>cost</small></span><time dateTime={run.created_at}>{formatDateTime(run.created_at)}</time></button>)}</div> : null}</section>
-          </> : null}
+          </> : null}</> : null}
         </section> : null}
 
         {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use built-in deterministic rules without a key, or add a hosted-provider key to your private workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel workspaceId={activeWorkspaceId} onConfigurationChanged={() => { void handleWorkspaceChanged(); }} onModelConfigurationChanged={() => { void handleModelConfigurationChanged(); }} onWorkspaceProfileChanged={() => { void workspaceQuery.refetch(); }} /></section> : null}
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
 
-        {view === "workspace" && workflowView === 1 && !extraction && !decision ? <ImportStage sourceMode={sourceMode} onSourceModeChange={setSourceMode} source={source} onSourceChange={setSource} file={file} onFileChange={setFile} models={models} selectedModelId={selectedModelId} recommendedModelId={recommendedModelId} onModelSelect={setSelectedModelId} selectedModel={selectedModel} extracting={busyPhase === "extract"} draftSavedAt={draftSavedAt} formatDateTime={formatDateTime} onExtract={extract} /> : null}
+        {view === "workspace" && workflowView === 1 && !extraction && !decision ? <ImportStage sourceMode={sourceMode} onSourceModeChange={setSourceMode} source={source} onSourceChange={setSource} file={file} onFileChange={setFile} models={models} selectedModelId={selectedModelId} recommendedModelId={recommendedModelId} onModelSelect={setSelectedModelId} selectedModel={selectedModel} extracting={busyPhase === "extract"} draftSavedAt={draftSavedAt} guest={guestMode} formatDateTime={formatDateTime} onExtract={extract} /> : null}
 
         {view === "workspace" && workflowView === 1 && decision ? <section className="card stage-snapshot">
           <div className="snapshot-heading"><div><span className="snapshot-step">01</span><span className="overline">Import snapshot</span><h2>Original decision context</h2><p>This is the source-backed context preserved with the saved record.</p></div><button className="primary subtle-primary" type="button" onClick={() => setWorkflowView(2)}>View review →</button></div>

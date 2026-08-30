@@ -360,8 +360,9 @@ class DecisionListRead(BaseModel):
 
 class WorkspaceBootstrapRead(BaseModel):
     models: ModelCatalogRead
-    workspace: WorkspaceRead
+    workspace: WorkspaceRead | None
     library: DecisionListRead
+    guest: bool = False
 
 
 class UsageRunRead(BaseModel):

@@ -119,13 +119,13 @@ Reports are written to `packages/evals/reports/`. Production claims require a se
 ## Quality checks
 
 ```bash
-pnpm check
-pnpm --filter @rationexa/web build
-pnpm --filter @rationexa/web test:e2e
-pnpm --filter @rationexa/web build-storybook
-.venv/bin/pytest services/api/tests
-.venv/bin/ruff check services/api
+pnpm validate
 ```
+
+This is the same validation entry point used by CI. It runs type checking,
+linting, the production web build, API tests, the production dependency audit,
+and browser tests. CI also installs the Playwright Chromium runtime through the
+same script.
 
 Run the same API suite in an isolated temporary PostgreSQL schema:
 

@@ -80,7 +80,14 @@ def test_hosted_mode_requires_a_private_authenticated_workspace(monkeypatch) -> 
     monkeypatch.setattr(main, "settings", Settings(hosted_mode=True, session_cookie_secure=True))
     with TestClient(app) as client:
         assert client.get("/v1/workspace").status_code == 401
-        assert client.get("/v1/bootstrap").status_code == 401
+        bootstrap = client.get("/v1/bootstrap")
+        assert bootstrap.status_code == 200
+        assert bootstrap.json()["guest"] is True
+        assert bootstrap.json()["workspace"] is None
+        assert bootstrap.json()["library"] == {"items": [], "total": 0}
+        assert [model["id"] for model in bootstrap.json()["models"]["models"]] == ["deterministic/rules-v1"]
+        assert client.get("/v1/decisions").status_code == 401
+        assert client.get("/v1/usage").status_code == 401
         assert (
             client.post(
                 "/v1/telemetry/client-errors",

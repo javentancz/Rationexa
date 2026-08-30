@@ -404,9 +404,13 @@ def record_product_event(
 @app.get("/v1/models", response_model=ModelCatalogRead)
 def list_models(request: Request, db: Db) -> ModelCatalogRead:
     token = extract_session_token(request)
-    workspace = active_workspace(db, token)
-    models = available_models(settings)
-    if workspace.id == settings.local_workspace_id:
+    workspace = None if settings.hosted_mode and token is None else active_workspace(db, token)
+    models = (
+        available_models(settings.model_copy(update={"ai_provider": "deterministic"}))
+        if workspace is None
+        else available_models(settings)
+    )
+    if workspace is not None and workspace.id == settings.local_workspace_id:
         models = [model for model in models if model.location != "hosted"]
     ollama_installed, ollama_error = _ollama_model_status()
     models = [
@@ -429,7 +433,7 @@ def list_models(request: Request, db: Db) -> ModelCatalogRead:
     existing_ids = {model.id for model in models}
     private_entries = (
         []
-        if workspace.id == settings.local_workspace_id
+        if workspace is None or workspace.id == settings.local_workspace_id
         else db.scalars(select(SecretRow).where(SecretRow.workspace_id == workspace.id)).all()
     )
     for entry in private_entries:
@@ -1197,6 +1201,14 @@ def list_decisions(
 @app.get("/v1/bootstrap", response_model=WorkspaceBootstrapRead)
 def workspace_bootstrap(route: Request, db: Db) -> WorkspaceBootstrapRead:
     """Load the initial workspace in one serverless round trip."""
+    token = extract_session_token(route)
+    if settings.hosted_mode and token is None:
+        return WorkspaceBootstrapRead(
+            models=list_models(route, db),
+            workspace=None,
+            library=DecisionListRead(items=[], total=0),
+            guest=True,
+        )
     return WorkspaceBootstrapRead(
         models=list_models(route, db),
         workspace=get_workspace(route, db),

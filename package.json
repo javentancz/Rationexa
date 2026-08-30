@@ -8,6 +8,7 @@
   "scripts": {
     "dev:web": "pnpm --filter @rationexa/web dev",
     "build:web": "pnpm --filter @rationexa/web build",
-    "check": "pnpm --filter @rationexa/web check"
+    "check": "pnpm --filter @rationexa/web check",
+    "validate": "bash scripts/validate.sh"
   }
 }
