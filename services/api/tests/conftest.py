@@ -25,6 +25,7 @@ else:
 artifact_dir = Path(tempfile.gettempdir()) / f"rationexa-artifacts-{os.getpid()}"
 os.environ["ARTIFACT_DIR"] = str(artifact_dir)
 os.environ["AI_PROVIDER"] = "deterministic"
+os.environ["HOSTED_MODE"] = "false"
 os.environ.setdefault("SECRET_ENCRYPTION_KEY", "LVOw0rMnwHO0RjG21UEe89Y8ldVc49I2H0nJX1CPzbk=")
 
 

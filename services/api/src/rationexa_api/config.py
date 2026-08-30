@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     ollama_status_cache_seconds: float = 15
     provider_model_cache_seconds: float = 60
     job_execution_mode: Literal["inline", "thread"] = "inline"
-    hosted_mode: bool = False
+    # Fail closed when a deployment forgets to set HOSTED_MODE. Local
+    # development explicitly opts into the single-user workspace in .env.
+    hosted_mode: bool = True
     custom_provider_allowed_hosts: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.4-mini"

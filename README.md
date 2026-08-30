@@ -37,6 +37,16 @@ The Account & keys screen also supports OpenRouter, OpenAI direct, and custom Op
 
 There is intentionally no misleading universal API-key field. Providers with incompatible native protocols require dedicated adapters; OpenRouter or a custom OpenAI-compatible endpoint provides the broadest current hosted-model coverage.
 
+### Hosted workspace isolation
+
+Hosted deployments are private-workspace only: `HOSTED_MODE` defaults to
+`true`, so a missing environment variable cannot expose the shared local
+development library. Each account owns one workspace, and every artifact,
+extraction, decision, job, provider key, and usage query is filtered by that
+workspace. Separate physical databases per user are not required for pilot
+isolation; PostgreSQL stores all tenants while the API returns `404` for a
+record owned by another workspace.
+
 ## Run locally
 
 Requirements:

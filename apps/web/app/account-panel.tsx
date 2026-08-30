@@ -372,7 +372,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
     <section className="usage-section account-section">
       <div className="usage-section-heading">
         <div><span className="overline">Models &amp; provider keys</span><h2>Your AI runtime</h2></div>
-        <span>{authenticated ? "Private workspace · encrypted BYOK" : "Built-in rules · sign in for BYOK"}</span>
+        <span>{authenticated ? "Private workspace · encrypted BYOK" : workspace ? "Local development workspace" : "Sign in required · private workspace"}</span>
       </div>
       {error ? <p className="account-error">{error}</p> : null}
       <div className="account-body">
@@ -422,7 +422,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
             <KeyRound aria-hidden="true" />
             <div>
               <strong>Bring your own API key</strong>
-              <p>{authenticated ? "Choose the platform that issued your key, load its live model catalog, then activate one model. Keys cannot be safely auto-detected because provider formats overlap." : "Sign in or create a private workspace before connecting a hosted provider. Guest browsers can use built-in deterministic rules, but cannot store or use BYOK credentials."}</p>
+              <p>{authenticated ? "Choose the platform that issued your key, load its live model catalog, then activate one model. Keys cannot be safely auto-detected because provider formats overlap." : workspace ? "Local development can use built-in models without storing a shared key." : "Sign in or create a private workspace before connecting a provider. Every account receives an isolated decision library and encrypted BYOK storage."}</p>
             </div>
           </div>
           {authenticated ? <><form onSubmit={handleStoreKey} className="account-key-form">
@@ -441,7 +441,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
                 </li>
               ))}
             </ul>
-          ) : <p className="account-empty">No hosted-provider keys stored. Built-in deterministic rules remain available without one.</p>}</> : <p className="account-empty">BYOK is disabled in the guest workspace to prevent one visitor&apos;s key from being shared with other browsers.</p>}
+          ) : <p className="account-empty">No hosted-provider keys stored. Built-in deterministic rules remain available without one.</p>}</> : <p className="account-empty">{workspace ? "BYOK is disabled in the local guest workspace." : "No shared guest workspace is available on the hosted service. Sign in to access only your own library."}</p>}
         </div>
         {authenticated ? <section className="account-danger-zone">
           <div><strong>Delete account and workspace</strong><p>Permanently removes your decisions, evidence, shares, provider keys, sessions, and account. This cannot be undone.</p></div>
@@ -449,8 +449,8 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
           <button type="button" className="secondary danger" disabled={!deletePassword || accountDeleteBusy} onClick={() => setConfirmingAccountDelete(true)}><Trash2 aria-hidden="true" />Delete account</button>
         </section> : null}
         {!authenticated ? (
-          <details className="optional-sign-in">
-            <summary>Optional: use a private pilot workspace</summary>
+          <details className="optional-sign-in" open={!workspace}>
+            <summary>{workspace ? "Optional: use a private pilot workspace" : "Sign in or create your private workspace"}</summary>
             <div className="auth-mode-toggle" role="tablist" aria-label="Account action"><button type="button" role="tab" aria-selected={authMode === "login"} className={authMode === "login" ? "active" : ""} onClick={() => setAuthMode("login")}>Sign in</button><button type="button" role="tab" aria-selected={authMode === "register"} className={authMode === "register" ? "active" : ""} onClick={() => setAuthMode("register")}>Create workspace</button><button type="button" role="tab" aria-selected={authMode === "reset"} className={authMode === "reset" ? "active" : ""} onClick={() => setAuthMode("reset")}>Reset password</button></div>
             <form onSubmit={authMode === "login" ? handleLogin : authMode === "register" ? handleRegister : resetToken ? handleResetConfirm : handleResetRequest} className="account-login">
               {authMode === "register" ? <label><span>Display name</span><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Pilot reviewer" /></label> : null}

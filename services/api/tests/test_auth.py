@@ -335,6 +335,28 @@ def test_records_created_in_one_workspace_do_not_leak_to_another() -> None:
             headers={"Authorization": f"Bearer {token_a}"},
             json={"artifact_id": artifact["id"]},
         ).json()
+        reviewed = client.post(
+            f"/v1/extractions/{extraction['id']}/review",
+            headers={"Authorization": f"Bearer {token_a}"},
+            json={
+                "title": "Workspace A private decision",
+                "reviews": [
+                    {
+                        "candidate_id": premise["candidate_id"],
+                        "action": "confirm",
+                        "statement": premise["statement"],
+                        "kind": premise["kind"],
+                    }
+                    for premise in extraction["result"]["premises"]
+                ],
+            },
+        )
+        assert reviewed.status_code == 200
+        decision = client.post(
+            f"/v1/extractions/{extraction['id']}/finalize",
+            headers={"Authorization": f"Bearer {token_a}"},
+            json={"criticality": "important"},
+        ).json()
 
         b_list = client.get("/v1/decisions", headers={"Authorization": f"Bearer {token_b}"})
         assert b_list.status_code == 200
@@ -344,6 +366,24 @@ def test_records_created_in_one_workspace_do_not_leak_to_another() -> None:
             headers={"Authorization": f"Bearer {token_b}"},
         )
         assert hidden.status_code == 404
+        decision_path = f"/v1/decisions/{decision['id']}"
+        assert client.get(decision_path, headers={"Authorization": f"Bearer {token_b}"}).status_code == 404
+        assert (
+            client.get(
+                f"{decision_path}/revisit-checks",
+                headers={"Authorization": f"Bearer {token_b}"},
+            ).status_code
+            == 404
+        )
+        assert (
+            client.get(
+                f"{decision_path}/export/markdown",
+                headers={"Authorization": f"Bearer {token_b}"},
+            ).status_code
+            == 404
+        )
+        assert client.delete(decision_path, headers={"Authorization": f"Bearer {token_b}"}).status_code == 404
+        assert client.get(decision_path, headers={"Authorization": f"Bearer {token_a}"}).status_code == 200
 
 
 def test_durable_jobs_are_scoped_to_the_owning_workspace() -> None:
