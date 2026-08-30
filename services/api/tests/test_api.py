@@ -371,6 +371,39 @@ def test_pilot_metrics_capture_real_product_actions() -> None:
         assert payload["active_days"] >= 1
 
 
+def test_client_error_monitoring_accepts_only_privacy_safe_metadata(monkeypatch) -> None:
+    from rationexa_api import main
+
+    logged: list[tuple[object, ...]] = []
+    monkeypatch.setattr(main.logger, "warning", lambda *args: logged.append(args))
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/telemetry/client-errors",
+            json={
+                "category": "react_error",
+                "route": "/workspace",
+                "digest": "a" * 64,
+                "component": "route-boundary",
+            },
+        )
+        assert response.status_code == 204
+        assert logged
+        assert logged[-1][0].startswith("client_error")
+        assert "a" * 64 in logged[-1]
+
+        unsafe = client.post(
+            "/v1/telemetry/client-errors",
+            json={
+                "category": "react_error",
+                "route": "/workspace",
+                "digest": "b" * 64,
+                "raw_message": "A private decision excerpt must never be reported",
+            },
+        )
+        assert unsafe.status_code == 422
+        assert all("A private decision excerpt" not in repr(entry) for entry in logged)
+
+
 def test_personal_workspace_excludes_other_workspace_records() -> None:
     other_account_id = "10000000-0000-4000-8000-000000000001"
     other_workspace_id = "10000000-0000-4000-8000-000000000002"

@@ -2,8 +2,9 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Tooltip } from "radix-ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
+import { reportClientError } from "./monitoring";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -14,6 +15,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
       },
     }),
   );
+
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      void reportClientError(event.error ?? new Error(event.message), { category: "global_error", component: "window" });
+    };
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      void reportClientError(event.reason, { category: "unhandled_rejection", component: "window" });
+    };
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

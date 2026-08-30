@@ -81,6 +81,13 @@ def test_hosted_mode_requires_a_private_authenticated_workspace(monkeypatch) -> 
     with TestClient(app) as client:
         assert client.get("/v1/workspace").status_code == 401
         assert client.get("/v1/bootstrap").status_code == 401
+        assert (
+            client.post(
+                "/v1/telemetry/client-errors",
+                json={"category": "react_error", "route": "/workspace", "digest": "a" * 64},
+            ).status_code
+            == 401
+        )
 
 
 def test_login_rate_limit_is_persistent_and_contextual(monkeypatch) -> None:

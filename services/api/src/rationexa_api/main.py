@@ -68,6 +68,7 @@ from .schemas import (
     ArtifactCreate,
     ArtifactRead,
     ChallengePoint,
+    ClientErrorReport,
     CredentialCreate,
     Criticality,
     DecisionChallengeConfirmRequest,
@@ -166,7 +167,18 @@ app.add_middleware(
 async def add_operational_headers(request: Request, call_next):
     started_at = perf_counter()
     request_id = request.headers.get("x-request-id") or str(uuid4())
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (perf_counter() - started_at) * 1000
+        logger.exception(
+            "request_failed request_id=%s method=%s path=%s duration_ms=%.1f",
+            request_id,
+            request.method,
+            request.url.path,
+            duration_ms,
+        )
+        raise
     duration_ms = (perf_counter() - started_at) * 1000
     response.headers["Server-Timing"] = f'app;dur={duration_ms:.1f};desc="Rationexa API"'
     response.headers["X-Request-ID"] = request_id
@@ -201,6 +213,20 @@ def extract_session_token(request: Request) -> str | None:
     if bearer.lower().startswith("bearer "):
         return bearer.split(" ", 1)[1].strip()
     return request.headers.get("x-session-token") or request.cookies.get(settings.session_cookie_name)
+
+
+@app.post("/v1/telemetry/client-errors", status_code=status.HTTP_204_NO_CONTENT)
+def report_client_error(route: Request, payload: ClientErrorReport, db: Db) -> Response:
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    logger.warning(
+        "client_error workspace_id=%s category=%s route=%s digest=%s component=%s",
+        workspace_id,
+        payload.category,
+        payload.route,
+        payload.digest,
+        payload.component or "unknown",
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def set_session_cookie(response: Response, token: str) -> None:

@@ -8,139 +8,11 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ConfirmDialog, Disclosure, Hint } from "./ui";
 import { ApiError, apiResponse as req, responseJson } from "./api";
-import { ModelPicker, type ModelOption } from "./model-picker";
+import { ModelPicker } from "./model-picker";
 import { FinalizeConfirmation } from "./finalize-stage";
-
-type Criticality = "routine" | "important" | "critical";
-type ReviewAction = "confirm" | "unknown" | "reject";
-type FindingJudgment = "worth_reviewing" | "not_material" | "needs_context" | "false_positive";
-type WorkflowStep = 1 | 2 | 3 | 4;
-type WorkspaceView = "workspace" | "library" | "usage" | "settings";
-
-type Premise = {
-  candidate_id: string;
-  kind: string;
-  statement: string;
-  quality_state: string;
-  attention_reason?: string;
-  anchor?: { exact_excerpt: string };
-};
-
-type Extraction = {
-  id: string;
-  status: string;
-  provider: string;
-  model: string;
-  result: {
-    title: string;
-    decision_question: string;
-    context: string;
-    chosen_option?: string;
-    rationale: string;
-    suggested_criticality: Criticality;
-    criticality_reason: string;
-    premises: Premise[];
-  };
-};
-
-type Decision = {
-  id: string;
-  title: string;
-  question: string;
-  context: string;
-  chosen_option?: string;
-  rationale: string;
-  criticality: Criticality;
-  preservation_policy: string;
-  status: string;
-  created_at: string;
-  premises: Array<{ id: string; kind: string; statement: string; anchor?: { exact_excerpt: string } }>;
-  challenge?: DecisionChallenge | null;
-};
-
-type DecisionListItem = {
-  id: string;
-  title: string;
-  question: string;
-  chosen_option?: string;
-  criticality: Criticality;
-  status: string;
-  premise_count: number;
-  revisit_count: number;
-  pending_revisit_count: number;
-  last_revisited_at?: string;
-  created_at: string;
-};
-
-type DecisionLibrary = { items: DecisionListItem[]; total: number };
-type PersonalWorkspace = { id: string; name: string; account_id: string; account_name: string; mode: "local_personal" | "authenticated_personal"; created_at: string };
-type WorkspaceBootstrap = { models: ModelCatalog; workspace: PersonalWorkspace; library: DecisionLibrary };
-
-type Finding = {
-  premise_id: string;
-  premise_statement: string;
-  relationship: string;
-  confidence_band: string;
-  explanation: string;
-  missing_context_question?: string;
-   new_excerpt: string;
-   old_excerpt?: string;
-   source_fallback_performed: boolean;
-  finding_type?: "premise_change" | "new_constraint";
-  detection_source?: "model" | "deterministic_rules" | "deterministic_safety_net";
-  human_judgment?: FindingJudgment;
-  human_notes?: string;
-  judged_at?: string;
-};
-
-type PremiseReview = { action: ReviewAction; statement: string; kind: string };
-type DecisionDraft = { title: string; question: string; context: string; chosenOption: string; rationale: string };
-type ModelCatalog = { default_model_id: string; models: ModelOption[] };
-type ChallengePoint = { premise_id: string; premise_statement: string; source_excerpt?: string; prompt: string; explanation: string };
-type DecisionChallenge = {
-  status: "draft" | "confirmed";
-  weakest_assumption: ChallengePoint;
-  missing_evidence: ChallengePoint;
-  strongest_counterargument: ChallengePoint;
-  reversal_condition: ChallengePoint;
-  provider: string;
-  model: string;
-  prompt_version: string;
-  latency_ms?: number;
-  input_tokens?: number;
-  output_tokens?: number;
-  estimated_cost_usd?: number;
-  generated_at: string;
-  confirmed_at?: string;
-  reviewer_notes?: string;
-};
-type Job = { id: string; kind: "extraction" | "revisit" | "challenge"; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; phase: string; progress: number; result?: unknown; error?: string };
-type RevisitResult = { id: string; decision_id: string; status: string; findings: Finding[]; provider?: string; model?: string; prompt_version?: string; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number; evidence_filename?: string; created_at: string };
-type ComparisonRun = { modelId: string; label: string; result: RevisitResult };
-type Share = { id: string; decision_id: string; token: string; status: string; url: string | null; created_at: string; expires_at: string | null; revoked_at: string | null };
-type AuditEvent = { id: string; kind: "decision" | "challenge" | "evidence" | "judgment"; title: string; detail: string; timestamp: string };
-type UsageRun = { id: string; kind: "extraction" | "revisit" | "challenge"; provider: string; model: string; prompt_version: string; location: "local" | "hosted" | "unknown"; latency_ms?: number; input_tokens?: number; output_tokens?: number; estimated_cost_usd?: number; created_at: string; decision_id?: string };
-type UsageModel = { provider: string; model: string; location: "local" | "hosted" | "unknown"; run_count: number; total_tokens: number; known_cost_usd: number; unpriced_run_count: number; average_latency_ms?: number };
-type UsageSummary = { total_runs: number; extraction_runs: number; revisit_runs: number; challenge_runs: number; local_runs: number; hosted_runs: number; unknown_location_runs: number; total_tokens: number; tokenized_run_count: number; known_cost_usd: number; unpriced_run_count: number; models: UsageModel[]; recent_runs: UsageRun[] };
-type PilotMetrics = { decision_count: number; revisit_count: number; judgment_count: number; share_count: number; export_count: number; challenge_confirmation_count: number; active_days: number; repeat_use_observed: boolean; latest_activity_at?: string };
-type PersistedWorkspaceSession = {
-  workspaceId?: string;
-  source?: string;
-  evidence?: string;
-  sourceMode?: "paste" | "file";
-  view?: WorkspaceView;
-  workflowView?: WorkflowStep;
-  selectedModelId?: string;
-  comparisonModelId?: string;
-  compareMode?: boolean;
-  decisionId?: string;
-  extraction?: Extraction;
-  draft?: DecisionDraft;
-  reviews?: Record<string, PremiseReview>;
-  criticality?: Criticality;
-  selectedPremise?: string;
-};
-type EvidenceDraft = { workspaceId: string; content: string; selectedModelId: string; comparisonModelId: string; compareMode: boolean; updatedAt: string };
+import { DecisionLibraryView } from "./decision-library-view";
+import { ImportStage } from "./import-stage";
+import type { AuditEvent, ComparisonRun, Criticality, Decision, DecisionChallenge, DecisionDraft, DecisionLibrary, EvidenceDraft, Extraction, Finding, FindingJudgment, Job, ModelCatalog, ModelOption, PersonalWorkspace, PersistedWorkspaceSession, PremiseReview, RevisitResult, ReviewAction, Share, UsageSummary, PilotMetrics, WorkflowStep, WorkspaceBootstrap, WorkspaceView } from "./workspace-types";
 
 const workspaceSessionKey = "rationexa-workspace-draft-v1";
 const evidenceDraftsKey = "rationexa-evidence-drafts-v1";
@@ -1070,21 +942,13 @@ export default function Home() {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.detail ?? `Delete failed with status ${response.status}`);
          }
-      if (view === "workspace") {
-        setDecision(null);
-        setExtraction(null);
-        setFindings([]);
-        setComparisonRuns([]);
-        setRevisitHistory([]);
-        setRevisitCompleted(false);
-        setExpandedHistoryId(null);
-        setShares([]);
-        }
       clearPersistedDecision(targetId);
+      resetWorkspace();
       setConfirmingDeleteFor(null);
       setDeleteTitle(null);
       navigateTo("library");
       await loadLibrary();
+      toast.success("Decision deleted");
        } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not delete this decision");
        } finally {
@@ -1204,24 +1068,7 @@ export default function Home() {
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
 
-        {view === "library" ? <section className="library-view">
-          <div className="library-toolbar">
-            <label className="library-search"><span>⌕</span><input aria-label="Search decisions" value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search title, question, context, or chosen option" /></label>
-          </div>
-          <div className="mobile-library-filters" aria-label="Filter decisions by criticality">
-            {(["all", "critical", "important", "routine"] as ("all" | Criticality)[]).map((value) => <button type="button" key={value} className={libraryCriticality === value ? "active" : ""} aria-pressed={libraryCriticality === value} onClick={() => setLibraryCriticality(value)}>{value === "all" ? "All" : value[0].toUpperCase() + value.slice(1)}</button>)}
-          </div>
-          {hasCurrentDraft ? <button type="button" className="library-draft-resume" onClick={() => navigateTo("workspace")}><span><Save aria-hidden="true" /></span><div><strong>Continue current draft</strong><small>{currentDraftTitle} · {currentDraftStep}</small></div><em>Resume →</em></button> : null}
-          <div className="library-summary"><div><strong>{library.total}</strong><span>saved decisions</span></div><p>Reopen a record to review its premises, add new evidence, or inspect previous revisit checks.</p></div>
-{libraryLoading ? <div className="library-empty"><span className="spinner dark" /><strong>Loading decision memory…</strong></div> : library.items.length ? <div className="decision-list">{library.items.map((item) => <div className="decision-card" key={item.id}>
-            <button type="button" className="decision-row" onClick={() => openDecision(item.id)}>
-              <div className="decision-row-main"><div><span className={`criticality-dot ${item.criticality}`} /> <span>{item.criticality}</span></div><h2>{item.title}</h2><p>{item.question}</p></div>
-              <div className="decision-row-stats"><div><strong>{item.premise_count}</strong><span>premises</span></div><div><strong>{item.revisit_count}</strong><span>revisits</span></div>{item.pending_revisit_count ? <div className="pending-stat"><strong>{item.pending_revisit_count}</strong><span>need review</span></div> : null}</div>
-              <div className="decision-row-date"><span>Last checked</span><strong>{item.last_revisited_at ? formatDateTime(item.last_revisited_at) : "Not revisited"}</strong><small>Saved {formatDateTime(item.created_at)}</small></div><span className="row-arrow">→</span>
-            </button>
-            <Hint label="Delete decision" side="left"><button type="button" className="decision-row-delete icon-action" aria-label={`Delete ${item.title}`} onClick={() => { setDeleteTitle(item.title); setConfirmingDeleteFor(item.id); }}><ActionIcon name="delete" /></button></Hint>
-          </div>)}</div> : <div className="library-empty"><span className="library-empty-icon"><Library aria-hidden="true" /></span><strong>{libraryQuery || libraryCriticality !== "all" ? "No matching decisions" : "Your decision memory starts here"}</strong><p>{libraryQuery || libraryCriticality !== "all" ? "Try a broader search or remove the criticality filter." : "Finalize your first decision review and it will appear here automatically."}</p><button className="primary" onClick={() => { resetWorkspace(); navigateTo("workspace"); }}>Create a decision →</button></div>}
-        </section> : null}
+        {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} library={library} loading={libraryLoading} onOpenDecision={(id) => { void openDecision(id); }} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={() => { resetWorkspace(); navigateTo("workspace"); }} formatDateTime={formatDateTime} /> : null}
 
         {view === "usage" ? <section className="usage-view">
           <div className="usage-intro"><span className="usage-intro-icon"><ChartNoAxesColumn aria-hidden="true" /></span><div><strong>Workspace AI activity</strong><p>Usage is calculated from persisted extraction, revisit, and challenge provenance. Known cost excludes runs whose provider did not report a price.</p></div><button type="button" className="text-button" disabled={usageLoading} onClick={loadUsage}>{usageLoading ? "Refreshing…" : "Refresh usage"}</button></div>
@@ -1245,19 +1092,7 @@ export default function Home() {
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
 
-        {view === "workspace" && workflowView === 1 && !extraction && !decision ? (
-          <section className="card import-card">
-            <div className="section-heading"><div><span className="overline">Step 1</span><h2>Bring in a decision</h2><p>Start with a short decision note, ADR, assessment, or proposal excerpt.</p></div><span className="privacy-badge">Private · processed locally</span></div>
-            <div className="source-tabs" role="tablist">
-              <button type="button" className={sourceMode === "paste" ? "active" : ""} onClick={() => setSourceMode("paste")}>Paste text</button>
-              <button type="button" className={sourceMode === "file" ? "active" : ""} onClick={() => setSourceMode("file")}>Upload file</button>
-            </div>
-            <form onSubmit={extract}>
-              {sourceMode === "paste" ? <label className="field"><span>Decision source</span><textarea aria-label="Decision source" value={source} onChange={(event) => setSource(event.target.value)} rows={10} placeholder="Paste the source material here…" /></label> : <label className="upload-zone"><input aria-label="Decision file" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /><span className="upload-icon">⇧</span><strong>{file ? file.name : "Choose a PDF, Markdown, or text file"}</strong><small>Maximum file size: 10 MB</small></label>}
-              <div className="form-footer model-action-footer"><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Extraction model" /><span className="draft-assurance"><span>{selectedModel?.availability_reason ?? `${selectedModel?.label ?? "The selected model"} will suggest structure. You remain the reviewer.`}</span>{source.trim() && draftSavedAt ? <small><Save aria-hidden="true" />Draft saved locally · {formatDateTime(draftSavedAt)}</small> : null}</span><button className="primary" disabled={busyPhase === "extract" || !selectedModelId || selectedModel?.available === false || (sourceMode === "paste" ? !source.trim() : !file)}>{busyPhase === "extract" ? <><span className="spinner" />Extracting with {selectedModel?.label ?? "model"}…</> : "Extract decision →"}</button></div>
-            </form>
-          </section>
-        ) : null}
+        {view === "workspace" && workflowView === 1 && !extraction && !decision ? <ImportStage sourceMode={sourceMode} onSourceModeChange={setSourceMode} source={source} onSourceChange={setSource} file={file} onFileChange={setFile} models={models} selectedModelId={selectedModelId} recommendedModelId={recommendedModelId} onModelSelect={setSelectedModelId} selectedModel={selectedModel} extracting={busyPhase === "extract"} draftSavedAt={draftSavedAt} formatDateTime={formatDateTime} onExtract={extract} /> : null}
 
         {view === "workspace" && workflowView === 1 && decision ? <section className="card stage-snapshot">
           <div className="snapshot-heading"><div><span className="snapshot-step">01</span><span className="overline">Import snapshot</span><h2>Original decision context</h2><p>This is the source-backed context preserved with the saved record.</p></div><button className="primary subtle-primary" type="button" onClick={() => setWorkflowView(2)}>View review →</button></div>

@@ -69,6 +69,15 @@ class ModelCatalogRead(BaseModel):
     models: list[ModelOption]
 
 
+class ClientErrorReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    category: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9_-]+$")
+    route: str = Field(min_length=1, max_length=160)
+    digest: str = Field(min_length=16, max_length=128, pattern=r"^[a-f0-9]+$")
+    component: str | None = Field(default=None, max_length=80)
+
+
 class WorkspaceRead(BaseModel):
     id: str
     name: str
