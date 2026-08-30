@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { KeyRound, LogIn, LogOut, Monitor, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch, apiResponse, confirmPasswordReset, login, logout, register, requestPasswordReset, responseJson, setAuthenticatedState, setSessionToken } from "./api";
@@ -13,6 +14,7 @@ type SessionSummary = { id: string; created_at: string; expires_at: string; curr
 type SecretRead = { provider: string; configured: boolean; label?: string; base_url?: string; selected_model?: string; protocol?: string; last_updated_at?: string; source: string };
 type ProviderModels = { models: string[] };
 type ProviderTest = { provider: string; ok: boolean; model_count: number; latency_ms: number };
+type AccountSettingsSnapshot = { authenticated: boolean; account: AccountRead; workspace: WorkspaceRead | null; sessions: SessionSummary[]; secrets: SecretRead[] };
 
 const providerOptions = [
   { id: "openrouter", label: "OpenRouter", detail: "Many model companies through one compatible API" },
@@ -21,13 +23,15 @@ const providerOptions = [
 ] as const;
 
 type AccountPanelProps = {
+  workspaceId?: string;
   onConfigurationChanged?: () => void;
   onModelConfigurationChanged?: () => void;
   onWorkspaceProfileChanged?: () => void;
 };
 
-export function AccountPanel({ onConfigurationChanged, onModelConfigurationChanged, onWorkspaceProfileChanged }: AccountPanelProps) {
+export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfigurationChanged, onWorkspaceProfileChanged }: AccountPanelProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [authenticated, setAuthenticated] = useState(false);
   const [account, setAccount] = useState<AccountRead | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceRead | null>(null);
@@ -60,48 +64,57 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
   const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
   const selectedProvider = providerOptions.find((provider) => provider.id === providerEntry) ?? providerOptions[0];
 
-  async function refresh() {
+  function invalidateAccountSettings() {
+    void queryClient.invalidateQueries({ queryKey: ["account-settings", workspaceId ?? "anonymous"], exact: true, refetchType: "none" });
+  }
+
+  async function refresh(force = false) {
     setError(null);
     try {
-      const accountResponse = await apiResponse("/v1/account");
-      if (accountResponse.ok) {
-        const signedInAccount = await responseJson(accountResponse) as AccountRead;
-        const [who, currentWorkspace, activeSessions, stored] = await Promise.all([
-          Promise.resolve(signedInAccount),
-          apiFetch("/v1/workspace") as Promise<WorkspaceRead>,
-          apiFetch("/v1/auth/sessions") as Promise<SessionSummary[]>,
-          apiFetch("/v1/secrets") as Promise<SecretRead[]>,
-        ]);
-        setAuthenticated(true);
-        setAuthenticatedState(true);
-        setAccount(who);
-        setWorkspace(currentWorkspace);
-        setSessions(activeSessions);
-        setProfileName(who.name);
-        setWorkspaceName(currentWorkspace.name);
-        setSecrets(stored);
-        setProviderModelSelection((current) => stored.reduce<Record<string, string>>((next, entry) => {
-          if (entry.selected_model) next[entry.provider] = entry.selected_model;
-          return next;
-        }, { ...current }));
-      } else if (accountResponse.status === 401) {
-        setAuthenticated(false);
-        try {
-          const localWorkspace = (await apiFetch("/v1/workspace")) as WorkspaceRead;
-          setAccount({
-            id: localWorkspace.id,
-            name: localWorkspace.account_name,
-            has_password: false,
-            created_at: "",
-          });
-          setWorkspace(localWorkspace);
-        } catch {
-          setAccount({ id: "guest", name: "Pilot reviewer", has_password: false, created_at: "" });
-          setWorkspace(null);
-        }
-        setSessions([]);
-        setSecrets([]);
-      } else await responseJson(accountResponse);
+      const queryKey = ["account-settings", workspaceId ?? "anonymous"];
+      if (force) await queryClient.invalidateQueries({ queryKey, exact: true, refetchType: "none" });
+      const snapshot = await queryClient.fetchQuery<AccountSettingsSnapshot>({
+        queryKey,
+        staleTime: 5 * 60_000,
+        queryFn: async () => {
+          const accountResponse = await apiResponse("/v1/account");
+          if (accountResponse.ok) {
+            const signedInAccount = await responseJson(accountResponse) as AccountRead;
+            const [currentWorkspace, activeSessions, stored] = await Promise.all([
+              apiFetch("/v1/workspace") as Promise<WorkspaceRead>,
+              apiFetch("/v1/auth/sessions") as Promise<SessionSummary[]>,
+              apiFetch("/v1/secrets") as Promise<SecretRead[]>,
+            ]);
+            return { authenticated: true, account: signedInAccount, workspace: currentWorkspace, sessions: activeSessions, secrets: stored };
+          }
+          if (accountResponse.status !== 401) await responseJson(accountResponse);
+          let localWorkspace: WorkspaceRead | null = null;
+          try {
+            localWorkspace = (await apiFetch("/v1/workspace")) as WorkspaceRead;
+          } catch {
+            // Hosted anonymous sessions do not have a workspace.
+          }
+          return {
+            authenticated: false,
+            account: localWorkspace ? { id: localWorkspace.id, name: localWorkspace.account_name, has_password: false, created_at: "" } : { id: "guest", name: "Pilot reviewer", has_password: false, created_at: "" },
+            workspace: localWorkspace,
+            sessions: [],
+            secrets: [],
+          };
+        },
+      });
+      setAuthenticated(snapshot.authenticated);
+      if (snapshot.authenticated) setAuthenticatedState(true);
+      setAccount(snapshot.account);
+      setWorkspace(snapshot.workspace);
+      setSessions(snapshot.sessions);
+      setProfileName(snapshot.account.name);
+      setWorkspaceName(snapshot.workspace?.name ?? "");
+      setSecrets(snapshot.secrets);
+      setProviderModelSelection((current) => snapshot.secrets.reduce<Record<string, string>>((next, entry) => {
+        if (entry.selected_model) next[entry.provider] = entry.selected_model;
+        return next;
+      }, { ...current }));
     } catch (caught) {
       setAccount(null);
       setWorkspace(null);
@@ -120,7 +133,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
       setAuthMode("reset");
     }
     void refresh();
-    const recover = () => { void refresh(); };
+    const recover = () => { void refresh(true); };
     window.addEventListener("rationexa-auth-expired", recover);
     return () => window.removeEventListener("rationexa-auth-expired", recover);
   }, []);
@@ -131,7 +144,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
     setError(null);
     try {
       await login(email, password);
-      await refresh();
+      await refresh(true);
       onConfigurationChanged?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Login failed");
@@ -149,7 +162,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
       setName("");
       setEmail("");
       setPassword("");
-      await refresh();
+      await refresh(true);
       onConfigurationChanged?.();
       toast.success("Pilot workspace created");
     } catch (caught) {
@@ -186,7 +199,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
       setResetMessage(null);
       setAuthMode("login");
       router.replace("/settings");
-      await refresh();
+      await refresh(true);
       onConfigurationChanged?.();
       toast.success("Password reset complete");
     } catch (caught) {
@@ -203,7 +216,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
     try {
       await apiFetch("/v1/account", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: profileName }) });
       await apiFetch("/v1/workspace", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: workspaceName }) });
-      await refresh();
+      await refresh(true);
       onWorkspaceProfileChanged?.();
       toast.success("Workspace profile updated");
     } catch (caught) {
@@ -221,7 +234,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
       await apiFetch("/v1/auth/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) });
       setCurrentPassword("");
       setNewPassword("");
-      await refresh();
+      await refresh(true);
       toast.success("Password changed. Other sessions were signed out.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not change password");
@@ -235,7 +248,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
     setError(null);
     try {
       await apiFetch("/v1/auth/logout-others", { method: "POST" });
-      await refresh();
+      await refresh(true);
       toast.success("Other sessions signed out");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not sign out other sessions");
@@ -246,7 +259,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
 
   async function handleLogout() {
     await logout();
-    await refresh();
+    await refresh(true);
     onConfigurationChanged?.();
   }
 
@@ -263,6 +276,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
       setKeyEntry("");
       if (providerEntry === "custom") setBaseUrlEntry("");
       setSecrets((current) => [...current.filter((entry) => entry.provider !== connected.provider), connected].sort((a, b) => a.provider.localeCompare(b.provider)));
+      invalidateAccountSettings();
       await loadProviderModels(providerEntry);
       toast.success("Provider connected. Choose an active model.");
     } catch (caught) {
@@ -315,6 +329,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
         body: JSON.stringify({ model }),
       }) as SecretRead;
       setSecrets((current) => current.map((entry) => entry.provider === provider ? activated : entry));
+      invalidateAccountSettings();
       onModelConfigurationChanged?.();
       toast.success("Hosted model activated");
     } catch (caught) {
@@ -332,6 +347,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
       setProviderModels((current) => { const next = { ...current }; delete next[provider]; return next; });
       setProviderModelSelection((current) => { const next = { ...current }; delete next[provider]; return next; });
       setSecrets((current) => current.filter((entry) => entry.provider !== provider));
+      invalidateAccountSettings();
       onModelConfigurationChanged?.();
       setRemoveProvider(null);
       toast.success("Provider key removed");
@@ -354,7 +370,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
       setSessionToken(null);
       setDeletePassword("");
       setConfirmingAccountDelete(false);
-      await refresh();
+      await refresh(true);
       onConfigurationChanged?.();
       toast.success("Account and workspace deleted");
     } catch (caught) {

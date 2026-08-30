@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { usePathname, useRouter } from "next/navigation";
 import { AccountPanel } from "./account-panel";
 import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleDollarSign, Clock3, Cpu, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Settings, Sparkles, Trash2, UserRound } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ConfirmDialog, Disclosure, Hint } from "./ui";
 import { ApiError, apiResponse as req, responseJson } from "./api";
@@ -116,6 +116,7 @@ function LibraryNavIcon({ value }: { value: "all" | Criticality }) {
 export default function Home() {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [view, setView] = useState<WorkspaceView>(() => workspaceViewFromPath(pathname));
   const [source, setSource] = useState("");
   const [sourceMode, setSourceMode] = useState<"paste" | "file">("paste");
@@ -143,10 +144,9 @@ export default function Home() {
   const [activeRevisitId, setActiveRevisitId] = useState<string | null>(null);
   const [judgmentBusy, setJudgmentBusy] = useState<string | null>(null);
   const [judgmentNotes, setJudgmentNotes] = useState<Record<string, string>>({});
-  const [library, setLibrary] = useState<DecisionLibrary>({ items: [], total: 0 });
   const [libraryQuery, setLibraryQuery] = useState("");
+  const [debouncedLibraryQuery, setDebouncedLibraryQuery] = useState("");
   const [libraryCriticality, setLibraryCriticality] = useState<"all" | Criticality>("all");
-  const [libraryLoading, setLibraryLoading] = useState(true);
    const [revisitHistory, setRevisitHistory] = useState<RevisitResult[]>([]);
    const [exportBusy, setExportBusy] = useState(false);
    const [pdfExportBusy, setPdfExportBusy] = useState(false);
@@ -171,11 +171,10 @@ export default function Home() {
   const [usageLoading, setUsageLoading] = useState(false);
   const [personalWorkspace, setPersonalWorkspace] = useState<PersonalWorkspace | null>(null);
   const [confirmingNewDecision, setConfirmingNewDecision] = useState(false);
+  const [confirmingDraftDiscard, setConfirmingDraftDiscard] = useState(false);
   const [sessionRestored, setSessionRestored] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const restoredSession = useRef(false);
-  const libraryRequest = useRef<AbortController | null>(null);
-  const loadedLibraryQuery = useRef<string | null>(null);
 
   const navigateTo = useCallback((nextView: WorkspaceView, replace = false) => {
     setView(nextView);
@@ -190,13 +189,16 @@ export default function Home() {
     if (pathname === "/") router.replace("/workspace");
   }, [pathname, router]);
 
-  useEffect(() => () => libraryRequest.current?.abort(), []);
-
   const bootstrapQuery = useQuery({
     queryKey: ["workspace-bootstrap"],
     queryFn: async () => req(`/v1/bootstrap`).then(responseJson) as Promise<WorkspaceBootstrap>,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedLibraryQuery(libraryQuery.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [libraryQuery]);
 
   useEffect(() => {
     if (bootstrapQuery.error) {
@@ -207,21 +209,37 @@ export default function Home() {
       } else {
         setError(bootstrapQuery.error instanceof Error ? bootstrapQuery.error.message : "Could not load workspace");
       }
-      setLibraryLoading(false);
     }
     if (!bootstrapQuery.data) return;
     const { models: catalog, workspace, library: initialLibrary } = bootstrapQuery.data;
     setModels(catalog.models);
     setPersonalWorkspace(workspace);
-    setLibrary(initialLibrary);
-    setLibraryLoading(false);
-    loadedLibraryQuery.current = "";
+    queryClient.setQueryData<DecisionLibrary>(["decisions", workspace.id, ""], (current) => current ?? initialLibrary);
     setRecommendedModelId(catalog.default_model_id);
     setSelectedModelId((current) => catalog.models.some((model) => model.id === current) ? current : catalog.default_model_id);
     setComparisonModelId((current) => catalog.models.some((model) => model.id === current)
       ? current
       : catalog.models.find((model) => model.id !== catalog.default_model_id)?.id || "");
-  }, [bootstrapQuery.data, bootstrapQuery.error, navigateTo, pathname]);
+  }, [bootstrapQuery.data, bootstrapQuery.error, navigateTo, pathname, queryClient]);
+
+  const libraryParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (debouncedLibraryQuery) params.set("q", debouncedLibraryQuery);
+    if (libraryCriticality !== "all") params.set("criticality", libraryCriticality);
+    return params.toString();
+  }, [debouncedLibraryQuery, libraryCriticality]);
+  const activeWorkspaceId = bootstrapQuery.data?.workspace.id ?? personalWorkspace?.id;
+  const decisionLibraryQuery = useQuery({
+    queryKey: ["decisions", activeWorkspaceId ?? "pending", libraryParams],
+    queryFn: async ({ signal }) => responseJson(await req(`/v1/decisions${libraryParams ? `?${libraryParams}` : ""}`, { signal })) as Promise<DecisionLibrary>,
+    enabled: Boolean(activeWorkspaceId),
+    initialData: libraryParams ? undefined : bootstrapQuery.data?.library,
+    initialDataUpdatedAt: bootstrapQuery.dataUpdatedAt,
+    placeholderData: (previous) => previous,
+    staleTime: 5 * 60_000,
+  });
+  const library = decisionLibraryQuery.data ?? { items: [], total: 0 };
+  const libraryLoading = decisionLibraryQuery.isPending && library.items.length === 0;
 
   const modelCatalogQuery = useQuery({
     queryKey: ["model-catalog"],
@@ -259,8 +277,8 @@ export default function Home() {
       window.localStorage.removeItem(workspaceSessionKey);
       window.localStorage.removeItem(evidenceDraftsKey);
       resetWorkspace();
-      setLibrary({ items: [], total: 0 });
-      loadedLibraryQuery.current = null;
+      queryClient.removeQueries({ queryKey: ["decisions"] });
+      queryClient.removeQueries({ queryKey: ["decision"] });
       void bootstrapQuery.refetch();
       if (pathname.startsWith("/account/reset")) setView("settings");
       else navigateTo("settings", true);
@@ -268,7 +286,7 @@ export default function Home() {
     };
     window.addEventListener("rationexa-auth-expired", recoverLocalWorkspace);
     return () => window.removeEventListener("rationexa-auth-expired", recoverLocalWorkspace);
-  }, [bootstrapQuery, navigateTo, pathname]);
+  }, [bootstrapQuery, navigateTo, pathname, queryClient]);
 
   useEffect(() => {
     if (restoredSession.current) return;
@@ -357,18 +375,6 @@ export default function Home() {
       return models.find((model) => model.id !== selectedModelId)?.id ?? "";
     });
   }, [compareMode, models, selectedModelId]);
-
-  useEffect(() => {
-    if (!bootstrapQuery.data) return;
-    const params = new URLSearchParams();
-    if (libraryQuery.trim()) params.set("q", libraryQuery.trim());
-    if (libraryCriticality !== "all") params.set("criticality", libraryCriticality);
-    if (loadedLibraryQuery.current === params.toString()) return;
-    const timer = window.setTimeout(() => {
-      void loadLibrary();
-    }, 180);
-    return () => window.clearTimeout(timer);
-  }, [bootstrapQuery.data, libraryQuery, libraryCriticality]);
 
   useEffect(() => {
     if (view === "usage" && !usage) void loadUsage();
@@ -560,6 +566,7 @@ export default function Home() {
     try {
       const saved = await responseJson(await req(`/v1/extractions/${extraction.id}/finalize`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ criticality }) })) as Decision;
       setDecision(saved);
+      queryClient.setQueryData(["decision", activeWorkspaceId, saved.id], saved);
       setChallenge(saved.challenge ?? null);
       setRevisitHistory([]);
       setWorkflowView(3);
@@ -594,7 +601,7 @@ export default function Home() {
         setLastRevisitModel(runs[0].label);
         setLastRevisitProvenance(provenanceLabel(result));
       }
-      await loadRevisitHistory(decision.id);
+      await loadRevisitHistory(decision.id, true);
       setEvidence("");
       toast.success(compareMode ? "Comparison complete" : "Evidence check complete", { description: `${runs.reduce((total, run) => total + run.result.findings.length, 0)} finding(s) ready for human review.` });
       void loadLibrary();
@@ -620,6 +627,7 @@ export default function Home() {
       const next = completed.result as DecisionChallenge;
       setChallenge(next);
       setDecision((current) => current ? { ...current, challenge: next } : current);
+      queryClient.setQueryData<Decision>(["decision", activeWorkspaceId, decision.id], (current) => current ? { ...current, challenge: next } : current);
       setChallengeNotes("");
       toast.success("Challenge brief ready", { description: "Human confirmation is still required." });
     } catch (caught) {
@@ -642,6 +650,7 @@ export default function Home() {
       })) as DecisionChallenge;
       setChallenge(confirmed);
       setDecision((current) => current ? { ...current, challenge: confirmed } : current);
+      queryClient.setQueryData<Decision>(["decision", activeWorkspaceId, decision.id], (current) => current ? { ...current, challenge: confirmed } : current);
       toast.success("Challenge review confirmed");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not confirm the challenge brief");
@@ -662,6 +671,7 @@ export default function Home() {
       })) as RevisitResult;
       if (activeRevisitId === updated.id) setFindings(updated.findings);
       setRevisitHistory((current) => current.map((item) => item.id === updated.id ? updated : item));
+      queryClient.setQueryData<RevisitResult[]>(["revisits", activeWorkspaceId, updated.decision_id], (current = []) => current.map((item) => item.id === updated.id ? updated : item));
       setJudgmentNotes((current) => ({ ...current, ...Object.fromEntries(updated.findings.map((finding) => [`${updated.id}:${finding.premise_id}`, finding.human_notes || ""])) }));
       toast.success("Judgment saved");
       void loadLibrary();
@@ -673,30 +683,8 @@ export default function Home() {
   }
 
   async function loadLibrary() {
-    libraryRequest.current?.abort();
-    const controller = new AbortController();
-    libraryRequest.current = controller;
-    setLibraryLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (libraryQuery.trim()) params.set("q", libraryQuery.trim());
-      if (libraryCriticality !== "all") params.set("criticality", libraryCriticality);
-      const query = params.size ? `?${params.toString()}` : "";
-      const result = await responseJson(await req(`/v1/decisions${query}`, { signal: controller.signal })) as DecisionLibrary;
-      if (libraryRequest.current === controller) {
-        setLibrary(result);
-        loadedLibraryQuery.current = params.toString();
-      }
-    } catch (caught) {
-      if (caught instanceof DOMException && caught.name === "AbortError") return;
-      setError(caught instanceof Error ? caught.message : "Could not load the decision library");
-    } finally {
-      if (libraryRequest.current === controller) {
-        libraryRequest.current = null;
-        setLibraryLoading(false);
-      }
-    }
+    if (!activeWorkspaceId) return;
+    await queryClient.invalidateQueries({ queryKey: ["decisions", activeWorkspaceId] });
   }
 
   async function loadUsage() {
@@ -704,8 +692,8 @@ export default function Home() {
     setError(null);
     try {
       const [usageResult, pilotResult] = await Promise.all([
-        responseJson(await req(`/v1/usage`)) as Promise<UsageSummary>,
-        responseJson(await req(`/v1/pilot/metrics`)) as Promise<PilotMetrics>,
+        queryClient.fetchQuery({ queryKey: ["usage", activeWorkspaceId], queryFn: async () => responseJson(await req(`/v1/usage`)) as Promise<UsageSummary>, staleTime: 5 * 60_000 }),
+        queryClient.fetchQuery({ queryKey: ["pilot-metrics", activeWorkspaceId], queryFn: async () => responseJson(await req(`/v1/pilot/metrics`)) as Promise<PilotMetrics>, staleTime: 5 * 60_000 }),
       ]);
       setUsage(usageResult);
       setPilotMetrics(pilotResult);
@@ -716,29 +704,20 @@ export default function Home() {
     }
   }
 
-  async function loadRevisitHistory(decisionId: string) {
-    const history = await responseJson(await req(`/v1/decisions/${decisionId}/revisit-checks`)) as RevisitResult[];
+  async function loadRevisitHistory(decisionId: string, force = false) {
+    const queryKey = ["revisits", activeWorkspaceId, decisionId];
+    if (force) await queryClient.invalidateQueries({ queryKey, exact: true, refetchType: "none" });
+    const history = await queryClient.fetchQuery({ queryKey, queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}/revisit-checks`)) as Promise<RevisitResult[]>, staleTime: 5 * 60_000 });
     setRevisitHistory(history);
   }
 
   async function openDecision(decisionId: string, targetStep: WorkflowStep = 4, restore?: { restoredView?: WorkspaceView; legacyEvidence?: string; clearIfMissing?: boolean }) {
     setError(null);
     try {
-      const [recordResponse, historyResponse] = await Promise.all([
-        req(`/v1/decisions/${decisionId}`),
-        req(`/v1/decisions/${decisionId}/revisit-checks`),
-      ]);
-      if (restore?.clearIfMissing && (recordResponse.status === 404 || historyResponse.status === 404)) {
-        clearPersistedDecision(decisionId);
-        navigateTo("library", true);
-        setWorkflowView(1);
-        toast.info("The deleted decision was removed from your restored workspace");
-        return false;
-      }
       const [record, history] = await Promise.all([
-        responseJson(recordResponse),
-        responseJson(historyResponse),
-      ]) as [Decision, RevisitResult[]];
+        queryClient.fetchQuery({ queryKey: ["decision", activeWorkspaceId, decisionId], queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}`)) as Promise<Decision>, staleTime: 5 * 60_000 }),
+        queryClient.fetchQuery({ queryKey: ["revisits", activeWorkspaceId, decisionId], queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}/revisit-checks`)) as Promise<RevisitResult[]>, staleTime: 5 * 60_000 }),
+      ]);
       setDecision(record);
       setChallenge(record.challenge ?? null);
       setChallengeNotes(record.challenge?.reviewer_notes ?? "");
@@ -763,9 +742,24 @@ export default function Home() {
        void loadShares(decisionId).catch(() => { setShares([]); });
        return true;
     } catch (caught) {
+      if (restore?.clearIfMissing && caught instanceof ApiError && caught.status === 404) {
+        clearPersistedDecision(decisionId);
+        navigateTo("library", true);
+        setWorkflowView(1);
+        toast.info("The deleted decision was removed from your restored workspace", { id: `deleted-restored-decision-${decisionId}` });
+        return false;
+      }
       setError(caught instanceof Error ? caught.message : "Could not open the decision");
       return false;
     }
+  }
+
+  function prefetchDecision(decisionId: string) {
+    void Promise.all([
+      queryClient.prefetchQuery({ queryKey: ["decision", activeWorkspaceId, decisionId], queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}`)) as Promise<Decision>, staleTime: 5 * 60_000 }),
+      queryClient.prefetchQuery({ queryKey: ["revisits", activeWorkspaceId, decisionId], queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}/revisit-checks`)) as Promise<RevisitResult[]>, staleTime: 5 * 60_000 }),
+      queryClient.prefetchQuery({ queryKey: ["shares", activeWorkspaceId, decisionId], queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}/shares`)) as Promise<Share[]>, staleTime: 5 * 60_000 }),
+    ]);
   }
 
   async function downloadMarkdown() {
@@ -843,8 +837,7 @@ export default function Home() {
     window.localStorage.removeItem(evidenceDraftsKey);
     resetWorkspace();
     if (keepSettingsOpen) setView("settings");
-    setLibrary({ items: [], total: 0 });
-    loadedLibraryQuery.current = null;
+    queryClient.clear();
     await bootstrapQuery.refetch();
   }
 
@@ -861,8 +854,17 @@ export default function Home() {
     }
   }
 
+  function discardCurrentDraft() {
+    window.localStorage.removeItem(workspaceSessionKey);
+    if (decision) writeEvidenceDraft(decision.id, null);
+    resetWorkspace();
+    setConfirmingDraftDiscard(false);
+    navigateTo("library");
+    toast.success("Draft discarded");
+  }
+
   async function loadShares(decisionId: string) {
-    setShares(await responseJson(await req(`/v1/decisions/${decisionId}/shares`)) as Share[]);
+    setShares(await queryClient.fetchQuery({ queryKey: ["shares", activeWorkspaceId, decisionId], queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}/shares`)) as Promise<Share[]>, staleTime: 5 * 60_000 }));
    }
 
   async function createShare() {
@@ -875,6 +877,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
         })) as Share;
+      await queryClient.invalidateQueries({ queryKey: ["shares", activeWorkspaceId, decision.id], exact: true, refetchType: "none" });
       await loadShares(decision.id);
       await copyLink(browserShareUrl(created), false);
       toast.success("Share link created", { description: "Copied to the clipboard." });
@@ -903,6 +906,7 @@ export default function Home() {
     setError(null);
     try {
       await responseJson(await req(`/v1/decisions/${decision.id}/shares/${shareId}`, { method: "DELETE" }));
+      await queryClient.invalidateQueries({ queryKey: ["shares", activeWorkspaceId, decision.id], exact: true, refetchType: "none" });
       await loadShares(decision.id);
         setCopiedToken((current) => (current === token ? null : current));
         toast.success("Share link revoked");
@@ -924,6 +928,7 @@ export default function Home() {
         throw new Error(payload?.detail ?? `Delete failed with status ${response.status}`);
       }
       setShares((current) => current.filter((share) => share.id !== confirmingShareDelete.id));
+      queryClient.setQueryData<Share[]>(["shares", activeWorkspaceId, decision.id], (current = []) => current.filter((share) => share.id !== confirmingShareDelete.id));
       setConfirmingShareDelete(null);
       toast.success("Share record deleted");
     } catch (caught) {
@@ -936,6 +941,18 @@ export default function Home() {
   async function deleteDecision(targetId: string) {
     setDeleteBusy(true);
     setError(null);
+    const cachedLibraries = queryClient.getQueriesData<DecisionLibrary>({ queryKey: ["decisions", activeWorkspaceId] });
+    queryClient.setQueriesData<DecisionLibrary>({ queryKey: ["decisions", activeWorkspaceId] }, (current) => current ? {
+      items: current.items.filter((item) => item.id !== targetId),
+      total: Math.max(0, current.total - (current.items.some((item) => item.id === targetId) ? 1 : 0)),
+    } : current);
+    setConfirmingDeleteFor(null);
+    setDeleteTitle(null);
+    if (decision?.id === targetId) {
+      clearPersistedDecision(targetId);
+      resetWorkspace();
+      navigateTo("library");
+    }
     try {
       const response = await req(`/v1/decisions/${targetId}`, { method: "DELETE" });
       if (!response.ok && response.status !== 404) {
@@ -943,13 +960,12 @@ export default function Home() {
         throw new Error(payload?.detail ?? `Delete failed with status ${response.status}`);
          }
       clearPersistedDecision(targetId);
-      resetWorkspace();
-      setConfirmingDeleteFor(null);
-      setDeleteTitle(null);
-      navigateTo("library");
-      await loadLibrary();
+      queryClient.removeQueries({ queryKey: ["decision", activeWorkspaceId, targetId] });
+      queryClient.removeQueries({ queryKey: ["revisits", activeWorkspaceId, targetId] });
+      queryClient.removeQueries({ queryKey: ["shares", activeWorkspaceId, targetId] });
       toast.success("Decision deleted");
        } catch (caught) {
+      cachedLibraries.forEach(([key, value]) => queryClient.setQueryData(key, value));
       setError(caught instanceof Error ? caught.message : "Could not delete this decision");
        } finally {
       setDeleteBusy(false);
@@ -1068,7 +1084,7 @@ export default function Home() {
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
 
-        {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} library={library} loading={libraryLoading} onOpenDecision={(id) => { void openDecision(id); }} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={() => { resetWorkspace(); navigateTo("workspace"); }} formatDateTime={formatDateTime} /> : null}
+        {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} onDiscardDraft={() => setConfirmingDraftDiscard(true)} library={library} loading={libraryLoading} refreshing={decisionLibraryQuery.isFetching && !decisionLibraryQuery.isPending} onOpenDecision={(id) => { void openDecision(id); }} onPrefetchDecision={prefetchDecision} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={() => { resetWorkspace(); navigateTo("workspace"); }} formatDateTime={formatDateTime} /> : null}
 
         {view === "usage" ? <section className="usage-view">
           <div className="usage-intro"><span className="usage-intro-icon"><ChartNoAxesColumn aria-hidden="true" /></span><div><strong>Workspace AI activity</strong><p>Usage is calculated from persisted extraction, revisit, and challenge provenance. Known cost excludes runs whose provider did not report a price.</p></div><button type="button" className="text-button" disabled={usageLoading} onClick={loadUsage}>{usageLoading ? "Refreshing…" : "Refresh usage"}</button></div>
@@ -1088,7 +1104,7 @@ export default function Home() {
           </> : null}
         </section> : null}
 
-        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use built-in deterministic rules without a key, or add a hosted-provider key to your private workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel onConfigurationChanged={() => { void handleWorkspaceChanged(); }} onModelConfigurationChanged={() => { void handleModelConfigurationChanged(); }} onWorkspaceProfileChanged={() => { void workspaceQuery.refetch(); }} /></section> : null}
+        {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use built-in deterministic rules without a key, or add a hosted-provider key to your private workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel workspaceId={activeWorkspaceId} onConfigurationChanged={() => { void handleWorkspaceChanged(); }} onModelConfigurationChanged={() => { void handleModelConfigurationChanged(); }} onWorkspaceProfileChanged={() => { void workspaceQuery.refetch(); }} /></section> : null}
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
 
@@ -1228,6 +1244,7 @@ export default function Home() {
 
          <ConfirmDialog open={Boolean(confirmingDeleteFor)} title="Delete this decision?" description={`This permanently removes ${deleteTitle || "this decision"}, its premises, source excerpts, revisit history, and share links. This cannot be undone.`} confirmLabel="Delete permanently" busyLabel="Deleting…" busy={deleteBusy} onOpenChange={(open) => { if (!open) { setConfirmingDeleteFor(null); setDeleteTitle(null); } }} onConfirm={() => { if (confirmingDeleteFor) void deleteDecision(confirmingDeleteFor); }} />
          <ConfirmDialog open={Boolean(confirmingShareDelete)} title="Delete this revoked share record?" description="This removes the old link from sharing history. The decision and its revisit history remain unchanged." confirmLabel="Delete share record" busyLabel="Deleting…" busy={shareDeleteBusy} onOpenChange={(open) => { if (!open) setConfirmingShareDelete(null); }} onConfirm={() => void deleteShareRecord()} />
+         <ConfirmDialog open={confirmingDraftDiscard} title="Discard this draft?" description={`This removes ${currentDraftTitle} from this browser. No finalized decision records will be changed.`} confirmLabel="Discard draft" busyLabel="Discarding…" onOpenChange={setConfirmingDraftDiscard} onConfirm={discardCurrentDraft} />
          <ConfirmDialog open={confirmingNewDecision} title="Start a new decision?" description="Your unfinished import or review draft is saved locally, but starting over will clear it from this workspace." confirmLabel="Start new decision" busyLabel="Starting…" onOpenChange={setConfirmingNewDecision} onConfirm={() => { setConfirmingNewDecision(false); window.localStorage.removeItem(workspaceSessionKey); resetWorkspace(); navigateTo("workspace"); }} />
       </div>
     );
