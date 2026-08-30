@@ -37,13 +37,10 @@ def copy_database(source_url: str, target_url: str) -> MigrationSummary:
             populated = [
                 table.name
                 for table in Base.metadata.sorted_tables
-                if table.name not in SKIPPED_TABLES
-                and target.scalar(select(func.count()).select_from(table))
+                if table.name not in SKIPPED_TABLES and target.scalar(select(func.count()).select_from(table))
             ]
             if populated:
-                raise ValueError(
-                    "Target database already contains application data in: " + ", ".join(populated)
-                )
+                raise ValueError("Target database already contains application data in: " + ", ".join(populated))
 
             for table in Base.metadata.sorted_tables:
                 if table.name in SKIPPED_TABLES:

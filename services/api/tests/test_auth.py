@@ -7,7 +7,13 @@ from rationexa_api.config import Settings
 from rationexa_api.db import AccountRow, SecretRow, SessionLocal, SessionRow, WorkspaceRow
 from rationexa_api.main import app, provider_for, settings
 from rationexa_api.providers import OpenAIResponsesProvider, get_provider
-from rationexa_api.secrets import delete_provider_key, fernet, select_provider_model, store_provider_key
+from rationexa_api.secrets import (
+    delete_provider_key,
+    fernet,
+    select_provider_model,
+    store_provider_key,
+    validate_provider_base_url,
+)
 
 
 def _login(client: TestClient, client_obj, email: str, password: str) -> str:
@@ -35,6 +41,7 @@ def test_account_create_login_whoami_and_logout() -> None:
         assert who.status_code == 200
         assert who.json()["id"] == body["id"]
 
+        client.cookies.clear()
         without = client.get("/v1/account")
         assert without.status_code == 401
 
@@ -44,6 +51,65 @@ def test_account_create_login_whoami_and_logout() -> None:
         after_logout = client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
         assert after_logout.status_code == 204
         assert client.get("/v1/account", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+
+
+def test_browser_session_uses_an_httponly_cookie_and_hashed_storage() -> None:
+    with TestClient(app) as client:
+        registered = client.post(
+            "/v1/auth/register",
+            json={"email": "cookie@rationexa.local", "name": "Cookie Pilot", "password": "cookie-pass"},
+        )
+        assert registered.status_code == 201
+        raw_token = registered.json()["session_token"]
+        cookie = registered.headers["set-cookie"].lower()
+        assert "httponly" in cookie
+        assert "samesite=lax" in cookie
+        assert client.get("/v1/account").status_code == 200
+
+        with SessionLocal() as db:
+            account = db.scalar(select(AccountRow).where(AccountRow.email == "cookie@rationexa.local"))
+            stored = db.scalar(select(SessionRow).where(SessionRow.account_id == account.id))
+            assert stored is not None
+            assert stored.token != raw_token
+            assert len(stored.token) == 64
+
+
+def test_hosted_mode_requires_a_private_authenticated_workspace(monkeypatch) -> None:
+    from rationexa_api import main
+
+    monkeypatch.setattr(main, "settings", Settings(hosted_mode=True, session_cookie_secure=True))
+    with TestClient(app) as client:
+        assert client.get("/v1/workspace").status_code == 401
+        assert client.get("/v1/bootstrap").status_code == 401
+
+
+def test_login_rate_limit_is_persistent_and_contextual(monkeypatch) -> None:
+    from rationexa_api import main
+
+    monkeypatch.setattr(
+        main,
+        "settings",
+        Settings(auth_rate_limit_attempts=2, auth_rate_limit_window_seconds=90),
+    )
+    with TestClient(app) as client:
+        client.post(
+            "/v1/auth/register",
+            json={"email": "rate-limit@rationexa.local", "password": "rate-limit-pass"},
+        )
+        for _ in range(2):
+            assert (
+                client.post(
+                    "/v1/auth/login",
+                    json={"email": "rate-limit@rationexa.local", "password": "wrong-password"},
+                ).status_code
+                == 401
+            )
+        limited = client.post(
+            "/v1/auth/login",
+            json={"email": "rate-limit@rationexa.local", "password": "wrong-password"},
+        )
+        assert limited.status_code == 429
+        assert limited.headers["retry-after"] == "90"
 
 
 def test_register_creates_an_authenticated_private_workspace() -> None:
@@ -78,6 +144,7 @@ def test_profile_and_workspace_names_can_be_updated_only_by_the_owner() -> None:
 
         assert profile.status_code == 200 and profile.json()["name"] == "Pilot One"
         assert workspace.status_code == 200 and workspace.json()["name"] == "Architecture pilot"
+        client.cookies.clear()
         assert client.patch("/v1/workspace", json={"name": "Local renamed"}).status_code == 401
 
 
@@ -112,12 +179,18 @@ def test_password_change_keeps_current_session_and_revokes_others() -> None:
         assert response.status_code == 204
         assert client.get("/v1/account", headers={"Authorization": f"Bearer {current}"}).status_code == 200
         assert client.get("/v1/account", headers={"Authorization": f"Bearer {other}"}).status_code == 401
-        assert client.post(
-            "/v1/auth/login", json={"email": "change@rationexa.local", "password": "before-pass"}
-        ).status_code == 401
-        assert client.post(
-            "/v1/auth/login", json={"email": "change@rationexa.local", "password": "after-pass"}
-        ).status_code == 200
+        assert (
+            client.post(
+                "/v1/auth/login", json={"email": "change@rationexa.local", "password": "before-pass"}
+            ).status_code
+            == 401
+        )
+        assert (
+            client.post(
+                "/v1/auth/login", json={"email": "change@rationexa.local", "password": "after-pass"}
+            ).status_code
+            == 200
+        )
 
 
 def test_account_deletion_requires_password_and_removes_private_workspace() -> None:
@@ -133,23 +206,32 @@ def test_account_deletion_requires_password_and_removes_private_workspace() -> N
             assert workspace is not None
             workspace_id = workspace.id
 
-        assert client.post(
-            "/v1/secrets",
-            headers=headers,
-            json={"provider": "openai", "key": "sk-delete-with-workspace"},
-        ).status_code == 201
-        assert client.request(
-            "DELETE",
-            "/v1/account",
-            headers=headers,
-            json={"password": "wrong-password"},
-        ).status_code == 401
-        assert client.request(
-            "DELETE",
-            "/v1/account",
-            headers=headers,
-            json={"password": "delete-pass"},
-        ).status_code == 204
+        assert (
+            client.post(
+                "/v1/secrets",
+                headers=headers,
+                json={"provider": "openai", "key": "sk-delete-with-workspace"},
+            ).status_code
+            == 201
+        )
+        assert (
+            client.request(
+                "DELETE",
+                "/v1/account",
+                headers=headers,
+                json={"password": "wrong-password"},
+            ).status_code
+            == 401
+        )
+        assert (
+            client.request(
+                "DELETE",
+                "/v1/account",
+                headers=headers,
+                json={"password": "delete-pass"},
+            ).status_code
+            == 204
+        )
         assert client.get("/v1/account", headers=headers).status_code == 401
 
         with SessionLocal() as db:
@@ -176,13 +258,19 @@ def test_password_reset_is_single_use_and_revokes_existing_sessions(monkeypatch)
         )
         assert confirmed.status_code == 200
         assert client.get("/v1/account", headers={"Authorization": f"Bearer {old_token}"}).status_code == 401
-        assert client.get(
-            "/v1/account", headers={"Authorization": f"Bearer {confirmed.json()['session_token']}"}
-        ).status_code == 200
-        assert client.post(
-            "/v1/auth/password-reset/confirm",
-            json={"token": reset_token, "new_password": "another-pass"},
-        ).status_code == 400
+        assert (
+            client.get(
+                "/v1/account", headers={"Authorization": f"Bearer {confirmed.json()['session_token']}"}
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post(
+                "/v1/auth/password-reset/confirm",
+                json={"token": reset_token, "new_password": "another-pass"},
+            ).status_code
+            == 400
+        )
 
 
 def test_password_reset_request_does_not_reveal_unknown_accounts() -> None:
@@ -225,6 +313,7 @@ def test_authenticated_session_uses_the_owning_workspace() -> None:
         assert who.json()["account_id"] == account["id"]
         assert who.json()["id"] == workspace.id
 
+        client.cookies.clear()
         local = client.get("/v1/workspace")
         assert local.json()["id"] == "00000000-0000-4000-8000-000000000002"
 
@@ -240,21 +329,101 @@ def test_records_created_in_one_workspace_do_not_leak_to_another() -> None:
             "/v1/artifacts",
             headers={"Authorization": f"Bearer {token_a}"},
             json={"filename": "a.txt", "content": "We decided to use Vendor B."},
-         ).json()
+        ).json()
         extraction = client.post(
             "/v1/decisions/extractions",
             headers={"Authorization": f"Bearer {token_a}"},
             json={"artifact_id": artifact["id"]},
-         ).json()
+        ).json()
 
         b_list = client.get("/v1/decisions", headers={"Authorization": f"Bearer {token_b}"})
         assert b_list.status_code == 200
         assert b_list.json()["total"] == 0
         hidden = client.get(
-             f"/v1/extractions/{extraction['id']}",
+            f"/v1/extractions/{extraction['id']}",
             headers={"Authorization": f"Bearer {token_b}"},
-         )
+        )
         assert hidden.status_code == 404
+
+
+def test_durable_jobs_are_scoped_to_the_owning_workspace() -> None:
+    with TestClient(app) as client:
+        a = client.post(
+            "/v1/auth/register",
+            json={"email": "job-a@rationexa.local", "password": "job-owner-a"},
+        ).json()
+        b = client.post(
+            "/v1/auth/register",
+            json={"email": "job-b@rationexa.local", "password": "job-owner-b"},
+        ).json()
+        headers_a = {"Authorization": f"Bearer {a['session_token']}"}
+        headers_b = {"Authorization": f"Bearer {b['session_token']}"}
+        artifact = client.post(
+            "/v1/artifacts",
+            headers=headers_a,
+            json={"filename": "job.txt", "content": "We decided to keep the current contract."},
+        ).json()
+        created = client.post(
+            "/v1/decisions/extractions/jobs",
+            headers=headers_a,
+            json={"artifact_id": artifact["id"], "model_id": "deterministic/rules-v1"},
+        )
+        assert created.status_code == 202
+        job_id = created.json()["id"]
+        assert client.get(f"/v1/jobs/{job_id}", headers=headers_a).status_code == 200
+        assert client.get(f"/v1/jobs/{job_id}", headers=headers_b).status_code == 404
+        assert client.delete(f"/v1/jobs/{job_id}", headers=headers_b).status_code == 404
+
+
+def test_share_management_is_scoped_to_the_owning_workspace() -> None:
+    with TestClient(app) as client:
+        a = client.post(
+            "/v1/auth/register",
+            json={"email": "share-a@rationexa.local", "password": "share-owner-a"},
+        ).json()
+        b = client.post(
+            "/v1/auth/register",
+            json={"email": "share-b@rationexa.local", "password": "share-owner-b"},
+        ).json()
+        headers_a = {"Authorization": f"Bearer {a['session_token']}"}
+        headers_b = {"Authorization": f"Bearer {b['session_token']}"}
+        artifact = client.post(
+            "/v1/artifacts",
+            headers=headers_a,
+            json={"filename": "share.txt", "content": "We decided to retain the current service."},
+        ).json()
+        extraction = client.post(
+            "/v1/decisions/extractions",
+            headers=headers_a,
+            json={"artifact_id": artifact["id"]},
+        ).json()
+        client.post(
+            f"/v1/extractions/{extraction['id']}/review",
+            headers=headers_a,
+            json={
+                "title": "Private share",
+                "reviews": [
+                    {
+                        "candidate_id": premise["candidate_id"],
+                        "action": "confirm",
+                        "statement": premise["statement"],
+                        "kind": premise["kind"],
+                    }
+                    for premise in extraction["result"]["premises"]
+                ],
+            },
+        )
+        decision = client.post(
+            f"/v1/extractions/{extraction['id']}/finalize",
+            headers=headers_a,
+            json={"criticality": "important"},
+        ).json()
+        share = client.post(f"/v1/decisions/{decision['id']}/shares", headers=headers_a, json={}).json()
+
+        revoke_path = f"/v1/decisions/{decision['id']}/shares/{share['id']}"
+        assert client.delete(revoke_path, headers=headers_b).status_code == 404
+        assert client.delete(revoke_path + "/record", headers=headers_b).status_code == 404
+        assert client.get(f"/v1/shares/{share['token']}").status_code == 200
 
 
 def test_identical_artifacts_are_isolated_between_workspaces() -> None:
@@ -298,16 +467,22 @@ def test_byok_connections_and_models_do_not_leak_between_workspaces(monkeypatch)
         headers_a = {"Authorization": f"Bearer {token_a}"}
         headers_b = {"Authorization": f"Bearer {token_b}"}
 
-        assert client.post(
-            "/v1/secrets",
-            headers=headers_a,
-            json={"provider": "openrouter", "key": "workspace-a-key"},
-        ).status_code == 201
-        assert client.post(
-            "/v1/secrets/openrouter/model",
-            headers=headers_a,
-            json={"model": "provider/private-model"},
-        ).status_code == 200
+        assert (
+            client.post(
+                "/v1/secrets",
+                headers=headers_a,
+                json={"provider": "openrouter", "key": "workspace-a-key"},
+            ).status_code
+            == 201
+        )
+        assert (
+            client.post(
+                "/v1/secrets/openrouter/model",
+                headers=headers_a,
+                json={"model": "provider/private-model"},
+            ).status_code
+            == 200
+        )
 
         assert client.get("/v1/secrets", headers=headers_b).json() == []
         assert not any(
@@ -319,10 +494,13 @@ def test_byok_connections_and_models_do_not_leak_between_workspaces(monkeypatch)
 def test_anonymous_workspace_cannot_access_or_publish_byok_credentials() -> None:
     with TestClient(app) as client:
         assert client.get("/v1/secrets").status_code == 401
-        assert client.post(
-            "/v1/secrets",
-            json={"provider": "openai", "key": "sk-must-stay-private"},
-        ).status_code == 401
+        assert (
+            client.post(
+                "/v1/secrets",
+                json={"provider": "openai", "key": "sk-must-stay-private"},
+            ).status_code
+            == 401
+        )
         assert client.get("/v1/secrets/openai/models").status_code == 401
         assert client.post("/v1/secrets/openai/test").status_code == 401
         assert client.post("/v1/secrets/openai/model", json={"model": "gpt-private"}).status_code == 401
@@ -471,11 +649,14 @@ def test_provider_connection_failure_is_contextual(monkeypatch) -> None:
             json={"email": "offline-provider@rationexa.local", "name": "Offline Provider", "password": "offline-pass"},
         ).json()
         headers = {"Authorization": f"Bearer {session['session_token']}"}
-        assert client.post(
-            "/v1/secrets",
-            headers=headers,
-            json={"provider": "openrouter", "key": "sk-or-offline"},
-        ).status_code == 201
+        assert (
+            client.post(
+                "/v1/secrets",
+                headers=headers,
+                json={"provider": "openrouter", "key": "sk-or-offline"},
+            ).status_code
+            == 201
+        )
         tested = client.post("/v1/secrets/openrouter/test", headers=headers)
         assert tested.status_code == 422
         assert "Could not load models from this provider" in tested.json()["detail"]
@@ -547,8 +728,9 @@ def test_provider_catalog_cache_uses_a_key_fingerprint(monkeypatch) -> None:
 
     calls = 0
 
-    def provider_models(configuration: dict) -> list[str]:
+    def provider_models(provider: str, configuration: dict) -> list[str]:
         nonlocal calls
+        assert provider == "custom"
         calls += 1
         return ["provider/model"]
 
@@ -558,13 +740,57 @@ def test_provider_catalog_cache_uses_a_key_fingerprint(monkeypatch) -> None:
     main._provider_model_cache.clear()
     configuration = {"base_url": "https://models.example.test", "key": "private-provider-key"}
 
-    assert main._cached_provider_model_ids(configuration) == ["provider/model"]
-    assert main._cached_provider_model_ids(configuration) == ["provider/model"]
+    assert main._cached_provider_model_ids("custom", configuration) == ["provider/model"]
+    assert main._cached_provider_model_ids("custom", configuration) == ["provider/model"]
     assert calls == 1
     assert all("private-provider-key" not in cache_key for cache_key in main._provider_model_cache)
 
-    assert main._cached_provider_model_ids(configuration, force=True) == ["provider/model"]
+    assert main._cached_provider_model_ids("custom", configuration, force=True) == ["provider/model"]
     assert calls == 2
+
+
+def test_custom_provider_urls_are_restricted_in_hosted_mode(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "rationexa_api.secrets.socket.getaddrinfo",
+        lambda *args, **kwargs: [(2, 1, 6, "", ("93.184.216.34", 443))],
+    )
+    hosted = Settings(hosted_mode=True, custom_provider_allowed_hosts="models.example.com")
+    assert (
+        validate_provider_base_url(
+            "https://models.example.com/v1",
+            provider="custom",
+            settings=hosted,
+        )
+        == "https://models.example.com/v1"
+    )
+    try:
+        validate_provider_base_url(
+            "https://unapproved.example.com/v1",
+            provider="custom",
+            settings=hosted,
+        )
+    except ValueError as exc:
+        assert "not allowed" in str(exc)
+    else:
+        raise AssertionError("An unapproved custom provider host was accepted")
+
+
+def test_custom_provider_rejects_private_network_targets(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "rationexa_api.secrets.socket.getaddrinfo",
+        lambda *args, **kwargs: [(2, 1, 6, "", ("10.0.0.12", 443))],
+    )
+    hosted = Settings(hosted_mode=True, custom_provider_allowed_hosts="models.example.com")
+    try:
+        validate_provider_base_url(
+            "https://models.example.com/v1",
+            provider="custom",
+            settings=hosted,
+        )
+    except ValueError as exc:
+        assert "private or non-public" in str(exc)
+    else:
+        raise AssertionError("A private network provider target was accepted")
 
 
 def test_password_hash_round_trips() -> None:

@@ -572,10 +572,7 @@ def test_deterministic_safety_net_recovers_explicit_runtime_review_trigger() -> 
         kind="revisit_condition",
         statement="The runtime choice must be revisited before upstream support ends.",
     )
-    evidence = (
-        "Python 3.9 is end-of-life. "
-        "This evidence directly triggers the planned runtime review."
-    )
+    evidence = "Python 3.9 is end-of-life. This evidence directly triggers the planned runtime review."
 
     findings = _apply_deterministic_safety_net([], [premise], evidence, "important")
 

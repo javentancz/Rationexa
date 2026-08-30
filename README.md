@@ -13,7 +13,7 @@ Stage 1 established the trusted Import → Review → Finalize → Revisit workf
 - Markdown and PDF export;
 - revocable, expiring, scrubbed read-only share links;
 - source-grounded challenge briefs;
-- background jobs with progress, cancellation, and late-result suppression;
+- durable, workspace-scoped jobs with progress, cancellation, restart recovery, and late-result suppression;
 - model, provider, prompt, latency, token, runtime, and known-cost provenance;
 - local Ollama models and encrypted bring-your-own-key (BYOK) providers with live connection checks;
 - Alembic database migrations and supervised-pilot repeat-use metrics.
@@ -22,7 +22,8 @@ The next milestone is a supervised user pilot. The checked-in 30-case suite is a
 
 Pilot operations now include private account registration, one-time password
 recovery, active-session revocation, workspace profile management, database-aware
-readiness checks, and guarded PostgreSQL-plus-artifact backup/restore tooling.
+readiness checks, persistent authentication throttling, hashed session tokens,
+HttpOnly browser cookies, and guarded PostgreSQL-plus-artifact backup/restore tooling.
 
 ## Model runtimes
 
@@ -32,7 +33,7 @@ Local Ollama is free and requires no account. The configured local models are:
 - Gemma 4 E4B
 - Ornith 1.5 9B
 
-The Account & keys screen also supports OpenRouter, OpenAI direct, and custom OpenAI-compatible endpoints. After connecting a key, load that provider's model catalog and activate the model you want to expose in Rationexa. Keys are encrypted before database storage and are never returned by the API or included in shared records.
+The Account & keys screen also supports OpenRouter, OpenAI direct, and custom OpenAI-compatible endpoints. After connecting a key, load that provider's model catalog and activate the model you want to expose in Rationexa. Keys are encrypted per workspace before database storage and are never returned by the API or included in shared records. Hosted deployments require sign-in before any workspace data or BYOK configuration is available.
 
 There is intentionally no misleading universal API-key field. Providers with incompatible native protocols require dedicated adapters; OpenRouter or a custom OpenAI-compatible endpoint provides the broadest current hosted-model coverage.
 
@@ -82,6 +83,12 @@ docker compose up -d db
 The command refuses to write into a target that already contains application data. It preserves IDs, decisions, premises, revisits, shares, provenance, and encrypted BYOK records. Keep the same `SECRET_ENCRYPTION_KEY` or `.rationexa-secret.key` to decrypt migrated provider records. Artifact files remain in `ARTIFACT_DIR`; back up and move that directory separately when changing machines.
 
 For fast development without a model process, set `AI_PROVIDER=deterministic`. To expose additional installed Ollama models, update the comma-separated `OLLAMA_MODELS` value and restart the API.
+
+Use `JOB_EXECUTION_MODE=thread` for a long-running local API process. Hosted
+serverless deployments must use `JOB_EXECUTION_MODE=inline`; the job record is
+still durable, and interrupted records fail explicitly after restart instead of
+remaining stuck. A queue worker can replace inline execution later if pilot
+traffic proves it necessary; Redis is not required for the current pilot load.
 
 Local models only reason over evidence supplied to Rationexa. They do not fetch current web evidence by themselves.
 

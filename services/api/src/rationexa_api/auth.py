@@ -22,7 +22,7 @@ def hash_password(password: str, iterations: int = settings.pbkdf2_iterations) -
         password.encode("utf-8"),
         bytes.fromhex(salt),
         iterations,
-     )
+    )
     return hexlify(digest).decode("ascii"), salt, iterations
 
 
@@ -37,7 +37,7 @@ def verify_password(
         password.encode("utf-8"),
         bytes.fromhex(salt),
         iterations,
-     )
+    )
     return hmac.compare_digest(hexlify(checked).decode("ascii"), stored_hash)
 
 
@@ -46,17 +46,22 @@ def find_account_by_email(email: str, db) -> AccountRow | None:
     return db.scalar(select(AccountRow).where(AccountRow.email == normalized))
 
 
-def issue_session(db, account_id: str, ttl_hours: int | None = None) -> SessionRow:
+def session_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def issue_session(db, account_id: str, ttl_hours: int | None = None) -> tuple[SessionRow, str]:
     lifetime = ttl_hours if ttl_hours is not None else settings.auth_session_ttl_hours
+    token = new_share_token()
     session = SessionRow(
         account_id=account_id,
-        token=new_share_token(),
+        token=session_token_hash(token),
         expires_at=now_utc() + timedelta(hours=lifetime),
-     )
+    )
     db.add(session)
     db.commit()
     db.refresh(session)
-    return session
+    return session, token
 
 
 def resolve_session(token: str | None, db=None) -> AccountRow | None:
@@ -69,7 +74,14 @@ def resolve_session(token: str | None, db=None) -> AccountRow | None:
             session_db = SessionLocal()
             owns_session = True
             db = session_db
-        row = db.scalar(select(SessionRow).where(SessionRow.token == token))
+        digest = session_token_hash(token)
+        row = db.scalar(select(SessionRow).where(SessionRow.token == digest))
+        if row is None:
+            # Transparently migrate sessions issued before tokens were hashed.
+            row = db.scalar(select(SessionRow).where(SessionRow.token == token))
+            if row is not None:
+                row.token = digest
+                db.commit()
         if row is None or row.revoked_at is not None:
             return None
         if row.expires_at.tzinfo is None:
@@ -90,7 +102,8 @@ def revoke_session(token: str, db=None) -> bool:
             session_db = SessionLocal()
             owns_session = True
             db = session_db
-        row = db.scalar(select(SessionRow).where(SessionRow.token == token))
+        digest = session_token_hash(token)
+        row = db.scalar(select(SessionRow).where(SessionRow.token.in_([digest, token])))
         if row is None or row.revoked_at is not None:
             return False
         row.revoked_at = now_utc()

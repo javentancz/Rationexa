@@ -32,6 +32,11 @@ RATIONEXA_API_URL=https://your-api-preview.vercel.app
 The API project still enforces Rationexa sessions and workspace isolation after
 the Vercel protection layer.
 
+Set `HOSTED_MODE=true`, `SESSION_COOKIE_SECURE=true`, and
+`JOB_EXECUTION_MODE=inline`. Hosted mode rejects anonymous workspace access;
+browser sessions use an HttpOnly cookie, while raw bearer tokens remain available
+for explicit API clients. Session tokens are stored only as hashes.
+
 ## Password recovery
 
 Configure SMTP and keep `PASSWORD_RESET_DEV_MODE=false`. Reset tokens are
@@ -39,9 +44,25 @@ single-use, expire after 30 minutes by default, and revoke all existing account
 sessions when redeemed. Development mode may return a token to the local UI;
 never enable it in staging or production.
 
-Rate-limit registration, login, and password-reset endpoints at the staging
-reverse proxy. Do not depend on application-process memory for distributed
-rate limits.
+Registration, login, and password-reset endpoints use database-backed throttling.
+Keep an edge or reverse-proxy limit as a second layer against volumetric abuse.
+Tune `AUTH_RATE_LIMIT_ATTEMPTS` and `AUTH_RATE_LIMIT_WINDOW_SECONDS` for the pilot.
+
+Custom OpenAI-compatible endpoints are disabled in hosted mode unless their DNS
+host appears in `CUSTOM_PROVIDER_ALLOWED_HOSTS`. Resolved private, loopback, and
+non-public addresses are rejected to prevent server-side request forgery. Prefer
+the first-class OpenAI and OpenRouter presets unless a pilot requires a reviewed
+custom endpoint.
+
+## Operational signals
+
+Every API response includes `X-Request-ID` and `Server-Timing`; the API emits a
+privacy-safe completion log with request ID, method, path, status, and duration.
+Do not log request bodies, cookies, provider keys, reset tokens, or evidence.
+Alert on `/readyz` failures, repeated 5xx responses, and sustained latency above
+the pilot baseline. A Redis cache is deliberately not required: the library and
+model catalogs already use client/server freshness windows, while authoritative
+decision and session state remains in PostgreSQL.
 
 ## Backup and recovery
 

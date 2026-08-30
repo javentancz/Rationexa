@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { KeyRound, LogIn, LogOut, Monitor, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import { apiFetch, confirmPasswordReset, getSessionToken, login, logout, register, requestPasswordReset, setSessionToken } from "./api";
+import { apiFetch, apiResponse, confirmPasswordReset, login, logout, register, requestPasswordReset, responseJson, setAuthenticatedState, setSessionToken } from "./api";
 import { ConfirmDialog } from "./ui";
 
 type AccountRead = { id: string; name: string; email?: string; has_password: boolean; created_at: string };
@@ -60,17 +60,18 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
 
   async function refresh() {
     setError(null);
-    const startedWithToken = Boolean(getSessionToken());
     try {
-      const token = getSessionToken();
-      if (token) {
+      const accountResponse = await apiResponse("/v1/account");
+      if (accountResponse.ok) {
+        const signedInAccount = await responseJson(accountResponse) as AccountRead;
         const [who, currentWorkspace, activeSessions, stored] = await Promise.all([
-          apiFetch("/v1/account") as Promise<AccountRead>,
+          Promise.resolve(signedInAccount),
           apiFetch("/v1/workspace") as Promise<WorkspaceRead>,
           apiFetch("/v1/auth/sessions") as Promise<SessionSummary[]>,
           apiFetch("/v1/secrets") as Promise<SecretRead[]>,
         ]);
         setAuthenticated(true);
+        setAuthenticatedState(true);
         setAccount(who);
         setWorkspace(currentWorkspace);
         setSessions(activeSessions);
@@ -81,29 +82,25 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
           if (entry.selected_model) next[entry.provider] = entry.selected_model;
           return next;
         }, { ...current }));
-      } else {
-        const workspace = (await apiFetch("/v1/workspace")) as WorkspaceRead;
+      } else if (accountResponse.status === 401) {
         setAuthenticated(false);
-        setAccount({
-          id: workspace.id,
-          name: workspace.account_name,
-          has_password: false,
-          created_at: "",
-        });
-        setWorkspace(workspace);
+        try {
+          const localWorkspace = (await apiFetch("/v1/workspace")) as WorkspaceRead;
+          setAccount({
+            id: localWorkspace.id,
+            name: localWorkspace.account_name,
+            has_password: false,
+            created_at: "",
+          });
+          setWorkspace(localWorkspace);
+        } catch {
+          setAccount({ id: "guest", name: "Pilot reviewer", has_password: false, created_at: "" });
+          setWorkspace(null);
+        }
         setSessions([]);
         setSecrets([]);
-      }
+      } else await responseJson(accountResponse);
     } catch (caught) {
-      if (startedWithToken && getSessionToken() === null) {
-        const workspace = (await apiFetch("/v1/workspace")) as WorkspaceRead;
-        setAuthenticated(false);
-        setAccount({ id: workspace.id, name: workspace.account_name, has_password: false, created_at: "" });
-        setWorkspace(workspace);
-        setSessions([]);
-        setSecrets([]);
-        return;
-      }
       setAccount(null);
       setWorkspace(null);
       setSessions([]);
@@ -129,8 +126,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
     setAuthBusy(true);
     setError(null);
     try {
-      const session = await login(email, password);
-      setSessionToken(session.session_token);
+      await login(email, password);
       await refresh();
       onConfigurationChanged?.();
     } catch (caught) {
@@ -145,8 +141,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
     setAuthBusy(true);
     setError(null);
     try {
-      const session = await register(name, email, password);
-      setSessionToken(session.session_token);
+      await register(name, email, password);
       setName("");
       setEmail("");
       setPassword("");
@@ -181,8 +176,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
     setAuthBusy(true);
     setError(null);
     try {
-      const session = await confirmPasswordReset(resetToken, newPassword);
-      setSessionToken(session.session_token);
+      await confirmPasswordReset(resetToken, newPassword);
       setResetToken("");
       setNewPassword("");
       setResetMessage(null);
@@ -386,7 +380,11 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
           <span className="account-avatar"><UserRound aria-hidden="true" /></span>
           <div>
             <strong>{account.name}</strong>
-            <small>{authenticated ? account.email ?? "Signed-in workspace" : "Guest workspace · no signup required"}</small>
+            <small>{authenticated
+              ? account.email ?? "Signed-in workspace"
+              : workspace
+                ? "Local workspace · no signup required"
+                : "Sign in to open a private workspace"}</small>
           </div>
         </div>
         {authenticated ? (
@@ -430,7 +428,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
           {authenticated ? <><form onSubmit={handleStoreKey} className="account-key-form">
             <label><span>Provider platform</span><select value={providerEntry} onChange={(event) => setProviderEntry(event.target.value)}>{providerOptions.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select><small className="provider-choice-note">{selectedProvider.detail}</small></label>
             {providerEntry === "custom" ? <label><span>Compatible API base URL <small>HTTPS, or localhost for development</small></span><input type="url" required value={baseUrlEntry} onChange={(event) => setBaseUrlEntry(event.target.value)} placeholder="https://api.example.com/v1" /></label> : null}
-            <label><span>Provider API key <small>Encrypted on this machine</small></span><input type="password" autoComplete="off" value={keyEntry} onChange={(event) => setKeyEntry(event.target.value)} placeholder="Paste this provider's API key" /></label>
+            <label><span>Provider API key <small>Encrypted for this workspace</small></span><input type="password" autoComplete="off" value={keyEntry} onChange={(event) => setKeyEntry(event.target.value)} placeholder="Paste this provider's API key" /></label>
             <button type="submit" className="primary" disabled={secretBusy || !keyEntry || (providerEntry === "custom" && !baseUrlEntry)}><KeyRound aria-hidden="true" />{secretBusy ? "Connecting…" : "Connect provider"}</button>
           </form>
           {secrets.length ? (

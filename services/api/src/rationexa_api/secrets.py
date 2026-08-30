@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ipaddress
 import json
+import socket
 from typing import Any
 from urllib.parse import urlparse
 
@@ -21,6 +23,41 @@ PROVIDER_PRESETS = {
 }
 
 
+def validate_provider_base_url(
+    base_url: str,
+    *,
+    provider: str,
+    settings: Settings | None = None,
+) -> str:
+    settings = settings or get_settings()
+    resolved = base_url.strip().rstrip("/")
+    parsed = urlparse(resolved)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or not parsed.hostname:
+        raise ValueError("Provider base URL must be a valid HTTP or HTTPS URL")
+    hostname = parsed.hostname.lower()
+    local_host = hostname in {"localhost", "127.0.0.1", "::1"}
+    if parsed.username or parsed.password:
+        raise ValueError("Provider base URL must not contain embedded credentials")
+    if parsed.scheme != "https" and not (local_host and not settings.hosted_mode):
+        raise ValueError("Remote provider base URLs must use HTTPS")
+    if provider != "custom":
+        return resolved
+    if provider == "custom" and settings.hosted_mode:
+        if not settings.allowed_custom_provider_hosts:
+            raise ValueError("Custom provider endpoints are disabled until an administrator allowlists a host")
+        if hostname not in settings.allowed_custom_provider_hosts:
+            raise ValueError("This custom provider host is not allowed in the hosted application")
+    try:
+        addresses = {entry[4][0] for entry in socket.getaddrinfo(hostname, parsed.port or 443, type=socket.SOCK_STREAM)}
+    except socket.gaierror as exc:
+        raise ValueError("Provider host could not be resolved") from exc
+    for address in addresses:
+        ip = ipaddress.ip_address(address)
+        if not ip.is_global and not (local_host and not settings.hosted_mode):
+            raise ValueError("Provider host resolves to a private or non-public address")
+    return resolved
+
+
 def fernet(settings: Settings | None = None) -> Fernet | None:
     settings = settings or get_settings()
     key = settings.secret_encryption_key
@@ -38,7 +75,7 @@ def fernet(settings: Settings | None = None) -> Fernet | None:
             return None
     try:
         return Fernet(key.encode("utf-8"))
-    except (ValueError, SyntaxError):
+    except ValueError, SyntaxError:
         return None
 
 
@@ -66,21 +103,18 @@ def store_provider_key(
     if handle is None:
         raise ValueError("Secret encryption is not configured")
     existing = db.scalar(
-         select(SecretRow).where(
-             SecretRow.workspace_id == workspace_id,
-             SecretRow.provider == provider,
-          )
-       )
+        select(SecretRow).where(
+            SecretRow.workspace_id == workspace_id,
+            SecretRow.provider == provider,
+        )
+    )
     preset = PROVIDER_PRESETS[provider]
     resolved_base_url = (base_url or preset["base_url"] or "").strip().rstrip("/")
     if not resolved_base_url:
         raise ValueError("A base URL is required for a custom provider")
-    parsed = urlparse(resolved_base_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError("Provider base URL must be a valid HTTP or HTTPS URL")
-    if parsed.scheme != "https" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
-        raise ValueError("Remote provider base URLs must use HTTPS")
+    resolved_base_url = validate_provider_base_url(resolved_base_url, provider=provider, settings=settings)
     configuration = {
+        "provider": provider,
         "key": value,
         "label": preset["label"],
         "base_url": resolved_base_url,
@@ -124,11 +158,11 @@ def get_provider_config(
     if provider not in PROVIDER_PRESETS:
         return None
     row = db.scalar(
-         select(SecretRow).where(
-             SecretRow.workspace_id == workspace_id,
-             SecretRow.provider == provider,
-           )
+        select(SecretRow).where(
+            SecretRow.workspace_id == workspace_id,
+            SecretRow.provider == provider,
         )
+    )
     if row is None:
         return None
     handle = fernet(settings)
@@ -194,11 +228,11 @@ def delete_provider_key(
 ) -> bool:
     settings = settings or get_settings()
     row = db.scalar(
-         select(SecretRow).where(
-             SecretRow.workspace_id == workspace_id,
-             SecretRow.provider == provider,
-         )
-      )
+        select(SecretRow).where(
+            SecretRow.workspace_id == workspace_id,
+            SecretRow.provider == provider,
+        )
+    )
     if row is None:
         return False
     db.delete(row)

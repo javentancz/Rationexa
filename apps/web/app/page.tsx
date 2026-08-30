@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft,
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ConfirmDialog, Disclosure, Hint } from "./ui";
-import { apiResponse as req, responseJson } from "./api";
+import { ApiError, apiResponse as req, responseJson } from "./api";
 import { ModelPicker, type ModelOption } from "./model-picker";
 import { FinalizeConfirmation } from "./finalize-stage";
 
@@ -293,7 +293,12 @@ export default function Home() {
 
   useEffect(() => {
     if (bootstrapQuery.error) {
-      setError(bootstrapQuery.error instanceof Error ? bootstrapQuery.error.message : "Could not load workspace");
+      if (bootstrapQuery.error instanceof ApiError && bootstrapQuery.error.status === 401) {
+        setView("settings");
+        setError(null);
+      } else {
+        setError(bootstrapQuery.error instanceof Error ? bootstrapQuery.error.message : "Could not load workspace");
+      }
       setLibraryLoading(false);
     }
     if (!bootstrapQuery.data) return;
@@ -349,7 +354,8 @@ export default function Home() {
       setLibrary({ items: [], total: 0 });
       loadedLibraryQuery.current = null;
       void bootstrapQuery.refetch();
-      toast.info("Your session expired. The local workspace is active.");
+      setView("settings");
+      toast.info("Your session expired. Sign in again to continue.");
     };
     window.addEventListener("rationexa-auth-expired", recoverLocalWorkspace);
     return () => window.removeEventListener("rationexa-auth-expired", recoverLocalWorkspace);

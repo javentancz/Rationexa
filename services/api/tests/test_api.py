@@ -25,7 +25,7 @@ def test_database_is_at_the_alembic_head() -> None:
     with TestClient(app):
         with engine.connect() as connection:
             revision = MigrationContext.configure(connection).get_current_revision()
-    assert revision == "20260829_05"
+    assert revision == "20260830_06"
 
 
 def test_readiness_checks_database_and_artifact_storage() -> None:
@@ -61,14 +61,21 @@ def create_finalized_decision(
     source: str,
     title: str,
     criticality: str = "important",
+    headers: dict[str, str] | None = None,
 ) -> dict:
     artifact = client.post(
         "/v1/artifacts",
+        headers=headers,
         json={"filename": f"{title}.txt", "media_type": "text/plain", "content": source},
     ).json()
-    extraction = client.post("/v1/decisions/extractions", json={"artifact_id": artifact["id"]}).json()
+    extraction = client.post(
+        "/v1/decisions/extractions",
+        headers=headers,
+        json={"artifact_id": artifact["id"]},
+    ).json()
     reviewed = client.post(
         f"/v1/extractions/{extraction['id']}/review",
+        headers=headers,
         json={
             "title": title,
             "reviews": [
@@ -85,10 +92,49 @@ def create_finalized_decision(
     assert reviewed.status_code == 200
     finalized = client.post(
         f"/v1/extractions/{extraction['id']}/finalize",
+        headers=headers,
         json={"criticality": criticality},
     )
     assert finalized.status_code == 201
     return finalized.json()
+
+
+def test_authenticated_pilot_workflow_imports_reviews_finalizes_revisits_shares_and_deletes() -> None:
+    with TestClient(app) as client:
+        registered = client.post(
+            "/v1/auth/register",
+            json={"email": "full-flow@rationexa.local", "name": "Pilot Reviewer", "password": "full-flow-pass"},
+        )
+        assert registered.status_code == 201
+        headers = {"Authorization": f"Bearer {registered.json()['session_token']}"}
+        decision = create_finalized_decision(
+            client,
+            source=(
+                "We selected Vendor B because availability is assumed. "
+                "The service must support SAML. Revisit if availability changes."
+            ),
+            title="Pilot lifecycle decision",
+            criticality="critical",
+            headers=headers,
+        )
+
+        revisit = client.post(
+            f"/v1/decisions/{decision['id']}/revisit-checks",
+            headers=headers,
+            json={"content": "Vendor B reported an availability incident but SAML remains supported."},
+        )
+        assert revisit.status_code == 201
+        share = client.post(
+            f"/v1/decisions/{decision['id']}/shares",
+            headers=headers,
+            json={},
+        )
+        assert share.status_code == 201
+        assert client.get(f"/v1/shares/{share.json()['token']}").status_code == 200
+
+        assert client.delete(f"/v1/decisions/{decision['id']}", headers=headers).status_code == 204
+        assert client.get(f"/v1/decisions/{decision['id']}", headers=headers).status_code == 404
+        assert client.get(f"/v1/shares/{share.json()['token']}").status_code == 404
 
 
 def test_stage_one_vertical_slice() -> None:
@@ -302,10 +348,7 @@ def test_stage_two_usage_summary_distinguishes_known_and_unpriced_runs() -> None
         assert usage["challenge_runs"] >= 1
         assert usage["local_runs"] >= 3
         assert usage["known_cost_usd"] == 0.0
-        assert any(
-            run["decision_id"] == decision["id"] and run["kind"] == "challenge"
-            for run in usage["recent_runs"]
-        )
+        assert any(run["decision_id"] == decision["id"] and run["kind"] == "challenge" for run in usage["recent_runs"])
         assert any(model["provider"] == "deterministic" for model in usage["models"])
 
 
@@ -669,25 +712,25 @@ def test_stage_two_pdf_export_returns_valid_pdf_with_reviewed_record() -> None:
         decision = create_finalized_decision(
             client,
             source=(
-                  "We decided to use Vendor B because it was assumed Vendor B does not support external users. "
-                  "The service must support SAML. Revisit if Vendor B introduces external-user support."
-               ),
+                "We decided to use Vendor B because it was assumed Vendor B does not support external users. "
+                "The service must support SAML. Revisit if Vendor B introduces external-user support."
+            ),
             title="Pdf export decision",
             criticality="critical",
-          )
+        )
         revisit = client.post(
             f"/v1/decisions/{decision['id']}/revisit-checks",
             json={
-                  "filename": "vendor-release-note.txt",
-                  "content": "Vendor B now supports external users.",
-              },
-          )
+                "filename": "vendor-release-note.txt",
+                "content": "Vendor B now supports external users.",
+            },
+        )
         assert revisit.status_code == 201
         finding = revisit.json()["findings"][0]
         judged = client.post(
             f"/v1/revisit-checks/{revisit.json()['id']}/findings/{finding['premise_id']}/judgment",
             json={"judgment": "worth_reviewing"},
-          )
+        )
         assert judged.status_code == 200
 
         response = client.get(f"/v1/decisions/{decision['id']}/export/pdf")
@@ -713,23 +756,23 @@ def test_delete_decision_removes_all_related_records() -> None:
             source="We decided to use Vendor B because it was assumed Vendor B does not support external users.",
             title="Deletable decision",
             criticality="critical",
-          )
+        )
         revisit = client.post(
             f"/v1/decisions/{decision['id']}/revisit-checks",
             json={"content": "Vendor B now supports external users."},
-          )
+        )
         assert revisit.status_code == 201
         share = client.post(f"/v1/decisions/{decision['id']}/shares", json={}).json()
         assert share["status"] == "active"
 
         with SessionLocal() as db:
             premise_ids = [
-                 row.id for row in db.scalars(select(PremiseRow).where(PremiseRow.decision_id == decision["id"])).all()
-             ]
+                row.id for row in db.scalars(select(PremiseRow).where(PremiseRow.decision_id == decision["id"])).all()
+            ]
             assert premise_ids
             anchored = db.scalar(
-                 select(func.count()).select_from(SourceAnchorRow).where(SourceAnchorRow.premise_id.in_(premise_ids))
-              )
+                select(func.count()).select_from(SourceAnchorRow).where(SourceAnchorRow.premise_id.in_(premise_ids))
+            )
             assert anchored > 0
 
         deleted = client.delete(f"/v1/decisions/{decision['id']}")
@@ -738,24 +781,20 @@ def test_delete_decision_removes_all_related_records() -> None:
         with SessionLocal() as db:
             assert db.get(DecisionRow, decision["id"]) is None
             remaining_premises = db.scalar(
-                 select(func.count()).select_from(PremiseRow).where(PremiseRow.decision_id == decision["id"])
-               )
+                select(func.count()).select_from(PremiseRow).where(PremiseRow.decision_id == decision["id"])
+            )
             assert remaining_premises == 0
             remaining_revisits = db.scalar(
-                 select(func.count()).select_from(RevisitRow).where(RevisitRow.decision_id == decision["id"])
-               )
+                select(func.count()).select_from(RevisitRow).where(RevisitRow.decision_id == decision["id"])
+            )
             assert remaining_revisits == 0
             remaining_shares = db.scalar(
-                 select(func.count())
-                   .select_from(DecisionShareRow)
-                   .where(DecisionShareRow.decision_id == decision["id"])
-               )
+                select(func.count()).select_from(DecisionShareRow).where(DecisionShareRow.decision_id == decision["id"])
+            )
             assert remaining_shares == 0
             remaining_anchors = db.scalar(
-                 select(func.count())
-                   .select_from(SourceAnchorRow)
-                   .where(SourceAnchorRow.premise_id.in_(premise_ids))
-               )
+                select(func.count()).select_from(SourceAnchorRow).where(SourceAnchorRow.premise_id.in_(premise_ids))
+            )
             assert remaining_anchors == 0
 
         assert client.get(f"/v1/decisions/{decision['id']}").status_code == 404

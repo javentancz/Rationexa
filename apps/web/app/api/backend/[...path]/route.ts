@@ -8,6 +8,8 @@ const forwardedResponseHeaders = [
   "content-type",
   "retry-after",
   "server-timing",
+  "set-cookie",
+  "x-request-id",
 ];
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {

@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     ollama_status_timeout_seconds: float = 0.75
     ollama_status_cache_seconds: float = 15
     provider_model_cache_seconds: float = 60
+    job_execution_mode: Literal["inline", "thread"] = "inline"
+    hosted_mode: bool = False
+    custom_provider_allowed_hosts: str = ""
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.4-mini"
     public_base_url: str = "http://localhost:3000"
@@ -37,6 +40,11 @@ class Settings(BaseSettings):
     local_account_email: str = "demo@rationexa.local"
     local_account_password: str | None = None
     auth_session_ttl_hours: int = 168
+    session_cookie_name: str = "rationexa_session"
+    session_cookie_secure: bool = False
+    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    auth_rate_limit_attempts: int = 10
+    auth_rate_limit_window_seconds: int = 60
     password_reset_ttl_minutes: int = 30
     password_reset_dev_mode: bool = False
     smtp_host: str | None = None
@@ -62,6 +70,10 @@ class Settings(BaseSettings):
     def configured_ollama_models(self) -> list[str]:
         models = [model.strip() for model in self.ollama_models.split(",") if model.strip()]
         return list(dict.fromkeys([self.ollama_model, *models]))
+
+    @property
+    def allowed_custom_provider_hosts(self) -> set[str]:
+        return {host.strip().lower() for host in self.custom_provider_allowed_hosts.split(",") if host.strip()}
 
 
 @lru_cache

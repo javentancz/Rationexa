@@ -61,6 +61,7 @@ def create_backup(
         temp = Path(temp_name)
         dump = temp / "database.dump"
         import os
+
         if compose_service:
             with dump.open("wb") as stream:
                 subprocess.run(
@@ -142,6 +143,7 @@ def restore_backup(
         with tarfile.open(path, "r:gz") as archive:
             archive.extractall(temp, filter="data")
         import os
+
         if compose_service:
             with (temp / "database.dump").open("rb") as stream:
                 subprocess.run(

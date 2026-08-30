@@ -989,17 +989,19 @@ def available_models(settings: Settings, *, include_openai: bool = False) -> lis
                 "Best current local development result; independent review pending",
             ),
         }
-        models.extend([
-            ModelOption(
-                id=f"ollama/{model}",
-                provider="ollama",
-                model=model,
-                label=descriptions.get(model, (model, "Locally configured Ollama model"))[0],
-                location="local",
-                best_for=descriptions.get(model, (model, "Locally configured Ollama model"))[1],
-            )
-            for model in settings.configured_ollama_models
-        ])
+        models.extend(
+            [
+                ModelOption(
+                    id=f"ollama/{model}",
+                    provider="ollama",
+                    model=model,
+                    label=descriptions.get(model, (model, "Locally configured Ollama model"))[0],
+                    location="local",
+                    best_for=descriptions.get(model, (model, "Locally configured Ollama model"))[1],
+                )
+                for model in settings.configured_ollama_models
+            ]
+        )
     elif provider == "openai":
         models.append(
             ModelOption(
@@ -1012,14 +1014,16 @@ def available_models(settings: Settings, *, include_openai: bool = False) -> lis
             )
         )
     else:
-        models.append(ModelOption(
-            id="deterministic/rules-v1",
-            provider="deterministic",
-            model="rules-v1",
-            label="Deterministic rules",
-            location="local",
-            best_for="Fast tests without a language model",
-        ))
+        models.append(
+            ModelOption(
+                id="deterministic/rules-v1",
+                provider="deterministic",
+                model="rules-v1",
+                label="Deterministic rules",
+                location="local",
+                best_for="Fast tests without a language model",
+            )
+        )
 
     if provider != "openai" and (include_openai or settings.openai_api_key):
         models.append(

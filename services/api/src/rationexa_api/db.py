@@ -80,6 +80,18 @@ class SessionRow(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class AuthAttemptRow(Base):
+    __tablename__ = "auth_attempts"
+    __table_args__ = (
+        Index("ix_auth_attempts_created_at", "created_at"),
+        Index("ix_auth_attempts_fingerprint_created", "fingerprint", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    fingerprint: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class PasswordResetRow(Base):
     __tablename__ = "password_reset_tokens"
     __table_args__ = (
@@ -130,6 +142,26 @@ class ProductEventRow(Base):
     event_type: Mapped[str] = mapped_column(String(80), index=True)
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class JobRow(Base):
+    __tablename__ = "jobs"
+    __table_args__ = (
+        Index("ix_jobs_workspace_created", "workspace_id", "created_at"),
+        Index("ix_jobs_workspace_status", "workspace_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    phase: Mapped[str] = mapped_column(String(120), default="Queued")
+    progress: Mapped[int] = mapped_column(default=0)
+    cancel_requested: Mapped[bool] = mapped_column(default=False)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
 
 class ArtifactRow(Base):
@@ -333,22 +365,23 @@ def _seed_local_account_credentials(account: AccountRow) -> None:
         account.password_hash, account.password_salt, account.password_iterations = hash_password(
             settings.local_account_password,
             settings.pbkdf2_iterations,
-          )
+        )
 
 
 def _add_missing_account_credential_columns() -> None:
     """Add the Stage 2 login credential fields to databases created before this milestone."""
     existing = {column["name"] for column in inspect(engine).get_columns("accounts")}
     column_definitions = {
-          "email": "VARCHAR(255)",
-          "password_hash": "VARCHAR(255)",
-          "password_salt": "VARCHAR(64)",
-          "password_iterations": "INTEGER",
-      }
+        "email": "VARCHAR(255)",
+        "password_hash": "VARCHAR(255)",
+        "password_salt": "VARCHAR(64)",
+        "password_iterations": "INTEGER",
+    }
     with engine.begin() as connection:
         for name, sql_type in column_definitions.items():
             if name not in existing:
                 connection.execute(text(f"ALTER TABLE accounts ADD COLUMN {name} {sql_type}"))
+
 
 def _add_missing_workspace_columns() -> None:
     """Assign existing local records to the personal workspace during the Stage 2 migration."""

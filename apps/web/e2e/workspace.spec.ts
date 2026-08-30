@@ -13,7 +13,10 @@ const models = {
   }],
 };
 
-const corsHeaders = { "Access-Control-Allow-Origin": "*" };
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "http://localhost:3000",
+  "Access-Control-Allow-Credentials": "true",
+};
 const workspace = {
   id: "workspace-1",
   name: "Personal workspace",

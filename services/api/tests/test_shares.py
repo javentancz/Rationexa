@@ -17,28 +17,28 @@ def create_finalized_decision(
     artifact = client.post(
         "/v1/artifacts",
         json={"filename": f"{title}.txt", "media_type": "text/plain", "content": source},
-      ).json()
+    ).json()
     extraction = client.post("/v1/decisions/extractions", json={"artifact_id": artifact["id"]}).json()
     reviewed = client.post(
         f"/v1/extractions/{extraction['id']}/review",
         json={
-             "title": title,
-             "reviews": [
-                  {
-                      "candidate_id": premise["candidate_id"],
-                      "action": "confirm",
-                      "statement": premise["statement"],
-                      "kind": premise["kind"],
-                  }
-                 for premise in extraction["result"]["premises"]
-              ],
-          },
-      )
+            "title": title,
+            "reviews": [
+                {
+                    "candidate_id": premise["candidate_id"],
+                    "action": "confirm",
+                    "statement": premise["statement"],
+                    "kind": premise["kind"],
+                }
+                for premise in extraction["result"]["premises"]
+            ],
+        },
+    )
     assert reviewed.status_code == 200
     finalized = client.post(
         f"/v1/extractions/{extraction['id']}/finalize",
         json={"criticality": criticality},
-      )
+    )
     assert finalized.status_code == 201
     return finalized.json()
 
@@ -56,11 +56,11 @@ def test_share_link_round_trips_read_only_record_and_revoke() -> None:
             source="We decided to use Vendor B because it was assumed Vendor B does not support external users.",
             title="Shared vendor decision",
             criticality="important",
-         )
+        )
         revisit = client.post(
             f"/v1/decisions/{decision['id']}/revisit-checks",
             json={"filename": "vendor-note.txt", "content": "Vendor B now supports external users."},
-         )
+        )
         assert revisit.status_code == 201
 
         share = _created_share(client, decision["id"])
@@ -118,11 +118,11 @@ def test_expired_share_link_is_not_served() -> None:
             source="We decided to use SQLite because the application must remain portable.",
             title="Expired share decision",
             criticality="routine",
-         )
+        )
         created = client.post(
             f"/v1/decisions/{decision['id']}/shares",
             json={"expires_at": (now_utc() - timedelta(minutes=1)).isoformat()},
-         )
+        )
         assert created.status_code == 201
         token = created.json()["token"]
 
@@ -136,12 +136,12 @@ def test_shared_record_never_leaks_provider_secrets_or_private_artifacts() -> No
         decision = create_finalized_decision(
             client,
             source=(
-                 "We decided to use Vendor B because it was assumed Vendor B does not support external users. "
-                 "The service must support SAML. Revisit if Vendor B introduces external-user support."
-             ),
+                "We decided to use Vendor B because it was assumed Vendor B does not support external users. "
+                "The service must support SAML. Revisit if Vendor B introduces external-user support."
+            ),
             title="Secret scrub decision",
             criticality="critical",
-          )
+        )
 
         with SessionLocal() as db:
             row = db.get(DecisionRow, decision["id"])
@@ -154,10 +154,10 @@ def test_shared_record_never_leaks_provider_secrets_or_private_artifacts() -> No
         revisit = client.post(
             f"/v1/decisions/{decision['id']}/revisit-checks",
             json={
-                 "filename": "private-evidence.txt",
-                 "content": "Vendor B now supports external users and still supports SAML for enterprise tenants.",
-             },
-         )
+                "filename": "private-evidence.txt",
+                "content": "Vendor B now supports external users and still supports SAML for enterprise tenants.",
+            },
+        )
         assert revisit.status_code == 201
 
         with SessionLocal() as db:
@@ -165,20 +165,20 @@ def test_shared_record_never_leaks_provider_secrets_or_private_artifacts() -> No
             assert checks
             for check in checks:
                 check.findings = [
-                     {
-                         "premise_id": "p1",
-                         "premise_statement": "Vendor B does not support external users.",
-                         "relationship": "contradicts",
-                         "confidence_band": "high",
-                         "explanation": "The new evidence contradicts the preserved premise.",
-                         "new_excerpt": "Vendor B now supports external users.",
-                         "old_excerpt": "Vendor B does not support external users.",
-                         "source_fallback_performed": True,
-                         "evidence_artifact_id": "artifact-should-not-leak",
-                         "provider_secret": "sk-live-should-not-leak",
-                         "human_judgment": "worth_reviewing",
-                     }
-                 ]
+                    {
+                        "premise_id": "p1",
+                        "premise_statement": "Vendor B does not support external users.",
+                        "relationship": "contradicts",
+                        "confidence_band": "high",
+                        "explanation": "The new evidence contradicts the preserved premise.",
+                        "new_excerpt": "Vendor B now supports external users.",
+                        "old_excerpt": "Vendor B does not support external users.",
+                        "source_fallback_performed": True,
+                        "evidence_artifact_id": "artifact-should-not-leak",
+                        "provider_secret": "sk-live-should-not-leak",
+                        "human_judgment": "worth_reviewing",
+                    }
+                ]
             db.commit()
 
         share = _created_share(client, decision["id"])

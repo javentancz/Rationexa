@@ -148,9 +148,7 @@ def render_decision_markdown(decision: DecisionRow, revisits: Sequence[RevisitRo
             if finding.get("old_excerpt"):
                 lines.extend(["**Original source excerpt**", "", _blockquote(finding["old_excerpt"]), ""])
             if finding.get("missing_context_question"):
-                lines.extend(
-                    ["**Missing context question**", "", _paragraph(finding["missing_context_question"]), ""]
-                )
+                lines.extend(["**Missing context question**", "", _paragraph(finding["missing_context_question"]), ""])
             if finding.get("human_notes"):
                 lines.extend(["**Human notes**", "", _paragraph(finding["human_notes"]), ""])
 
