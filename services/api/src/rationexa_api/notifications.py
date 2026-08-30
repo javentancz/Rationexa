@@ -1,5 +1,6 @@
 from email.message import EmailMessage
 from smtplib import SMTP
+from urllib.parse import quote
 
 from .config import Settings
 
@@ -8,7 +9,7 @@ def send_password_reset_email(settings: Settings, email: str, token: str) -> boo
     """Deliver a one-time reset link without logging or returning the token."""
     if not settings.smtp_host or not settings.smtp_from_email:
         return False
-    link = f"{settings.public_base_url.rstrip('/')}/#account-reset={token}"
+    link = f"{settings.public_base_url.rstrip('/')}/account/reset?token={quote(token, safe='')}"
     message = EmailMessage()
     message["Subject"] = "Reset your Rationexa password"
     message["From"] = settings.smtp_from_email

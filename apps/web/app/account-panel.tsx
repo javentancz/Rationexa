@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { KeyRound, LogIn, LogOut, Monitor, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch, apiResponse, confirmPasswordReset, login, logout, register, requestPasswordReset, responseJson, setAuthenticatedState, setSessionToken } from "./api";
@@ -26,6 +27,7 @@ type AccountPanelProps = {
 };
 
 export function AccountPanel({ onConfigurationChanged, onModelConfigurationChanged, onWorkspaceProfileChanged }: AccountPanelProps) {
+  const router = useRouter();
   const [authenticated, setAuthenticated] = useState(false);
   const [account, setAccount] = useState<AccountRead | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceRead | null>(null);
@@ -110,9 +112,11 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
   }
 
   useEffect(() => {
-    const resetHash = window.location.hash.match(/^#account-reset=(.+)$/);
-    if (resetHash) {
-      setResetToken(decodeURIComponent(resetHash[1]));
+    const resetTokenFromUrl = window.location.pathname === "/account/reset"
+      ? new URLSearchParams(window.location.search).get("token")
+      : null;
+    if (resetTokenFromUrl) {
+      setResetToken(resetTokenFromUrl);
       setAuthMode("reset");
     }
     void refresh();
@@ -181,6 +185,7 @@ export function AccountPanel({ onConfigurationChanged, onModelConfigurationChang
       setNewPassword("");
       setResetMessage(null);
       setAuthMode("login");
+      router.replace("/settings");
       await refresh();
       onConfigurationChanged?.();
       toast.success("Password reset complete");

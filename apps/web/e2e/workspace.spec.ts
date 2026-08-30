@@ -62,13 +62,40 @@ test("does not restore another workspace's browser draft", async ({ page }) => {
 test("keeps an unfinished decision available after visiting the library", async ({ page }) => {
   await mockBootstrap(page);
   await page.goto("/");
+  await expect(page).toHaveURL(/\/workspace$/);
   await page.getByLabel("Decision source").fill("Draft decision that still needs review");
 
   await page.getByRole("button", { name: "All decisions" }).click();
+  await expect(page).toHaveURL(/\/library$/);
   await expect(page.getByRole("button", { name: /Continue current draft/ })).toBeVisible();
   await page.getByRole("button", { name: /Continue current draft/ }).click();
 
+  await expect(page).toHaveURL(/\/workspace$/);
   await expect(page.getByLabel("Decision source")).toHaveValue("Draft decision that still needs review");
+});
+
+test("uses clean paths for workspace sections", async ({ page }) => {
+  await mockBootstrap(page);
+  await page.route(/\/v1\/account(?:\?.*)?$/, (route) => route.fulfill({ status: 401, headers: corsHeaders, json: { detail: "Not authenticated" } }));
+  await page.goto("/library");
+
+  await expect(page).toHaveURL(/\/library$/);
+  await page.getByRole("button", { name: "Usage and cost" }).click();
+  await expect(page).toHaveURL(/\/usage$/);
+  await page.getByRole("button", { name: "Account and provider keys" }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.url()).not.toContain("#");
+});
+
+test("keeps a clean password-reset URL available while signed out", async ({ page }) => {
+  await page.route(/\/v1\/bootstrap(?:\?.*)?$/, (route) => route.fulfill({ status: 401, headers: corsHeaders, json: { detail: "Sign in required" } }));
+  await page.route(/\/v1\/account(?:\?.*)?$/, (route) => route.fulfill({ status: 401, headers: corsHeaders, json: { detail: "Not authenticated" } }));
+  await page.route(/\/v1\/workspace(?:\?.*)?$/, (route) => route.fulfill({ status: 401, headers: corsHeaders, json: { detail: "Not authenticated" } }));
+  await page.goto("/account/reset?token=clean-reset-token");
+
+  await expect(page).toHaveURL(/\/account\/reset\?token=clean-reset-token$/);
+  await expect(page.getByLabel("One-time reset token")).toHaveValue("clean-reset-token");
+  await expect(page.url()).not.toContain("#");
 });
 
 test("clears a deleted decision from restored workspace state", async ({ page }) => {

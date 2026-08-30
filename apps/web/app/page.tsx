@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { AccountPanel } from "./account-panel";
 import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleDollarSign, Clock3, Cpu, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Settings, Sparkles, Trash2, UserRound } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -143,6 +144,19 @@ type EvidenceDraft = { workspaceId: string; content: string; selectedModelId: st
 
 const workspaceSessionKey = "rationexa-workspace-draft-v1";
 const evidenceDraftsKey = "rationexa-evidence-drafts-v1";
+const workspacePaths: Record<WorkspaceView, string> = {
+  workspace: "/workspace",
+  library: "/library",
+  usage: "/usage",
+  settings: "/settings",
+};
+
+function workspaceViewFromPath(pathname: string): WorkspaceView {
+  if (pathname.startsWith("/library")) return "library";
+  if (pathname.startsWith("/usage")) return "usage";
+  if (pathname.startsWith("/settings") || pathname.startsWith("/account/")) return "settings";
+  return "workspace";
+}
 
 function readEvidenceDraft(decisionId: string, workspaceId?: string): EvidenceDraft | null {
   try {
@@ -221,7 +235,9 @@ function LibraryNavIcon({ value }: { value: "all" | Criticality }) {
 }
 
 export default function Home() {
-  const [view, setView] = useState<WorkspaceView>("workspace");
+  const pathname = usePathname();
+  const router = useRouter();
+  const [view, setView] = useState<WorkspaceView>(() => workspaceViewFromPath(pathname));
   const [source, setSource] = useState("");
   const [sourceMode, setSourceMode] = useState<"paste" | "file">("paste");
   const [file, setFile] = useState<File | null>(null);
@@ -282,9 +298,18 @@ export default function Home() {
   const libraryRequest = useRef<AbortController | null>(null);
   const loadedLibraryQuery = useRef<string | null>(null);
 
+  const navigateTo = useCallback((nextView: WorkspaceView, replace = false) => {
+    setView(nextView);
+    const nextPath = workspacePaths[nextView];
+    if (pathname === nextPath) return;
+    if (replace) router.replace(nextPath);
+    else router.push(nextPath);
+  }, [pathname, router]);
+
   useEffect(() => {
-    if (window.location.hash.startsWith("#account-reset=")) setView("settings");
-  }, []);
+    setView(workspaceViewFromPath(pathname));
+    if (pathname === "/") router.replace("/workspace");
+  }, [pathname, router]);
 
   useEffect(() => () => libraryRequest.current?.abort(), []);
 
@@ -297,7 +322,8 @@ export default function Home() {
   useEffect(() => {
     if (bootstrapQuery.error) {
       if (bootstrapQuery.error instanceof ApiError && bootstrapQuery.error.status === 401) {
-        setView("settings");
+        if (pathname.startsWith("/account/reset")) setView("settings");
+        else navigateTo("settings", true);
         setError(null);
       } else {
         setError(bootstrapQuery.error instanceof Error ? bootstrapQuery.error.message : "Could not load workspace");
@@ -316,7 +342,7 @@ export default function Home() {
     setComparisonModelId((current) => catalog.models.some((model) => model.id === current)
       ? current
       : catalog.models.find((model) => model.id !== catalog.default_model_id)?.id || "");
-  }, [bootstrapQuery.data, bootstrapQuery.error]);
+  }, [bootstrapQuery.data, bootstrapQuery.error, navigateTo, pathname]);
 
   const modelCatalogQuery = useQuery({
     queryKey: ["model-catalog"],
@@ -357,12 +383,13 @@ export default function Home() {
       setLibrary({ items: [], total: 0 });
       loadedLibraryQuery.current = null;
       void bootstrapQuery.refetch();
-      setView("settings");
+      if (pathname.startsWith("/account/reset")) setView("settings");
+      else navigateTo("settings", true);
       toast.info("Your session expired. Sign in again to continue.");
     };
     window.addEventListener("rationexa-auth-expired", recoverLocalWorkspace);
     return () => window.removeEventListener("rationexa-auth-expired", recoverLocalWorkspace);
-  }, []);
+  }, [bootstrapQuery, navigateTo, pathname]);
 
   useEffect(() => {
     if (restoredSession.current) return;
@@ -370,7 +397,7 @@ export default function Home() {
     restoredSession.current = true;
     const restore = async () => {
       try {
-        if (window.location.hash.startsWith("#account-reset=")) {
+        if (window.location.pathname.startsWith("/account/reset")) {
           setView("settings");
           return;
         }
@@ -395,7 +422,7 @@ export default function Home() {
         if (state.comparisonModelId) setComparisonModelId(state.comparisonModelId);
         setCompareMode(Boolean(state.compareMode));
         if (state.decisionId) {
-          const restored = await openDecision(state.decisionId, state.workflowView ?? 4, { restoredView: state.view ?? "workspace", legacyEvidence: state.evidence, clearIfMissing: true });
+          const restored = await openDecision(state.decisionId, state.workflowView ?? 4, { restoredView: workspaceViewFromPath(window.location.pathname), legacyEvidence: state.evidence, clearIfMissing: true });
           if (restored) toast.info("Decision workspace restored");
         } else if (state.extraction && state.draft) {
           setExtraction(state.extraction);
@@ -404,12 +431,12 @@ export default function Home() {
           setCriticality(state.criticality ?? state.extraction.result.suggested_criticality);
           setSelectedPremise(state.selectedPremise ?? state.extraction.result.premises[0]?.candidate_id ?? null);
           setWorkflowView(state.workflowView === 3 ? 3 : 2);
-          setView("workspace");
+          navigateTo(workspaceViewFromPath(window.location.pathname), true);
           toast.info("Unfinished review restored");
         } else {
           setEvidence(state.evidence ?? "");
           setWorkflowView(1);
-          setView(state.view ?? "workspace");
+          navigateTo(workspaceViewFromPath(window.location.pathname), true);
           if (state.source?.trim()) toast.info("Unfinished import restored");
         }
       } catch {
@@ -419,7 +446,7 @@ export default function Home() {
       }
     };
     void restore();
-  }, [bootstrapQuery.data, bootstrapQuery.isLoading]);
+  }, [bootstrapQuery.data, bootstrapQuery.isLoading, navigateTo]);
 
   useEffect(() => {
     if (!sessionRestored || !personalWorkspace) return;
@@ -824,7 +851,7 @@ export default function Home() {
       ]);
       if (restore?.clearIfMissing && (recordResponse.status === 404 || historyResponse.status === 404)) {
         clearPersistedDecision(decisionId);
-        setView("library");
+        navigateTo("library", true);
         setWorkflowView(1);
         toast.info("The deleted decision was removed from your restored workspace");
         return false;
@@ -853,9 +880,8 @@ export default function Home() {
        setExpandedHistoryId(null);
       setWorkflowView(targetStep);
        setWorkflowPaneCollapsed(false);
-       setView(restore?.restoredView ?? "workspace");
+       navigateTo(restore?.restoredView ?? "workspace", Boolean(restore));
        void loadShares(decisionId).catch(() => { setShares([]); });
-       window.location.hash = "workspace";
        return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not open the decision");
@@ -950,7 +976,10 @@ export default function Home() {
   function requestNewDecision() {
     const hasUnsavedWork = !decision && Boolean(source.trim() || evidence.trim() || extraction || draft);
     if (hasUnsavedWork) setConfirmingNewDecision(true);
-    else resetWorkspace();
+    else {
+      resetWorkspace();
+      navigateTo("workspace");
+    }
   }
 
   async function loadShares(decisionId: string) {
@@ -1047,7 +1076,7 @@ export default function Home() {
       clearPersistedDecision(targetId);
       setConfirmingDeleteFor(null);
       setDeleteTitle(null);
-      setView("library");
+      navigateTo("library");
       await loadLibrary();
        } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not delete this decision");
@@ -1112,7 +1141,7 @@ export default function Home() {
       <Hint label={exportBusy ? "Preparing Markdown…" : "Export Markdown"} side="bottom"><button type="button" className="record-action icon-action" aria-label={exportBusy ? "Preparing Markdown export" : "Export Markdown"} disabled={exportBusy} onClick={downloadMarkdown}><ActionIcon name="markdown" /></button></Hint>
       <Hint label={pdfExportBusy ? "Preparing PDF…" : "Export PDF"} side="bottom"><button type="button" className="record-action icon-action" aria-label={pdfExportBusy ? "Preparing PDF export" : "Export PDF"} disabled={pdfExportBusy} onClick={downloadPdf}><ActionIcon name="pdf" /></button></Hint>
       <Hint label="Delete record" side="bottom"><button type="button" className="record-action icon-action danger" aria-label="Delete record" onClick={() => { setDeleteTitle(decision.title); setConfirmingDeleteFor(decision.id); }}><ActionIcon name="delete" /></button></Hint>
-      <Hint label="Back to library" side="bottom"><button type="button" className="record-action icon-action" aria-label="Back to library" onClick={() => setView("library")}><ActionIcon name="back" /></button></Hint>
+      <Hint label="Back to library" side="bottom"><button type="button" className="record-action icon-action" aria-label="Back to library" onClick={() => navigateTo("library")}><ActionIcon name="back" /></button></Hint>
     </div>
   ) : null;
 
@@ -1127,15 +1156,15 @@ export default function Home() {
         <nav className="library-nav" aria-label="Decision libraries">
           {(["all", "critical", "important", "routine"] as ("all" | Criticality)[]).map((value) => {
             const label = value === "all" ? "All decisions" : value[0].toUpperCase() + value.slice(1);
-            return <Hint key={value} label={label} disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item ${view === "library" && libraryCriticality === value ? "active" : ""}`} aria-label={label} onClick={() => { setLibraryCriticality(value); setView("library"); }}><span className="nav-icon"><LibraryNavIcon value={value} /></span><span className="pane-label">{label}</span>{value === "all" && libraryCriticality === "all" ? <small className="pane-label">{library.total}</small> : null}</button></Hint>;
+            return <Hint key={value} label={label} disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item ${view === "library" && libraryCriticality === value ? "active" : ""}`} aria-label={label} onClick={() => { setLibraryCriticality(value); navigateTo("library"); }}><span className="nav-icon"><LibraryNavIcon value={value} /></span><span className="pane-label">{label}</span>{value === "all" && libraryCriticality === "all" ? <small className="pane-label">{library.total}</small> : null}</button></Hint>;
           })}
-          <Hint label="Usage and cost" disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item usage-nav ${view === "usage" ? "active" : ""}`} aria-label="Usage and cost" onClick={() => setView("usage")}><span className="nav-icon"><ChartNoAxesColumn aria-hidden="true" /></span><span className="pane-label">Usage &amp; cost</span></button></Hint>
-          <Hint label="Account and provider keys" disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item usage-nav ${view === "settings" ? "active" : ""}`} aria-label="Account and provider keys" onClick={() => setView("settings")}><span className="nav-icon"><Settings aria-hidden="true" /></span><span className="pane-label">Account &amp; keys</span></button></Hint>
+          <Hint label="Usage and cost" disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item usage-nav ${view === "usage" ? "active" : ""}`} aria-label="Usage and cost" onClick={() => navigateTo("usage")}><span className="nav-icon"><ChartNoAxesColumn aria-hidden="true" /></span><span className="pane-label">Usage &amp; cost</span></button></Hint>
+          <Hint label="Account and provider keys" disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item usage-nav ${view === "settings" ? "active" : ""}`} aria-label="Account and provider keys" onClick={() => navigateTo("settings")}><span className="nav-icon"><Settings aria-hidden="true" /></span><span className="pane-label">Account &amp; keys</span></button></Hint>
         </nav>
         <section className="decision-conversations pane-label" aria-label="Saved decisions">
           <div className="pane-section-heading"><span>Decision conversations</span>{libraryLoading ? <span className="spinner dark" /> : null}</div>
           <div className="conversation-list">
-            {hasCurrentDraft ? <button type="button" className={`conversation-row draft-row ${view === "workspace" ? "active" : ""}`} onClick={() => setView("workspace")}><span className="conversation-dot draft" /><span><strong>{currentDraftTitle}</strong><small>{currentDraftStep} draft · saved on this device</small></span><em>Draft</em></button> : null}
+            {hasCurrentDraft ? <button type="button" className={`conversation-row draft-row ${view === "workspace" ? "active" : ""}`} onClick={() => navigateTo("workspace")}><span className="conversation-dot draft" /><span><strong>{currentDraftTitle}</strong><small>{currentDraftStep} draft · saved on this device</small></span><em>Draft</em></button> : null}
             {library.items.map((item) => <button type="button" key={item.id} className={`conversation-row ${decision?.id === item.id ? "active" : ""}`} onClick={() => openDecision(item.id)}><span className={`conversation-dot ${item.criticality}`} /><span><strong>{item.title}</strong><small>{item.last_revisited_at ? formatDateTime(item.last_revisited_at) : `${item.premise_count} premises · not revisited`}</small></span>{item.pending_revisit_count ? <em>{item.pending_revisit_count}</em> : null}</button>)}
             {!hasCurrentDraft && !library.items.length ? <p>No saved decisions in this library.</p> : null}
           </div>
@@ -1154,11 +1183,11 @@ export default function Home() {
           {(["Import", "Review", "Finalize", "Revisit"] as const).map((label, index) => {
             const number = (index + 1) as WorkflowStep;
             const available = view === "workspace" && number <= stage;
-            return <li key={label} className={number === workflowView && view === "workspace" ? "active" : number < stage ? "complete" : ""}><button type="button" disabled={!available} aria-current={number === workflowView && view === "workspace" ? "step" : undefined} aria-label={label} onClick={() => { setView("workspace"); setWorkflowView(number); }}><span>{number < stage ? <Check aria-hidden="true" /> : number}</span><span className="pane-label"><strong>{label}</strong><small>{label === "Import" ? "Original decision source" : label === "Review" ? "Human premise review" : label === "Finalize" ? "Saved record and sharing" : "Evidence conversations"}</small></span></button></li>;
+            return <li key={label} className={number === workflowView && view === "workspace" ? "active" : number < stage ? "complete" : ""}><button type="button" disabled={!available} aria-current={number === workflowView && view === "workspace" ? "step" : undefined} aria-label={label} onClick={() => { navigateTo("workspace"); setWorkflowView(number); }}><span>{number < stage ? <Check aria-hidden="true" /> : number}</span><span className="pane-label"><strong>{label}</strong><small>{label === "Import" ? "Original decision source" : label === "Review" ? "Human premise review" : label === "Finalize" ? "Saved record and sharing" : "Evidence conversations"}</small></span></button></li>;
           })}
         </ol>
-        {decision ? <section className="workflow-conversations pane-label"><div className="pane-section-heading"><span>Revisit conversations</span><small>{revisitHistory.length}</small></div>{revisitHistory.length ? <div>{revisitHistory.map((run) => <button type="button" key={run.id} className={expandedHistoryId === run.id ? "active" : ""} onClick={() => { setView("workspace"); setWorkflowView(4); setExpandedHistoryId(run.id); }}><span className="workflow-conversation-copy"><strong>{run.evidence_filename || "New evidence"}</strong><small>{formatDateTime(run.created_at)}</small></span><em>{run.findings.length}</em></button>)}</div> : <p>No evidence checks yet.</p>}</section> : <div className="workflow-empty pane-label"><ListChecks aria-hidden="true" /><strong>{view === "library" ? "Choose a conversation" : "Start with Import"}</strong><p>{view === "library" ? "Select a saved decision from the library to inspect its workflow." : "Bring in a decision source to begin."}</p></div>}
-        <button type="button" className="workflow-library-link" onClick={() => setView("library")}><Library aria-hidden="true" /><span className="pane-label">Open library overview</span></button>
+        {decision ? <section className="workflow-conversations pane-label"><div className="pane-section-heading"><span>Revisit conversations</span><small>{revisitHistory.length}</small></div>{revisitHistory.length ? <div>{revisitHistory.map((run) => <button type="button" key={run.id} className={expandedHistoryId === run.id ? "active" : ""} onClick={() => { navigateTo("workspace"); setWorkflowView(4); setExpandedHistoryId(run.id); }}><span className="workflow-conversation-copy"><strong>{run.evidence_filename || "New evidence"}</strong><small>{formatDateTime(run.created_at)}</small></span><em>{run.findings.length}</em></button>)}</div> : <p>No evidence checks yet.</p>}</section> : <div className="workflow-empty pane-label"><ListChecks aria-hidden="true" /><strong>{view === "library" ? "Choose a conversation" : "Start with Import"}</strong><p>{view === "library" ? "Select a saved decision from the library to inspect its workflow." : "Bring in a decision source to begin."}</p></div>}
+        <button type="button" className="workflow-library-link" onClick={() => navigateTo("library")}><Library aria-hidden="true" /><span className="pane-label">Open library overview</span></button>
       </aside>
 
       <main id="workspace" className="workspace">
@@ -1175,7 +1204,7 @@ export default function Home() {
           <div className="mobile-library-filters" aria-label="Filter decisions by criticality">
             {(["all", "critical", "important", "routine"] as ("all" | Criticality)[]).map((value) => <button type="button" key={value} className={libraryCriticality === value ? "active" : ""} aria-pressed={libraryCriticality === value} onClick={() => setLibraryCriticality(value)}>{value === "all" ? "All" : value[0].toUpperCase() + value.slice(1)}</button>)}
           </div>
-          {hasCurrentDraft ? <button type="button" className="library-draft-resume" onClick={() => setView("workspace")}><span><Save aria-hidden="true" /></span><div><strong>Continue current draft</strong><small>{currentDraftTitle} · {currentDraftStep}</small></div><em>Resume →</em></button> : null}
+          {hasCurrentDraft ? <button type="button" className="library-draft-resume" onClick={() => navigateTo("workspace")}><span><Save aria-hidden="true" /></span><div><strong>Continue current draft</strong><small>{currentDraftTitle} · {currentDraftStep}</small></div><em>Resume →</em></button> : null}
           <div className="library-summary"><div><strong>{library.total}</strong><span>saved decisions</span></div><p>Reopen a record to review its premises, add new evidence, or inspect previous revisit checks.</p></div>
 {libraryLoading ? <div className="library-empty"><span className="spinner dark" /><strong>Loading decision memory…</strong></div> : library.items.length ? <div className="decision-list">{library.items.map((item) => <div className="decision-card" key={item.id}>
             <button type="button" className="decision-row" onClick={() => openDecision(item.id)}>
@@ -1184,7 +1213,7 @@ export default function Home() {
               <div className="decision-row-date"><span>Last checked</span><strong>{item.last_revisited_at ? formatDateTime(item.last_revisited_at) : "Not revisited"}</strong><small>Saved {formatDateTime(item.created_at)}</small></div><span className="row-arrow">→</span>
             </button>
             <Hint label="Delete decision" side="left"><button type="button" className="decision-row-delete icon-action" aria-label={`Delete ${item.title}`} onClick={() => { setDeleteTitle(item.title); setConfirmingDeleteFor(item.id); }}><ActionIcon name="delete" /></button></Hint>
-          </div>)}</div> : <div className="library-empty"><span className="library-empty-icon"><Library aria-hidden="true" /></span><strong>{libraryQuery || libraryCriticality !== "all" ? "No matching decisions" : "Your decision memory starts here"}</strong><p>{libraryQuery || libraryCriticality !== "all" ? "Try a broader search or remove the criticality filter." : "Finalize your first decision review and it will appear here automatically."}</p><button className="primary" onClick={resetWorkspace}>Create a decision →</button></div>}
+          </div>)}</div> : <div className="library-empty"><span className="library-empty-icon"><Library aria-hidden="true" /></span><strong>{libraryQuery || libraryCriticality !== "all" ? "No matching decisions" : "Your decision memory starts here"}</strong><p>{libraryQuery || libraryCriticality !== "all" ? "Try a broader search or remove the criticality filter." : "Finalize your first decision review and it will appear here automatically."}</p><button className="primary" onClick={() => { resetWorkspace(); navigateTo("workspace"); }}>Create a decision →</button></div>}
         </section> : null}
 
         {view === "usage" ? <section className="usage-view">
@@ -1357,7 +1386,7 @@ export default function Home() {
 
          <ConfirmDialog open={Boolean(confirmingDeleteFor)} title="Delete this decision?" description={`This permanently removes ${deleteTitle || "this decision"}, its premises, source excerpts, revisit history, and share links. This cannot be undone.`} confirmLabel="Delete permanently" busyLabel="Deleting…" busy={deleteBusy} onOpenChange={(open) => { if (!open) { setConfirmingDeleteFor(null); setDeleteTitle(null); } }} onConfirm={() => { if (confirmingDeleteFor) void deleteDecision(confirmingDeleteFor); }} />
          <ConfirmDialog open={Boolean(confirmingShareDelete)} title="Delete this revoked share record?" description="This removes the old link from sharing history. The decision and its revisit history remain unchanged." confirmLabel="Delete share record" busyLabel="Deleting…" busy={shareDeleteBusy} onOpenChange={(open) => { if (!open) setConfirmingShareDelete(null); }} onConfirm={() => void deleteShareRecord()} />
-         <ConfirmDialog open={confirmingNewDecision} title="Start a new decision?" description="Your unfinished import or review draft is saved locally, but starting over will clear it from this workspace." confirmLabel="Start new decision" busyLabel="Starting…" onOpenChange={setConfirmingNewDecision} onConfirm={() => { setConfirmingNewDecision(false); window.localStorage.removeItem(workspaceSessionKey); resetWorkspace(); }} />
+         <ConfirmDialog open={confirmingNewDecision} title="Start a new decision?" description="Your unfinished import or review draft is saved locally, but starting over will clear it from this workspace." confirmLabel="Start new decision" busyLabel="Starting…" onOpenChange={setConfirmingNewDecision} onConfirm={() => { setConfirmingNewDecision(false); window.localStorage.removeItem(workspaceSessionKey); resetWorkspace(); navigateTo("workspace"); }} />
       </div>
     );
 }
