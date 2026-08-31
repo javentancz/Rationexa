@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "start": "next start",
     "build": "next build",
     "check": "tsc --noEmit",
     "storybook": "storybook dev -p 6006",

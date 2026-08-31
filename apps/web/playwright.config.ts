@@ -24,7 +24,7 @@ export default defineConfig({
       },
     },
     {
-      command: "npm run dev",
+      command: process.env.CI === "true" ? "npm run start" : "npm run dev",
       url: "http://localhost:3000",
       reuseExistingServer: true,
       timeout: 120_000,
