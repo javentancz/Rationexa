@@ -56,8 +56,8 @@ export function ConfirmDialog({
           <AlertDialog.Title>{title}</AlertDialog.Title>
           <AlertDialog.Description>{description}</AlertDialog.Description>
           <div className="modal-actions">
-            <AlertDialog.Cancel asChild><button className="text-button" disabled={busy}>Cancel</button></AlertDialog.Cancel>
-            <button className="primary danger" disabled={busy} onClick={onConfirm}>{busy ? busyLabel : confirmLabel}</button>
+            <AlertDialog.Cancel className="text-button" disabled={busy}>Cancel</AlertDialog.Cancel>
+            <button type="button" className="primary danger" disabled={busy} onClick={onConfirm}>{busy ? busyLabel : confirmLabel}</button>
           </div>
         </AlertDialog.Content>
       </AlertDialog.Portal>
