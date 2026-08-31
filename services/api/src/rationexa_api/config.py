@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     local_account_password: str | None = None
     auth_session_ttl_hours: int = 168
     guest_workspace_ttl_hours: int = 24
+    guest_cleanup_batch_size: int = 200
+    cron_secret: str | None = None
     session_cookie_name: str = "rationexa_session"
     session_cookie_secure: bool = False
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
@@ -63,6 +65,15 @@ class Settings(BaseSettings):
     def use_psycopg_driver(cls, value: object) -> object:
         if isinstance(value, str) and value.startswith("postgresql://"):
             return value.replace("postgresql://", "postgresql+psycopg://", 1)
+        return value
+
+    @field_validator("cron_secret", mode="before")
+    @classmethod
+    def validate_cron_secret(cls, value: object) -> object:
+        if value is None or value == "":
+            return None
+        if not isinstance(value, str) or len(value) < 16:
+            raise ValueError("CRON_SECRET must contain at least 16 characters")
         return value
 
     @property

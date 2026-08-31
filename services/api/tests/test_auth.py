@@ -1,10 +1,15 @@
+from datetime import timedelta
+from pathlib import Path
+
 import httpx
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy import select
 
 from rationexa_api.auth import hash_password, verify_password
 from rationexa_api.config import Settings
-from rationexa_api.db import AccountRow, SecretRow, SessionLocal, SessionRow, WorkspaceRow
+from rationexa_api.db import AccountRow, ArtifactRow, SecretRow, SessionLocal, SessionRow, WorkspaceRow, now_utc
 from rationexa_api.main import app, provider_for, settings
 from rationexa_api.providers import OpenAIResponsesProvider, get_provider
 from rationexa_api.secrets import (
@@ -120,6 +125,85 @@ def test_hosted_guests_get_isolated_temporary_workspaces(monkeypatch) -> None:
         assert permanent_workspace["id"] == first_workspace["id"]
         assert permanent_workspace["mode"] == "authenticated_personal"
         assert first.get(f"/v1/extractions/{extraction.json()['id']}").status_code == 200
+
+
+def test_scheduled_cleanup_deletes_only_expired_guest_workspaces(monkeypatch) -> None:
+    from rationexa_api import main
+
+    monkeypatch.setattr(
+        main,
+        "settings",
+        Settings(
+            hosted_mode=True,
+            session_cookie_secure=False,
+            guest_workspace_ttl_hours=1,
+            guest_cleanup_batch_size=50,
+            cron_secret="scheduled-cleanup-secret",
+        ),
+    )
+    with TestClient(app) as guest, TestClient(app) as registered, TestClient(app) as scheduler:
+        guest_workspace = guest.get("/v1/bootstrap").json()["workspace"]
+        artifact_response = guest.post(
+            "/v1/artifacts",
+            json={"filename": "expired-guest.txt", "media_type": "text/plain", "content": "Temporary evidence"},
+        )
+        assert artifact_response.status_code == 201
+        artifact_id = artifact_response.json()["id"]
+
+        account_response = registered.post(
+            "/v1/auth/register",
+            json={"email": "cleanup-owner@rationexa.local", "name": "Permanent", "password": "permanent-pass"},
+        )
+        assert account_response.status_code == 201
+        permanent_account_id = account_response.json()["account_id"]
+
+        with SessionLocal() as db:
+            guest_account = db.get(AccountRow, guest_workspace["account_id"])
+            permanent_account = db.get(AccountRow, permanent_account_id)
+            artifact = db.get(ArtifactRow, artifact_id)
+            assert guest_account is not None and permanent_account is not None and artifact is not None
+            guest_account.created_at = now_utc() - timedelta(hours=2)
+            permanent_account.created_at = now_utc() - timedelta(hours=2)
+            artifact_path = artifact.storage_uri
+            db.commit()
+
+        assert scheduler.get("/v1/maintenance/cleanup-guests").status_code == 401
+        assert (
+            scheduler.get(
+                "/v1/maintenance/cleanup-guests",
+                headers={"Authorization": "Bearer wrong-secret"},
+            ).status_code
+            == 401
+        )
+        cleanup = scheduler.get(
+            "/v1/maintenance/cleanup-guests",
+            headers={"Authorization": "Bearer scheduled-cleanup-secret"},
+        )
+        assert cleanup.status_code == 200
+        assert cleanup.json()["guest_workspaces_deleted"] == 1
+        assert cleanup.json()["artifact_file_errors"] == 0
+
+        with SessionLocal() as db:
+            assert db.get(AccountRow, guest_workspace["account_id"]) is None
+            assert db.get(WorkspaceRow, guest_workspace["id"]) is None
+            assert db.get(ArtifactRow, artifact_id) is None
+            assert db.get(AccountRow, permanent_account_id) is not None
+        if not artifact_path.startswith("database://"):
+            assert not Path(artifact_path).exists()
+
+
+def test_scheduled_cleanup_fails_closed_without_a_secret(monkeypatch) -> None:
+    from rationexa_api import main
+
+    monkeypatch.setattr(main, "settings", Settings(hosted_mode=True, cron_secret=None))
+    with TestClient(app) as client:
+        response = client.get("/v1/maintenance/cleanup-guests", headers={"Authorization": "Bearer anything"})
+    assert response.status_code == 503
+
+
+def test_cron_secret_rejects_weak_values() -> None:
+    with pytest.raises(ValidationError, match="at least 16 characters"):
+        Settings(cron_secret="too-short")
 
 
 def test_login_rate_limit_is_persistent_and_contextual(monkeypatch) -> None:

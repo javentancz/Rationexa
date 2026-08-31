@@ -5,5 +5,11 @@
       "maxDuration": 300,
       "excludeFiles": "{tests/**,migrations/**/__pycache__/**,**/*.pyc,rationexa.db,artifacts/**}"
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/v1/maintenance/cleanup-guests",
+      "schedule": "17 3 * * *"
+    }
+  ]
 }

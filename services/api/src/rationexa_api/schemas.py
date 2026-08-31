@@ -490,6 +490,13 @@ class HealthRead(BaseModel):
     service: str
 
 
+class GuestCleanupRead(BaseModel):
+    guest_workspaces_deleted: int
+    artifact_files_deleted: int
+    artifact_file_errors: int
+    cutoff: datetime
+
+
 class ShareCreate(BaseModel):
     expires_at: datetime | None = None
 

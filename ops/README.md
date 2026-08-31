@@ -33,9 +33,23 @@ The API project still enforces Rationexa sessions and workspace isolation after
 the Vercel protection layer.
 
 Set `HOSTED_MODE=true`, `SESSION_COOKIE_SECURE=true`, and
-`JOB_EXECUTION_MODE=inline`. Hosted mode rejects anonymous workspace access;
-browser sessions use an HttpOnly cookie, while raw bearer tokens remain available
-for explicit API clients. Session tokens are stored only as hashes.
+`JOB_EXECUTION_MODE=inline`. Hosted visitors receive isolated temporary guest
+workspaces through an HttpOnly cookie; registered accounts receive permanent
+workspaces, while raw bearer tokens remain available for explicit API clients.
+Session tokens are stored only as hashes.
+
+## Temporary guest cleanup
+
+Set `CRON_SECRET` in the production API project to a random value of at least 16
+characters. Vercel invokes `GET /v1/maintenance/cleanup-guests` once daily with
+that value in the `Authorization: Bearer ...` header. The endpoint deletes guest
+workspaces older than `GUEST_WORKSPACE_TTL_HOURS` in bounded batches controlled
+by `GUEST_CLEANUP_BATCH_SIZE`; it never selects registered accounts. Guest
+creation also performs a small opportunistic cleanup as a fallback.
+
+The checked-in schedule is daily because Vercel Hobby projects do not support a
+shorter interval. Monitor `guest_cleanup_complete` logs and increase the batch
+size only if the daily run consistently reaches the configured limit.
 
 Set `PUBLIC_BASE_URL` to the canonical web-project origin, not the API-project
 origin. The browser always copies share links using its current web origin, while

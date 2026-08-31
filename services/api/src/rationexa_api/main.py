@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from hmac import compare_digest
 from pathlib import Path
 from secrets import token_urlsafe
 from threading import Lock
@@ -83,6 +84,7 @@ from .schemas import (
     ExtractionRequest,
     ExtractionResult,
     ExtractionReviewRequest,
+    GuestCleanupRead,
     HealthRead,
     JobRead,
     ModelCatalogRead,
@@ -1225,7 +1227,7 @@ def list_decisions(
     )
 
 
-def cleanup_expired_guest_workspaces(db: Session) -> None:
+def cleanup_expired_guest_workspaces(db: Session, *, limit: int = 20) -> GuestCleanupRead:
     cutoff = now_utc() - timedelta(hours=settings.guest_workspace_ttl_hours)
     expired = db.scalars(
         select(AccountRow)
@@ -1234,7 +1236,8 @@ def cleanup_expired_guest_workspaces(db: Session) -> None:
             AccountRow.email.is_(None),
             AccountRow.created_at < cutoff,
         )
-        .limit(20)
+        .order_by(AccountRow.created_at.asc())
+        .limit(max(1, min(limit, 1000)))
     ).all()
     artifact_files: list[Path] = []
     for account in expired:
@@ -1243,11 +1246,45 @@ def cleanup_expired_guest_workspaces(db: Session) -> None:
             artifact_files.extend(delete_private_account_data(db, account, workspace))
     if expired:
         db.commit()
+    artifact_files_deleted = 0
+    artifact_file_errors = 0
     for artifact_file in artifact_files:
         try:
+            existed = artifact_file.exists()
             artifact_file.unlink(missing_ok=True)
+            if existed:
+                artifact_files_deleted += 1
         except OSError:
-            pass
+            artifact_file_errors += 1
+    return GuestCleanupRead(
+        guest_workspaces_deleted=len(expired),
+        artifact_files_deleted=artifact_files_deleted,
+        artifact_file_errors=artifact_file_errors,
+        cutoff=cutoff,
+    )
+
+
+@app.get("/v1/maintenance/cleanup-guests", response_model=GuestCleanupRead)
+def scheduled_guest_cleanup(route: Request, db: Db) -> GuestCleanupRead:
+    """Delete expired temporary workspaces when invoked by the deployment scheduler."""
+    expected = settings.cron_secret
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Scheduled cleanup is not configured",
+        )
+    supplied = route.headers.get("authorization", "")
+    if not compare_digest(supplied, f"Bearer {expected}"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid maintenance credential")
+    result = cleanup_expired_guest_workspaces(db, limit=settings.guest_cleanup_batch_size)
+    logger.info(
+        "guest_cleanup_complete deleted=%s artifact_files_deleted=%s artifact_file_errors=%s cutoff=%s",
+        result.guest_workspaces_deleted,
+        result.artifact_files_deleted,
+        result.artifact_file_errors,
+        result.cutoff.isoformat(),
+    )
+    return result
 
 
 def create_guest_workspace(response: Response, db: Session) -> WorkspaceRow:
