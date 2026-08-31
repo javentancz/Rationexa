@@ -133,8 +133,13 @@ Run the same API suite in an isolated temporary PostgreSQL schema:
 ```bash
 docker compose up -d db
 TEST_DATABASE_URL=postgresql+psycopg://rationexa:rationexa@localhost:5433/rationexa \
-  .venv/bin/pytest services/api/tests
+  pnpm validate:postgres
 ```
+
+GitHub CI runs this PostgreSQL validation as a separate required job alongside
+the SQLite, web-build, dependency-audit, and browser-test job. This keeps local
+offline coverage fast while proving the complete API and Alembic migration path
+against the same database engine used by staging and pilot workspaces.
 
 Staging environment, password recovery, health-check, backup, and restore
 instructions are in [Pilot operations](ops/README.md).
