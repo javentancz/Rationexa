@@ -6,6 +6,7 @@
 .venv/
 __pycache__/
 node_modules/
+.pnpm-store/
 .next/
 storybook-static/
 playwright-report/

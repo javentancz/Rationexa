@@ -62,9 +62,11 @@ from .providers import (
     default_model_id,
     get_provider,
 )
+from .read_models import decision_read, extraction_read, revisit_read
 from .schemas import (
     AccountDeleteRequest,
     AccountRead,
+    AccountSettingsRead,
     AccountUpdateRequest,
     ArtifactCreate,
     ArtifactRead,
@@ -78,8 +80,8 @@ from .schemas import (
     DecisionFinalizeRequest,
     DecisionListItem,
     DecisionListRead,
-    DecisionPremiseRead,
     DecisionRead,
+    DecisionWorkspaceRead,
     ExtractionRead,
     ExtractionRequest,
     ExtractionResult,
@@ -109,9 +111,7 @@ from .schemas import (
     ShareCreate,
     ShareDecisionRead,
     ShareRead,
-    SourceAnchor,
-    UsageModelRead,
-    UsageRunRead,
+    UsageDashboardRead,
     UsageSummaryRead,
     WorkspaceBootstrapRead,
     WorkspaceRead,
@@ -127,6 +127,8 @@ from .secrets import (
     validate_provider_base_url,
 )
 from .services import extract_artifact_text, persist_artifact, validate_anchor
+from .share_service import is_expired, load_shared_decision, share_read
+from .usage_service import build_pilot_metrics, build_usage_summary
 
 settings = get_settings()
 logger = logging.getLogger("rationexa.api")
@@ -568,167 +570,22 @@ def workspace_decision(db: Session, decision_id: str, workspace_id: str | None =
     )
 
 
-def _provider_location(provider: str) -> str:
-    if provider in {"ollama", "deterministic"}:
-        return "local"
-    if provider == "unknown":
-        return "unknown"
-    return "hosted"
-
-
 @app.get("/v1/usage", response_model=UsageSummaryRead)
 def usage_summary(route: Request, db: Db) -> UsageSummaryRead:
     workspace_id = active_workspace_id(db, extract_session_token(route))
-    decision_by_extraction = dict(
-        db.execute(
-            select(DecisionRow.extraction_id, DecisionRow.id).where(DecisionRow.workspace_id == workspace_id)
-        ).all()
-    )
-    runs: list[UsageRunRead] = []
-    for extraction in db.scalars(select(ExtractionRow).where(ExtractionRow.workspace_id == workspace_id)).all():
-        runs.append(
-            UsageRunRead(
-                id=extraction.id,
-                kind="extraction",
-                provider=extraction.provider,
-                model=extraction.model,
-                prompt_version=extraction.prompt_version,
-                location=_provider_location(extraction.provider),
-                latency_ms=extraction.latency_ms,
-                input_tokens=extraction.input_tokens,
-                output_tokens=extraction.output_tokens,
-                estimated_cost_usd=extraction.estimated_cost_usd,
-                created_at=as_utc(extraction.created_at),
-                decision_id=decision_by_extraction.get(extraction.id),
-            )
-        )
-    for revisit in db.scalars(
-        select(RevisitRow).join(DecisionRow).where(DecisionRow.workspace_id == workspace_id)
-    ).all():
-        runs.append(
-            UsageRunRead(
-                id=revisit.id,
-                kind="revisit",
-                provider=revisit.provider or "unknown",
-                model=revisit.model or "unknown",
-                prompt_version=revisit.prompt_version or "unknown",
-                location=_provider_location(revisit.provider or "unknown"),
-                latency_ms=revisit.latency_ms,
-                input_tokens=revisit.input_tokens,
-                output_tokens=revisit.output_tokens,
-                estimated_cost_usd=revisit.estimated_cost_usd,
-                created_at=as_utc(revisit.created_at),
-                decision_id=revisit.decision_id,
-            )
-        )
-    for decision in db.scalars(
-        select(DecisionRow).where(
-            DecisionRow.workspace_id == workspace_id,
-            DecisionRow.challenge.is_not(None),
-        )
-    ).all():
-        challenge = DecisionChallengeRead.model_validate(decision.challenge)
-        runs.append(
-            UsageRunRead(
-                id=f"challenge-{decision.id}",
-                kind="challenge",
-                provider=challenge.provider,
-                model=challenge.model,
-                prompt_version=challenge.prompt_version,
-                location=_provider_location(challenge.provider),
-                latency_ms=challenge.latency_ms,
-                input_tokens=challenge.input_tokens,
-                output_tokens=challenge.output_tokens,
-                estimated_cost_usd=challenge.estimated_cost_usd,
-                created_at=challenge.generated_at,
-                decision_id=decision.id,
-            )
-        )
-
-    grouped: dict[tuple[str, str, str], list[UsageRunRead]] = {}
-    for run in runs:
-        grouped.setdefault((run.provider, run.model, run.location), []).append(run)
-    models = []
-    for (provider, model, location), model_runs in grouped.items():
-        latencies = [run.latency_ms for run in model_runs if run.latency_ms is not None]
-        models.append(
-            UsageModelRead(
-                provider=provider,
-                model=model,
-                location=location,
-                run_count=len(model_runs),
-                total_tokens=sum((run.input_tokens or 0) + (run.output_tokens or 0) for run in model_runs),
-                known_cost_usd=round(
-                    sum(run.estimated_cost_usd for run in model_runs if run.estimated_cost_usd is not None),
-                    8,
-                ),
-                unpriced_run_count=sum(run.estimated_cost_usd is None for run in model_runs),
-                average_latency_ms=round(sum(latencies) / len(latencies)) if latencies else None,
-            )
-        )
-    models.sort(key=lambda item: (-item.run_count, item.provider, item.model))
-    runs.sort(key=lambda run: run.created_at, reverse=True)
-    return UsageSummaryRead(
-        total_runs=len(runs),
-        extraction_runs=sum(run.kind == "extraction" for run in runs),
-        revisit_runs=sum(run.kind == "revisit" for run in runs),
-        challenge_runs=sum(run.kind == "challenge" for run in runs),
-        local_runs=sum(run.location == "local" for run in runs),
-        hosted_runs=sum(run.location == "hosted" for run in runs),
-        unknown_location_runs=sum(run.location == "unknown" for run in runs),
-        total_tokens=sum((run.input_tokens or 0) + (run.output_tokens or 0) for run in runs),
-        tokenized_run_count=sum(run.input_tokens is not None or run.output_tokens is not None for run in runs),
-        known_cost_usd=round(sum(run.estimated_cost_usd for run in runs if run.estimated_cost_usd is not None), 8),
-        unpriced_run_count=sum(run.estimated_cost_usd is None for run in runs),
-        models=models,
-        recent_runs=runs[:20],
-    )
+    return build_usage_summary(db, workspace_id)
 
 
 @app.get("/v1/pilot/metrics", response_model=PilotMetricsRead)
 def pilot_metrics(route: Request, db: Db) -> PilotMetricsRead:
     workspace_id = active_workspace_id(db, extract_session_token(route))
-    events = db.scalars(
-        select(ProductEventRow)
-        .where(ProductEventRow.workspace_id == workspace_id)
-        .order_by(ProductEventRow.created_at.desc())
-    ).all()
-    event_counts: dict[str, int] = {}
-    for event in events:
-        event_counts[event.event_type] = event_counts.get(event.event_type, 0) + 1
-    active_days = len({as_utc(event.created_at).date() for event in events})
-    decision_count = (
-        db.scalar(select(func.count()).select_from(DecisionRow).where(DecisionRow.workspace_id == workspace_id)) or 0
-    )
-    revisit_count = (
-        db.scalar(
-            select(func.count())
-            .select_from(RevisitRow)
-            .join(DecisionRow)
-            .where(DecisionRow.workspace_id == workspace_id)
-        )
-        or 0
-    )
-    share_count = (
-        db.scalar(
-            select(func.count())
-            .select_from(DecisionShareRow)
-            .join(DecisionRow)
-            .where(DecisionRow.workspace_id == workspace_id)
-        )
-        or 0
-    )
-    return PilotMetricsRead(
-        decision_count=decision_count,
-        revisit_count=revisit_count,
-        judgment_count=event_counts.get("finding_judged", 0),
-        share_count=share_count,
-        export_count=event_counts.get("decision_exported", 0),
-        challenge_confirmation_count=event_counts.get("challenge_confirmed", 0),
-        active_days=active_days,
-        repeat_use_observed=active_days >= 2 and revisit_count > 0,
-        latest_activity_at=as_utc(events[0].created_at) if events else None,
-    )
+    return build_pilot_metrics(db, workspace_id)
+
+
+@app.get("/v1/usage-dashboard", response_model=UsageDashboardRead)
+def usage_dashboard(route: Request, db: Db) -> UsageDashboardRead:
+    """Load usage and pilot signals in one serverless round trip."""
+    return UsageDashboardRead(usage=usage_summary(route, db), pilot_metrics=pilot_metrics(route, db))
 
 
 def save_artifact(
@@ -1381,137 +1238,6 @@ def export_decision_pdf(route: Request, decision_id: str, db: Db) -> Response:
     )
 
 
-SECRET_PLACEHOLD = "***redacted provider secret***"
-ARTIFACT_NOTICE = "Private source artifact not included in the shared record."
-_SECRET_KEYWORDS = ("api_key", "apikey", "secret", "token", "password", "authorization", "bearer", "openai", "ollama")
-
-
-def _scrub_shared_text(value: object | None) -> str | None:
-    """Scrub provider secrets and private artifact references out of shared text."""
-    if value is None:
-        return None
-    text = str(value)
-    lowered = text.lower()
-    if "storage_uri" in lowered or "artifact" in lowered and "file" in lowered:
-        return ARTIFACT_NOTICE
-    for keyword in _SECRET_KEYWORDS:
-        if keyword in lowered:
-            return SECRET_PLACEHOLD
-    return text
-
-
-def _scrub_shared_dict(data: object) -> object:
-    if isinstance(data, dict):
-        scrubbed = {}
-        for key, value in data.items():
-            if isinstance(key, str) and "artifact" in key.lower():
-                scrubbed[key] = ARTIFACT_NOTICE
-            elif isinstance(key, str) and any(secret in key.lower() for secret in _SECRET_KEYWORDS):
-                scrubbed[key] = SECRET_PLACEHOLD
-            else:
-                scrubbed[key] = _scrub_shared_dict(value)
-        return scrubbed
-    if isinstance(data, list):
-        return [_scrub_shared_dict(item) for item in data]
-    return _scrub_shared_text(data)
-
-
-def share_read(share: DecisionShareRow, base_url: str) -> ShareRead:
-    url = f"{base_url.rstrip('/')}/share/{share.token}" if share.status == "active" else None
-    return ShareRead(
-        id=share.id,
-        decision_id=share.decision_id,
-        token=share.token,
-        status=share.status,
-        url=url,
-        created_at=as_utc(share.created_at),
-        expires_at=as_utc(share.expires_at),
-        revoked_at=as_utc(share.revoked_at),
-    )
-
-
-def shared_premise(premise: PremiseRow) -> DecisionPremiseRead:
-    anchor = None
-    if premise.anchor is not None:
-        anchor = SourceAnchor(
-            exact_excerpt=_scrub_shared_text(premise.anchor.exact_excerpt) or "",
-            start_offset=premise.anchor.start_offset,
-            end_offset=premise.anchor.end_offset,
-            page_number=premise.anchor.page_number,
-        )
-    return DecisionPremiseRead(
-        id=premise.id,
-        kind=premise.kind,
-        statement=_scrub_shared_text(premise.statement) or "",
-        qualifiers=_scrub_shared_text(premise.qualifiers) or "",
-        importance=premise.importance,
-        quality_state=premise.quality_state,
-        claim_status=premise.claim_status,
-        anchor=anchor,
-    )
-
-
-def decision_share_payload(decision: DecisionRow, revisits: list[RevisitRow], shared_at) -> ShareDecisionRead:
-    revisits_for_share = [
-        RevisitRead(
-            id=revisit.id,
-            decision_id=revisit.decision_id,
-            status=revisit.status,
-            findings=_scrub_shared_dict(revisit.findings) or [],
-            provider=revisit.provider,
-            model=revisit.model,
-            prompt_version=revisit.prompt_version,
-            latency_ms=revisit.latency_ms,
-            input_tokens=revisit.input_tokens,
-            output_tokens=revisit.output_tokens,
-            estimated_cost_usd=revisit.estimated_cost_usd,
-            evidence_filename=None,
-            created_at=as_utc(revisit.created_at),
-        )
-        for revisit in revisits
-    ]
-    return ShareDecisionRead(
-        id=decision.id,
-        title=_scrub_shared_text(decision.title) or "",
-        question=_scrub_shared_text(decision.question) or "",
-        context=_scrub_shared_text(decision.context) or "",
-        chosen_option=_scrub_shared_text(decision.chosen_option),
-        rationale=_scrub_shared_text(decision.rationale) or "",
-        criticality=decision.criticality,
-        preservation_policy=decision.preservation_policy,
-        status=decision.status,
-        premises=[shared_premise(premise) for premise in decision.premises],
-        revisits=revisits_for_share,
-        shared_at=as_utc(shared_at),
-    )
-
-
-def _is_expired(share: DecisionShareRow) -> bool:
-    if share.expires_at is None:
-        return False
-    expires_at = share.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=UTC)
-    return expires_at < now_utc()
-
-
-def load_shared_decision(db: Session, token: str) -> ShareDecisionRead:
-    share = db.scalar(select(DecisionShareRow).where(DecisionShareRow.token == token))
-    if share is None or share.status != "active":
-        raise HTTPException(status_code=404, detail="Shared decision not found")
-    if _is_expired(share):
-        raise HTTPException(status_code=404, detail="Shared decision link has expired")
-    decision = db.get(DecisionRow, share.decision_id)
-    if decision is None:
-        raise HTTPException(status_code=404, detail="Shared decision not found")
-    revisits = db.scalars(
-        select(RevisitRow)
-        .where(RevisitRow.decision_id == decision.id)
-        .order_by(RevisitRow.created_at.asc(), RevisitRow.id.asc())
-    ).all()
-    return decision_share_payload(decision, revisits, share.created_at)
-
-
 @app.post(
     "/v1/decisions/{decision_id}/shares",
     response_model=ShareRead,
@@ -1555,6 +1281,30 @@ def list_shares(route: Request, decision_id: str, db: Db) -> list[ShareRead]:
     return [share_read(share, settings.public_base_url) for share in shares]
 
 
+@app.get("/v1/decisions/{decision_id}/workspace", response_model=DecisionWorkspaceRead)
+def decision_workspace(route: Request, decision_id: str, db: Db) -> DecisionWorkspaceRead:
+    """Load a decision conversation, its revisits, and shares together."""
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    decision = workspace_decision(db, decision_id, workspace_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    revisits = db.scalars(
+        select(RevisitRow)
+        .where(RevisitRow.decision_id == decision_id)
+        .order_by(RevisitRow.created_at.desc(), RevisitRow.id.desc())
+    ).all()
+    shares = db.scalars(
+        select(DecisionShareRow)
+        .where(DecisionShareRow.decision_id == decision_id)
+        .order_by(DecisionShareRow.created_at.desc())
+    ).all()
+    return DecisionWorkspaceRead(
+        decision=decision_read(decision),
+        revisits=[revisit_read(row) for row in revisits],
+        shares=[share_read(row, settings.public_base_url) for row in shares],
+    )
+
+
 @app.delete("/v1/decisions/{decision_id}/shares/{share_id}", response_model=ShareRead)
 def revoke_share(route: Request, decision_id: str, share_id: str, db: Db) -> ShareRead:
     workspace_id = active_workspace_id(db, extract_session_token(route))
@@ -1581,7 +1331,7 @@ def delete_share_record(route: Request, decision_id: str, share_id: str, db: Db)
     share = db.get(DecisionShareRow, share_id)
     if share is None or share.decision_id != decision_id:
         raise HTTPException(status_code=404, detail="Shared decision link not found")
-    if share.status == "active" and not _is_expired(share):
+    if share.status == "active" and not is_expired(share):
         raise HTTPException(status_code=409, detail="Revoke the active share link before deleting its record")
     db.delete(share)
     db.commit()
@@ -2365,75 +2115,19 @@ def remove_provider_secret(route: Request, provider: str, db: Db) -> SecretRead:
     raise HTTPException(status_code=404, detail="No stored secret for this provider")
 
 
-def extraction_read(row: ExtractionRow) -> ExtractionRead:
-    return ExtractionRead(
-        id=row.id,
-        artifact_id=row.artifact_id,
-        status=row.status,
-        provider=row.provider,
-        model=row.model,
-        prompt_version=row.prompt_version,
-        latency_ms=row.latency_ms,
-        input_tokens=row.input_tokens,
-        output_tokens=row.output_tokens,
-        estimated_cost_usd=row.estimated_cost_usd,
-        result=ExtractionResult.model_validate(row.output),
-        created_at=as_utc(row.created_at),
-    )
-
-
-def decision_read(row: DecisionRow) -> DecisionRead:
-    premises = []
-    for premise in row.premises:
-        anchor = None
-        if premise.anchor:
-            anchor = SourceAnchor(
-                exact_excerpt=premise.anchor.exact_excerpt,
-                start_offset=premise.anchor.start_offset,
-                end_offset=premise.anchor.end_offset,
-                page_number=premise.anchor.page_number,
-            )
-        premises.append(
-            DecisionPremiseRead(
-                id=premise.id,
-                kind=premise.kind,
-                statement=premise.statement,
-                qualifiers=premise.qualifiers,
-                importance=premise.importance,
-                quality_state=premise.quality_state,
-                claim_status=premise.claim_status,
-                anchor=anchor,
-            )
-        )
-    return DecisionRead(
-        id=row.id,
-        title=row.title,
-        question=row.question,
-        context=row.context,
-        chosen_option=row.chosen_option,
-        rationale=row.rationale,
-        criticality=row.criticality,
-        preservation_policy=row.preservation_policy,
-        status=row.status,
-        premises=premises,
-        challenge=DecisionChallengeRead.model_validate(row.challenge) if row.challenge else None,
-        created_at=as_utc(row.created_at),
-    )
-
-
-def revisit_read(row: RevisitRow) -> RevisitRead:
-    return RevisitRead(
-        id=row.id,
-        decision_id=row.decision_id,
-        status=row.status,
-        findings=row.findings,
-        provider=row.provider,
-        model=row.model,
-        prompt_version=row.prompt_version,
-        latency_ms=row.latency_ms,
-        input_tokens=row.input_tokens,
-        output_tokens=row.output_tokens,
-        estimated_cost_usd=row.estimated_cost_usd,
-        evidence_filename=row.evidence_filename,
-        created_at=as_utc(row.created_at),
+@app.get("/v1/account-settings", response_model=AccountSettingsRead)
+def account_settings(route: Request, db: Db) -> AccountSettingsRead:
+    """Load account, workspace, sessions, and provider status together."""
+    token = extract_session_token(route)
+    workspace = active_workspace(db, token)
+    account = db.get(AccountRow, workspace.owner_account_id)
+    if account is None:
+        raise HTTPException(status_code=503, detail="Workspace account is unavailable")
+    authenticated = not is_guest_account(account) and account.email is not None
+    return AccountSettingsRead(
+        authenticated=authenticated,
+        account=account_read(account),
+        workspace=workspace_read(workspace, account),
+        sessions=list_sessions(route, db) if authenticated else [],
+        secrets=list_provider_secrets(route, db) if authenticated else [],
     )

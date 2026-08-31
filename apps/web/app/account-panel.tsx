@@ -5,16 +5,13 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { KeyRound, LogIn, LogOut, Monitor, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import { apiFetch, apiResponse, confirmPasswordReset, login, logout, register, requestPasswordReset, responseJson, setAuthenticatedState, setSessionToken } from "./api";
+import { apiFetch, confirmPasswordReset, login, logout, register, requestPasswordReset, setAuthenticatedState, setSessionToken } from "./api";
 import { ConfirmDialog } from "./ui";
+import { accountSettingsKey, fetchAccountSettings } from "./workspace-api";
+import type { Account as AccountRead, AccountSettings as AccountSettingsSnapshot, PersonalWorkspace as WorkspaceRead, Secret as SecretRead, SessionSummary } from "./workspace-types";
 
-type AccountRead = { id: string; name: string; email?: string; has_password: boolean; created_at: string };
-type WorkspaceRead = { id: string; name: string; account_name: string; mode?: "local_personal" | "guest_personal" | "authenticated_personal" };
-type SessionSummary = { id: string; created_at: string; expires_at: string; current: boolean };
-type SecretRead = { provider: string; configured: boolean; label?: string; base_url?: string; selected_model?: string; protocol?: string; last_updated_at?: string; source: string };
 type ProviderModels = { models: string[] };
 type ProviderTest = { provider: string; ok: boolean; model_count: number; latency_ms: number };
-type AccountSettingsSnapshot = { authenticated: boolean; account: AccountRead; workspace: WorkspaceRead | null; sessions: SessionSummary[]; secrets: SecretRead[] };
 
 const providerOptions = [
   { id: "openrouter", label: "OpenRouter", detail: "Many model companies through one compatible API" },
@@ -65,43 +62,18 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
   const selectedProvider = providerOptions.find((provider) => provider.id === providerEntry) ?? providerOptions[0];
 
   function invalidateAccountSettings() {
-    void queryClient.invalidateQueries({ queryKey: ["account-settings", workspaceId ?? "anonymous"], exact: true, refetchType: "none" });
+    void queryClient.invalidateQueries({ queryKey: accountSettingsKey(workspaceId), exact: true, refetchType: "none" });
   }
 
   async function refresh(force = false) {
     setError(null);
     try {
-      const queryKey = ["account-settings", workspaceId ?? "anonymous"];
+      const queryKey = accountSettingsKey(workspaceId);
       if (force) await queryClient.invalidateQueries({ queryKey, exact: true, refetchType: "none" });
       const snapshot = await queryClient.fetchQuery<AccountSettingsSnapshot>({
         queryKey,
         staleTime: 5 * 60_000,
-        queryFn: async () => {
-          const accountResponse = await apiResponse("/v1/account");
-          if (accountResponse.ok) {
-            const signedInAccount = await responseJson(accountResponse) as AccountRead;
-            const [currentWorkspace, activeSessions, stored] = await Promise.all([
-              apiFetch("/v1/workspace") as Promise<WorkspaceRead>,
-              apiFetch("/v1/auth/sessions") as Promise<SessionSummary[]>,
-              apiFetch("/v1/secrets") as Promise<SecretRead[]>,
-            ]);
-            return { authenticated: true, account: signedInAccount, workspace: currentWorkspace, sessions: activeSessions, secrets: stored };
-          }
-          if (accountResponse.status !== 401) await responseJson(accountResponse);
-          let localWorkspace: WorkspaceRead | null = null;
-          try {
-            localWorkspace = (await apiFetch("/v1/workspace")) as WorkspaceRead;
-          } catch {
-            // Hosted anonymous sessions do not have a workspace.
-          }
-          return {
-            authenticated: false,
-            account: localWorkspace ? { id: localWorkspace.id, name: localWorkspace.account_name, has_password: false, created_at: "" } : { id: "guest", name: "Pilot reviewer", has_password: false, created_at: "" },
-            workspace: localWorkspace,
-            sessions: [],
-            secrets: [],
-          };
-        },
+        queryFn: fetchAccountSettings,
       });
       setAuthenticated(snapshot.authenticated);
       if (snapshot.authenticated) setAuthenticatedState(true);

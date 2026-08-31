@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AccountPanel } from "./account-panel";
-import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, CircleDollarSign, Clock3, Cpu, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Settings, Sparkles, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Settings, Sparkles, Trash2, UserRound } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ConfirmDialog, Disclosure, Hint } from "./ui";
@@ -12,17 +12,10 @@ import { ModelPicker } from "./model-picker";
 import { FinalizeConfirmation } from "./finalize-stage";
 import { DecisionLibraryView } from "./decision-library-view";
 import { ImportStage } from "./import-stage";
-import type { AuditEvent, ComparisonRun, Criticality, Decision, DecisionChallenge, DecisionDraft, DecisionLibrary, EvidenceDraft, Extraction, Finding, FindingJudgment, Job, ModelCatalog, ModelOption, PersonalWorkspace, PersistedWorkspaceSession, PremiseReview, RevisitResult, ReviewAction, Share, UsageSummary, PilotMetrics, WorkflowStep, WorkspaceBootstrap, WorkspaceView } from "./workspace-types";
-
-const workspaceSessionKey = "rationexa-workspace-draft-v1";
-const evidenceDraftsKey = "rationexa-evidence-drafts-v1";
-const guestWorkspaceId = "guest-browser";
-const workspacePaths: Record<WorkspaceView, string> = {
-  workspace: "/workspace",
-  library: "/library",
-  usage: "/usage",
-  settings: "/settings",
-};
+import { UsageView } from "./usage-view";
+import { accountSettingsKey, decisionWorkspaceKey, fetchAccountSettings, fetchDecisionWorkspace, fetchUsageDashboard, usageDashboardKey } from "./workspace-api";
+import { browserShareUrl, clearPersistedDecision, evidenceDraftsKey, formatDate, formatDateTime, guestWorkspaceId, provenanceLabel, readEvidenceDraft, workspacePaths, workspaceSessionKey, workspaceViewFromPath, writeEvidenceDraft } from "./workspace-utils";
+import type { AuditEvent, ComparisonRun, Criticality, Decision, DecisionChallenge, DecisionDraft, DecisionLibrary, Extraction, Finding, FindingJudgment, Job, ModelCatalog, ModelOption, PersonalWorkspace, PersistedWorkspaceSession, PremiseReview, RevisitResult, ReviewAction, Share, UsageSummary, PilotMetrics, WorkflowStep, WorkspaceBootstrap, WorkspaceView } from "./workspace-types";
 
 declare global {
   interface Window {
@@ -41,79 +34,8 @@ async function loadWorkspaceBootstrap(): Promise<WorkspaceBootstrap> {
   return responseJson(await req("/v1/bootstrap")) as Promise<WorkspaceBootstrap>;
 }
 
-function workspaceViewFromPath(pathname: string): WorkspaceView {
-  if (pathname.startsWith("/library")) return "library";
-  if (pathname.startsWith("/usage")) return "usage";
-  if (pathname.startsWith("/settings") || pathname.startsWith("/account/")) return "settings";
-  return "workspace";
-}
-
-function readEvidenceDraft(decisionId: string, workspaceId?: string): EvidenceDraft | null {
-  try {
-    if (!workspaceId) return null;
-    const saved = window.localStorage.getItem(evidenceDraftsKey);
-    if (!saved) return null;
-    const draft = (JSON.parse(saved) as Record<string, EvidenceDraft>)[decisionId];
-    return draft?.workspaceId === workspaceId ? draft : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeEvidenceDraft(decisionId: string, draft: EvidenceDraft | null) {
-  try {
-    const saved = window.localStorage.getItem(evidenceDraftsKey);
-    const drafts = saved ? JSON.parse(saved) as Record<string, EvidenceDraft> : {};
-    if (draft?.content.trim()) drafts[decisionId] = draft;
-    else delete drafts[decisionId];
-    if (Object.keys(drafts).length) window.localStorage.setItem(evidenceDraftsKey, JSON.stringify(drafts));
-    else window.localStorage.removeItem(evidenceDraftsKey);
-  } catch {
-    // Draft persistence must never block the decision workflow.
-  }
-}
-
-function clearPersistedDecision(decisionId: string) {
-  writeEvidenceDraft(decisionId, null);
-  try {
-    const saved = window.localStorage.getItem(workspaceSessionKey);
-    if (!saved) return;
-    const state = JSON.parse(saved) as PersistedWorkspaceSession;
-    if (state.decisionId === decisionId) window.localStorage.removeItem(workspaceSessionKey);
-  } catch {
-    window.localStorage.removeItem(workspaceSessionKey);
-  }
-}
-
 const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
 const premiseKinds = ["requirement", "hard_constraint", "soft_constraint", "fact", "assumption", "unknown", "material_claim", "revisit_condition"];
-
-function provenanceLabel(result: RevisitResult) {
-  const tokens = (result.input_tokens ?? 0) + (result.output_tokens ?? 0);
-  const cost = result.estimated_cost_usd == null ? "cost pending" : `$${result.estimated_cost_usd.toFixed(4)}`;
-  return `${result.provider ?? "unknown"}/${result.model ?? "unknown"} · ${result.prompt_version ?? "unknown prompt"} · ${result.latency_ms ?? 0} ms · ${tokens} tokens · ${cost}`;
-}
-
-function formatDate(value?: string) {
-  if (!value) return "Not revisited";
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
-}
-
-function formatDateTime(value?: string) {
-  if (!value) return "Not recorded";
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat().format(value);
-}
-
-function browserShareUrl(share: Pick<Share, "token" | "url">) {
-  if (typeof window !== "undefined") {
-    return new URL(`/share/${encodeURIComponent(share.token)}`, window.location.origin).toString();
-  }
-  return share.url ?? `/share/${encodeURIComponent(share.token)}`;
-}
 
 type ActionIconName = "markdown" | "pdf" | "delete" | "back";
 
@@ -708,12 +630,9 @@ export default function Home() {
     setUsageLoading(true);
     setError(null);
     try {
-      const [usageResult, pilotResult] = await Promise.all([
-        queryClient.fetchQuery({ queryKey: ["usage", activeWorkspaceId], queryFn: async () => responseJson(await req(`/v1/usage`)) as Promise<UsageSummary>, staleTime: 5 * 60_000 }),
-        queryClient.fetchQuery({ queryKey: ["pilot-metrics", activeWorkspaceId], queryFn: async () => responseJson(await req(`/v1/pilot/metrics`)) as Promise<PilotMetrics>, staleTime: 5 * 60_000 }),
-      ]);
-      setUsage(usageResult);
-      setPilotMetrics(pilotResult);
+      const dashboard = await queryClient.fetchQuery({ queryKey: usageDashboardKey(activeWorkspaceId), queryFn: fetchUsageDashboard, staleTime: 5 * 60_000 });
+      setUsage(dashboard.usage);
+      setPilotMetrics(dashboard.pilot_metrics);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load workspace usage");
     } finally {
@@ -731,15 +650,17 @@ export default function Home() {
   async function openDecision(decisionId: string, targetStep: WorkflowStep = 4, restore?: { restoredView?: WorkspaceView; legacyEvidence?: string; clearIfMissing?: boolean }) {
     setError(null);
     try {
-      const [record, history] = await Promise.all([
-        queryClient.fetchQuery({ queryKey: ["decision", activeWorkspaceId, decisionId], queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}`)) as Promise<Decision>, staleTime: 5 * 60_000 }),
-        queryClient.fetchQuery({ queryKey: ["revisits", activeWorkspaceId, decisionId], queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}/revisit-checks`)) as Promise<RevisitResult[]>, staleTime: 5 * 60_000 }),
-      ]);
+      const bundle = await queryClient.fetchQuery({ queryKey: decisionWorkspaceKey(activeWorkspaceId, decisionId), queryFn: () => fetchDecisionWorkspace(decisionId), staleTime: 5 * 60_000 });
+      const { decision: record, revisits: history } = bundle;
+      queryClient.setQueryData(["decision", activeWorkspaceId, decisionId], record);
+      queryClient.setQueryData(["revisits", activeWorkspaceId, decisionId], history);
+      queryClient.setQueryData(["shares", activeWorkspaceId, decisionId], bundle.shares);
       setDecision(record);
       setChallenge(record.challenge ?? null);
       setChallengeNotes(record.challenge?.reviewer_notes ?? "");
       setDraft({ title: record.title, question: record.question, context: record.context, chosenOption: record.chosen_option ?? "", rationale: record.rationale });
        setRevisitHistory(history);
+       setShares(bundle.shares);
        setExtraction(null);
        setFindings([]);
        setComparisonRuns([]);
@@ -756,7 +677,6 @@ export default function Home() {
       setWorkflowView(targetStep);
        setWorkflowPaneCollapsed(false);
        navigateTo(restore?.restoredView ?? "workspace", Boolean(restore));
-       void loadShares(decisionId).catch(() => { setShares([]); });
        return true;
     } catch (caught) {
       if (restore?.clearIfMissing && caught instanceof ApiError && caught.status === 404) {
@@ -772,11 +692,15 @@ export default function Home() {
   }
 
   function prefetchDecision(decisionId: string) {
-    void Promise.all([
-      queryClient.prefetchQuery({ queryKey: ["decision", activeWorkspaceId, decisionId], queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}`)) as Promise<Decision>, staleTime: 5 * 60_000 }),
-      queryClient.prefetchQuery({ queryKey: ["revisits", activeWorkspaceId, decisionId], queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}/revisit-checks`)) as Promise<RevisitResult[]>, staleTime: 5 * 60_000 }),
-      queryClient.prefetchQuery({ queryKey: ["shares", activeWorkspaceId, decisionId], queryFn: async () => responseJson(await req(`/v1/decisions/${decisionId}/shares`)) as Promise<Share[]>, staleTime: 5 * 60_000 }),
-    ]);
+    void queryClient.prefetchQuery({ queryKey: decisionWorkspaceKey(activeWorkspaceId, decisionId), queryFn: () => fetchDecisionWorkspace(decisionId), staleTime: 5 * 60_000 });
+  }
+
+  function prefetchUsage() {
+    void queryClient.prefetchQuery({ queryKey: usageDashboardKey(activeWorkspaceId), queryFn: fetchUsageDashboard, staleTime: 5 * 60_000 });
+  }
+
+  function prefetchAccountSettings() {
+    void queryClient.prefetchQuery({ queryKey: accountSettingsKey(activeWorkspaceId), queryFn: fetchAccountSettings, staleTime: 5 * 60_000 });
   }
 
   async function downloadMarkdown() {
@@ -1064,14 +988,14 @@ export default function Home() {
             const label = value === "all" ? "All decisions" : value[0].toUpperCase() + value.slice(1);
             return <Hint key={value} label={label} disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item ${view === "library" && libraryCriticality === value ? "active" : ""}`} aria-label={label} onClick={() => { setLibraryCriticality(value); navigateTo("library"); }}><span className="nav-icon"><LibraryNavIcon value={value} /></span><span className="pane-label">{label}</span>{value === "all" && libraryCriticality === "all" ? <small className="pane-label">{library.total}</small> : null}</button></Hint>;
           })}
-          <Hint label="Usage and cost" disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item usage-nav ${view === "usage" ? "active" : ""}`} aria-label="Usage and cost" onClick={() => navigateTo("usage")}><span className="nav-icon"><ChartNoAxesColumn aria-hidden="true" /></span><span className="pane-label">Usage &amp; cost</span></button></Hint>
-          <Hint label="Account and provider keys" disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item usage-nav ${view === "settings" ? "active" : ""}`} aria-label="Account and provider keys" onClick={() => navigateTo("settings")}><span className="nav-icon"><Settings aria-hidden="true" /></span><span className="pane-label">Account &amp; keys</span></button></Hint>
+          <Hint label="Usage and cost" disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item usage-nav ${view === "usage" ? "active" : ""}`} aria-label="Usage and cost" onMouseEnter={prefetchUsage} onFocus={prefetchUsage} onClick={() => navigateTo("usage")}><span className="nav-icon"><ChartNoAxesColumn aria-hidden="true" /></span><span className="pane-label">Usage &amp; cost</span></button></Hint>
+          <Hint label="Account and provider keys" disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item usage-nav ${view === "settings" ? "active" : ""}`} aria-label="Account and provider keys" onMouseEnter={prefetchAccountSettings} onFocus={prefetchAccountSettings} onClick={() => navigateTo("settings")}><span className="nav-icon"><Settings aria-hidden="true" /></span><span className="pane-label">Account &amp; keys</span></button></Hint>
         </nav>
         <section className="decision-conversations pane-label" aria-label="Saved decisions">
           <div className="pane-section-heading"><span>Decision conversations</span>{libraryLoading ? <span className="spinner dark" /> : null}</div>
           <div className="conversation-list">
             {hasCurrentDraft ? <button type="button" className={`conversation-row draft-row ${view === "workspace" ? "active" : ""}`} onClick={() => navigateTo("workspace")}><span className="conversation-dot draft" /><span><strong>{currentDraftTitle}</strong><small>{currentDraftStep} draft · saved on this device</small></span><em>Draft</em></button> : null}
-            {library.items.map((item) => <button type="button" key={item.id} className={`conversation-row ${decision?.id === item.id ? "active" : ""}`} onClick={() => openDecision(item.id)}><span className={`conversation-dot ${item.criticality}`} /><span><strong>{item.title}</strong><small>{item.last_revisited_at ? formatDateTime(item.last_revisited_at) : `${item.premise_count} premises · not revisited`}</small></span>{item.pending_revisit_count ? <em>{item.pending_revisit_count}</em> : null}</button>)}
+            {library.items.map((item) => <button type="button" key={item.id} className={`conversation-row ${decision?.id === item.id ? "active" : ""}`} onMouseEnter={() => prefetchDecision(item.id)} onFocus={() => prefetchDecision(item.id)} onClick={() => openDecision(item.id)}><span className={`conversation-dot ${item.criticality}`} /><span><strong>{item.title}</strong><small>{item.last_revisited_at ? formatDateTime(item.last_revisited_at) : `${item.premise_count} premises · not revisited`}</small></span>{item.pending_revisit_count ? <em>{item.pending_revisit_count}</em> : null}</button>)}
             {!hasCurrentDraft && !library.items.length ? <p>No saved decisions in this library.</p> : null}
           </div>
         </section>
@@ -1105,24 +1029,7 @@ export default function Home() {
 
         {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} onDiscardDraft={() => setConfirmingDraftDiscard(true)} library={library} loading={libraryLoading} refreshing={decisionLibraryQuery.isFetching && !decisionLibraryQuery.isPending} guest={guestMode} onOpenAccount={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} onPrefetchDecision={prefetchDecision} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={() => { resetWorkspace(); navigateTo("workspace"); }} formatDateTime={formatDateTime} /> : null}
 
-        {view === "usage" ? <section className="usage-view">
-          {guestMode ? <div className="guest-access-card"><div><strong>Temporary guest usage</strong><p>Only deterministic runs from this browser’s isolated guest workspace appear here. Create a permanent workspace to retain history and connect BYOK models.</p></div><button className="primary" onClick={() => navigateTo("settings")}>Keep history &amp; add BYOK →</button></div> : null}
-          <div className="usage-intro"><span className="usage-intro-icon"><ChartNoAxesColumn aria-hidden="true" /></span><div><strong>Workspace AI activity</strong><p>Usage is calculated from persisted extraction, revisit, and challenge provenance. Known cost excludes runs whose provider did not report a price.</p></div><button type="button" className="text-button" disabled={usageLoading} onClick={loadUsage}>{usageLoading ? "Refreshing…" : "Refresh usage"}</button></div>
-          {usageLoading && !usage ? <div className="library-empty"><span className="spinner dark" /><strong>Calculating workspace usage…</strong></div> : usage ? <>
-            <div className="usage-summary-grid">
-              <article><span><Cpu aria-hidden="true" />AI runs</span><strong>{formatNumber(usage.total_runs)}</strong><p>{usage.extraction_runs} extraction · {usage.revisit_runs} revisit · {usage.challenge_runs} challenge</p></article>
-              <article><span><CircleDollarSign aria-hidden="true" />Known estimated cost</span><strong>${usage.known_cost_usd.toFixed(4)}</strong><p>{usage.unpriced_run_count ? `${usage.unpriced_run_count} run${usage.unpriced_run_count === 1 ? " is" : "s are"} not included because pricing was unavailable` : "Every recorded run includes a cost estimate"}</p></article>
-              <article><span><ChartNoAxesColumn aria-hidden="true" />Recorded tokens</span><strong>{formatNumber(usage.total_tokens)}</strong><p>Token counts available for {usage.tokenized_run_count} of {usage.total_runs} runs</p></article>
-              <article><span><Clock3 aria-hidden="true" />Runtime location</span><strong>{usage.local_runs} local</strong><p>{usage.hosted_runs} hosted · {usage.unknown_location_runs} unknown · based on provider provenance</p></article>
-            </div>
-            <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Model breakdown</span><h2>Runs by model</h2></div><span>Known cost never estimates missing provider prices</span></div>{usage.models.length ? <div className="usage-models">{usage.models.map((model) => {
-              const maxRuns = Math.max(...usage.models.map((item) => item.run_count), 1);
-              return <article key={`${model.provider}/${model.model}`}><div className="usage-model-name"><span>{model.model.slice(0, 1).toUpperCase()}</span><div><strong>{model.model}</strong><small>{model.provider} · {model.location}</small></div></div><div className="usage-model-meter"><span style={{ width: `${Math.max(8, Math.round((model.run_count / maxRuns) * 100))}%` }} /></div><div className="usage-model-stats"><span><strong>{model.run_count}</strong> runs</span><span><strong>{formatNumber(model.total_tokens)}</strong> tokens</span><span><strong>{model.average_latency_ms == null ? "—" : `${formatNumber(model.average_latency_ms)} ms`}</strong> avg latency</span><span><strong>${model.known_cost_usd.toFixed(4)}</strong> known cost{model.unpriced_run_count ? ` · ${model.unpriced_run_count} unpriced` : ""}</span></div></article>;
-            })}</div> : <div className="library-empty"><strong>No AI usage recorded yet</strong><p>Complete an extraction, revisit, or challenge to create the first usage record.</p></div>}</section>
-            {pilotMetrics ? <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Supervised pilot</span><h2>Repeat-use signals</h2></div><span>{pilotMetrics.repeat_use_observed ? "Repeat use observed" : "More real-user sessions needed"}</span></div><div className="pilot-metrics-grid"><article><strong>{pilotMetrics.decision_count}</strong><span>decisions</span></article><article><strong>{pilotMetrics.revisit_count}</strong><span>evidence checks</span></article><article><strong>{pilotMetrics.judgment_count}</strong><span>human judgments</span></article><article><strong>{pilotMetrics.share_count + pilotMetrics.export_count}</strong><span>shares &amp; exports</span></article><article><strong>{pilotMetrics.challenge_confirmation_count}</strong><span>confirmed challenges</span></article><article><strong>{pilotMetrics.active_days}</strong><span>active days</span></article></div><p className="pilot-note">Pilot readiness requires activity from real reviewers across multiple days; these measurements describe behavior and do not claim model accuracy.</p></section> : null}
-            <section className="usage-section"><div className="usage-section-heading"><div><span className="overline">Recent activity</span><h2>Latest model runs</h2></div><span>Newest first</span></div>{usage.recent_runs.length ? <div className="usage-runs">{usage.recent_runs.map((run) => <button type="button" key={`${run.kind}-${run.id}`} disabled={!run.decision_id} onClick={() => run.decision_id && openDecision(run.decision_id)}><span className={`usage-kind ${run.kind}`}>{run.kind}</span><span className="usage-run-model"><strong>{run.model}</strong><small>{run.provider} · {run.prompt_version}</small></span><span><strong>{formatNumber((run.input_tokens ?? 0) + (run.output_tokens ?? 0))}</strong><small>tokens</small></span><span><strong>{run.latency_ms == null ? "—" : `${formatNumber(run.latency_ms)} ms`}</strong><small>latency</small></span><span><strong>{run.estimated_cost_usd == null ? "Unavailable" : `$${run.estimated_cost_usd.toFixed(4)}`}</strong><small>cost</small></span><time dateTime={run.created_at}>{formatDateTime(run.created_at)}</time></button>)}</div> : null}</section>
-          </> : null}
-        </section> : null}
+        {view === "usage" ? <UsageView guest={guestMode} usage={usage} pilotMetrics={pilotMetrics} loading={usageLoading} onRefresh={() => { void loadUsage(); }} onOpenSettings={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} /> : null}
 
         {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use built-in deterministic rules without a key, or add a hosted-provider key to your private workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel workspaceId={activeWorkspaceId} onConfigurationChanged={(preserveGuestDraft) => { void handleWorkspaceChanged(preserveGuestDraft); }} onModelConfigurationChanged={() => { void handleModelConfigurationChanged(); }} onWorkspaceProfileChanged={() => { void workspaceQuery.refetch(); }} /></section> : null}
 

@@ -19,11 +19,11 @@ test("keeps an unfinished draft mounted across tabs and lets the reviewer discar
 
 test("reuses workspace and account data when moving between application tabs", async ({ page }) => {
   let bootstrapRequests = 0;
-  let accountRequests = 0;
+  let accountSettingsRequests = 0;
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
     if (pathname === "/v1/bootstrap") bootstrapRequests += 1;
-    if (pathname === "/v1/account" && request.method() === "GET") accountRequests += 1;
+    if (pathname === "/v1/account-settings" && request.method() === "GET") accountSettingsRequests += 1;
   });
 
   await page.goto("/workspace");
@@ -31,8 +31,8 @@ test("reuses workspace and account data when moving between application tabs", a
   await page.getByRole("button", { name: "Account and provider keys" }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole("heading", { name: "Your AI runtime" })).toBeVisible();
-  const accountRequestsAfterInitialLoad = accountRequests;
-  expect(accountRequestsAfterInitialLoad).toBeGreaterThan(0);
+  const accountRequestsAfterInitialLoad = accountSettingsRequests;
+  expect(accountRequestsAfterInitialLoad).toBe(1);
   await page.getByRole("button", { name: "All decisions" }).click();
   await expect(page).toHaveURL(/\/library$/);
   await page.getByRole("button", { name: "Account and provider keys" }).click();
@@ -41,5 +41,5 @@ test("reuses workspace and account data when moving between application tabs", a
   await expect(page).toHaveURL(/\/workspace$/);
 
   expect(bootstrapRequests).toBe(1);
-  expect(accountRequests).toBe(accountRequestsAfterInitialLoad);
+  expect(accountSettingsRequests).toBe(accountRequestsAfterInitialLoad);
 });

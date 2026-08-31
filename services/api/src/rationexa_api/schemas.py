@@ -514,6 +514,25 @@ class ShareRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AccountSettingsRead(BaseModel):
+    authenticated: bool
+    account: AccountRead
+    workspace: WorkspaceRead
+    sessions: list[SessionSummaryRead]
+    secrets: list[SecretRead]
+
+
+class UsageDashboardRead(BaseModel):
+    usage: UsageSummaryRead
+    pilot_metrics: PilotMetricsRead
+
+
+class DecisionWorkspaceRead(BaseModel):
+    decision: DecisionRead
+    revisits: list[RevisitRead]
+    shares: list[ShareRead]
+
+
 class ShareDecisionRead(BaseModel):
     id: str
     title: str

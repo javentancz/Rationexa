@@ -132,6 +132,22 @@ def test_authenticated_pilot_workflow_imports_reviews_finalizes_revisits_shares_
         assert share.status_code == 201
         assert client.get(f"/v1/shares/{share.json()['token']}").status_code == 200
 
+        decision_workspace = client.get(f"/v1/decisions/{decision['id']}/workspace", headers=headers)
+        assert decision_workspace.status_code == 200
+        assert decision_workspace.json()["decision"]["id"] == decision["id"]
+        assert len(decision_workspace.json()["revisits"]) == 1
+        assert len(decision_workspace.json()["shares"]) == 1
+
+        account_settings = client.get("/v1/account-settings", headers=headers)
+        assert account_settings.status_code == 200
+        assert account_settings.json()["authenticated"] is True
+        assert account_settings.json()["workspace"]["mode"] == "authenticated_personal"
+
+        usage_dashboard = client.get("/v1/usage-dashboard", headers=headers)
+        assert usage_dashboard.status_code == 200
+        assert usage_dashboard.json()["usage"]["total_runs"] >= 2
+        assert usage_dashboard.json()["pilot_metrics"]["decision_count"] >= 1
+
         assert client.delete(f"/v1/decisions/{decision['id']}", headers=headers).status_code == 204
         assert client.get(f"/v1/decisions/{decision['id']}", headers=headers).status_code == 404
         assert client.get(f"/v1/shares/{share.json()['token']}").status_code == 404
