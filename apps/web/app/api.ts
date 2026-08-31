@@ -35,6 +35,16 @@ export function setAuthenticatedState(authenticated: boolean): void {
   else setSessionToken(null);
 }
 
+export function handleAuthenticationResponse(response: Response): void {
+  if (typeof window === "undefined") return;
+  const token = getSessionToken() ?? window.sessionStorage.getItem(SESSION_KEY);
+  const expectedSession = Boolean(token) || window.localStorage.getItem(AUTH_MARKER_KEY) === "true";
+  if (response.status === 401 && expectedSession) {
+    setSessionToken(null);
+    window.dispatchEvent(new Event("rationexa-auth-expired"));
+  }
+}
+
 async function responseJson(response: Response) {
   if (response.ok) return response.json();
   const payload = await response.json().catch(() => null);
@@ -63,11 +73,7 @@ export async function apiResponse(path: string, options: RequestInit = {}): Prom
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     throw new Error("Rationexa could not reach the API. Check the service connection and try again.", { cause: error });
   }
-  const expectedSession = token || (typeof window !== "undefined" && window.localStorage.getItem(AUTH_MARKER_KEY) === "true");
-  if (response.status === 401 && expectedSession) {
-    setSessionToken(null);
-    window.dispatchEvent(new Event("rationexa-auth-expired"));
-  }
+  handleAuthenticationResponse(response);
   return response;
 }
 

@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft,
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ConfirmDialog, Disclosure, Hint } from "./ui";
-import { ApiError, apiResponse as req, responseJson, setAuthenticatedState } from "./api";
+import { ApiError, apiResponse as req, handleAuthenticationResponse, responseJson, setAuthenticatedState } from "./api";
 import { ModelPicker } from "./model-picker";
 import { FinalizeConfirmation } from "./finalize-stage";
 import { DecisionLibraryView } from "./decision-library-view";
@@ -23,6 +23,23 @@ const workspacePaths: Record<WorkspaceView, string> = {
   usage: "/usage",
   settings: "/settings",
 };
+
+declare global {
+  interface Window {
+    __rationexaBootstrapPromise?: Promise<Response>;
+  }
+}
+
+async function loadWorkspaceBootstrap(): Promise<WorkspaceBootstrap> {
+  const preloaded = window.__rationexaBootstrapPromise;
+  if (preloaded) {
+    delete window.__rationexaBootstrapPromise;
+    const response = await preloaded;
+    handleAuthenticationResponse(response);
+    return responseJson(response) as Promise<WorkspaceBootstrap>;
+  }
+  return responseJson(await req("/v1/bootstrap")) as Promise<WorkspaceBootstrap>;
+}
 
 function workspaceViewFromPath(pathname: string): WorkspaceView {
   if (pathname.startsWith("/library")) return "library";
@@ -192,7 +209,7 @@ export default function Home() {
 
   const bootstrapQuery = useQuery({
     queryKey: ["workspace-bootstrap"],
-    queryFn: async () => req(`/v1/bootstrap`).then(responseJson) as Promise<WorkspaceBootstrap>,
+    queryFn: loadWorkspaceBootstrap,
     staleTime: 5 * 60_000,
   });
 
