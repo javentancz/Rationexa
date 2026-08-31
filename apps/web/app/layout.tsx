@@ -14,7 +14,7 @@ const apiOrigin = /^https?:\/\//.test(apiUrl) ? new URL(apiUrl).origin : null;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {apiOrigin ? <link rel="preconnect" href={apiOrigin} crossOrigin="use-credentials" /> : null}
         {apiOrigin ? <link rel="dns-prefetch" href={apiOrigin} /> : null}

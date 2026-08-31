@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Check, FileSearch, History, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const steps = [
   { number: "01", title: "Import the decision", copy: "Paste a decision note, ADR, assessment, or proposal excerpt." },
@@ -11,7 +12,7 @@ export default function LandingPage() {
   return <main className="landing-page">
     <nav className="landing-nav" aria-label="Main navigation">
       <Link className="landing-brand" href="/"><span>R</span><strong>Rationexa</strong></Link>
-      <div><a href="#how-it-works">How it works</a><a href="#privacy">Privacy</a><Link className="landing-nav-cta" href="/workspace">Open workspace</Link></div>
+      <div><a href="#how-it-works">How it works</a><a href="#privacy">Privacy</a><ThemeToggle /><Link className="landing-nav-cta" href="/workspace">Open workspace</Link></div>
     </nav>
 
     <section className="landing-hero">

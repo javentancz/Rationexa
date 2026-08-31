@@ -22,3 +22,20 @@ test("loads an editable sample into an isolated guest workflow", async ({ page }
   await expect(page.getByLabel("Decision source")).toHaveValue(/Choose an identity provider/);
   await expect(page.getByLabel("Decision source")).toHaveValue(/audit logs/);
 });
+
+test("persists the selected light and dark appearance", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Choose color theme" }).click();
+  await page.getByRole("menuitem", { name: "Dark" }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  expect(await page.evaluate(() => localStorage.getItem("theme"))).toBe("dark");
+
+  await page.getByRole("button", { name: "Choose color theme" }).click();
+  await page.getByRole("menuitem", { name: "Light" }).click();
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+});

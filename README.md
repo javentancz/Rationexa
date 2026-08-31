@@ -17,6 +17,7 @@ Stage 1 established the trusted Import → Review → Finalize → Revisit workf
 - model, provider, prompt, latency, token, runtime, and known-cost provenance;
 - local Ollama models and encrypted bring-your-own-key (BYOK) providers with live connection checks;
 - Alembic database migrations and supervised-pilot repeat-use metrics.
+- a shadcn component foundation with persistent light, dark, and system themes.
 
 The next milestone is a supervised user pilot. The checked-in 30-case suite is a development regression set, not independent proof of production accuracy.
 

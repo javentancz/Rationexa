@@ -1,9 +1,10 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Tooltip } from "radix-ui";
 import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
+import { ThemeProvider } from "@/components/theme-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { reportClientError } from "./monitoring";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -38,11 +39,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <Tooltip.Provider delayDuration={450} skipDelayDuration={150}>
-        {children}
-        <Toaster position="bottom-right" richColors closeButton />
-      </Tooltip.Provider>
-    </QueryClientProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider delayDuration={450} skipDelayDuration={150}>
+          {children}
+          <Toaster position="bottom-right" richColors closeButton theme="system" />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

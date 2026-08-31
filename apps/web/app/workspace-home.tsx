@@ -16,6 +16,7 @@ import { UsageView } from "./usage-view";
 import { accountSettingsKey, decisionWorkspaceKey, fetchAccountSettings, fetchDecisionWorkspace, fetchUsageDashboard, usageDashboardKey } from "./workspace-api";
 import { browserShareUrl, clearPersistedDecision, evidenceDraftsKey, formatDate, formatDateTime, guestWorkspaceId, provenanceLabel, readEvidenceDraft, workspacePaths, workspaceSessionKey, workspaceViewFromPath, writeEvidenceDraft } from "./workspace-utils";
 import type { AuditEvent, ComparisonRun, Criticality, Decision, DecisionChallenge, DecisionDraft, DecisionLibrary, Extraction, Finding, FindingJudgment, Job, ModelCatalog, ModelOption, PersonalWorkspace, PersistedWorkspaceSession, PremiseReview, RevisitResult, ReviewAction, Share, UsageSummary, PilotMetrics, WorkflowStep, WorkspaceBootstrap, WorkspaceView } from "./workspace-types";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 declare global {
   interface Window {
@@ -1010,6 +1011,7 @@ export default function Home() {
         <section className="workspace-identity" aria-label={personalWorkspace ? `${personalWorkspace.name}, owned by ${personalWorkspace.account_name}` : "Guest workspace"}>
           <span className="workspace-avatar"><UserRound aria-hidden="true" /></span>
           <span className="workspace-identity-copy pane-label"><strong>{personalWorkspace?.name || "Guest workspace"}</strong><small>{personalWorkspace ? `${personalWorkspace.account_name} · ${personalWorkspace.mode === "authenticated_personal" ? "Private pilot" : personalWorkspace.mode === "guest_personal" ? "Private 24-hour trial" : "Local profile"}` : "Preparing private trial…"}</small></span>
+          <ThemeToggle compact />
         </section>
       </aside>
 

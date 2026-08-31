@@ -1,8 +1,11 @@
 "use client";
 
-import { AlertDialog, Collapsible, Tooltip } from "radix-ui";
 import { ChevronDown } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export function Hint({
   label,
@@ -18,14 +21,10 @@ export function Hint({
   if (disabled) return children;
 
   return (
-    <Tooltip.Root>
-      <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
-      <Tooltip.Portal>
-        <Tooltip.Content className="radix-tooltip" side={side} sideOffset={10} collisionPadding={16}>
-          {label}<Tooltip.Arrow className="radix-tooltip-arrow" />
-        </Tooltip.Content>
-      </Tooltip.Portal>
-    </Tooltip.Root>
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side={side} sideOffset={10} collisionPadding={16}>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -49,19 +48,16 @@ export function ConfirmDialog({
   onConfirm: () => void;
 }) {
   return (
-    <AlertDialog.Root open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
-      <AlertDialog.Portal>
-        <AlertDialog.Overlay className="modal-backdrop radix-overlay" />
-        <AlertDialog.Content className="confirm-modal radix-dialog">
-          <AlertDialog.Title>{title}</AlertDialog.Title>
-          <AlertDialog.Description>{description}</AlertDialog.Description>
+    <AlertDialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
+        <AlertDialogContent>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
           <div className="modal-actions">
-            <AlertDialog.Cancel className="text-button" disabled={busy}>Cancel</AlertDialog.Cancel>
-            <button type="button" className="primary danger" disabled={busy} onClick={onConfirm}>{busy ? busyLabel : confirmLabel}</button>
+            <AlertDialogCancel className="text-button" disabled={busy}>Cancel</AlertDialogCancel>
+            <Button type="button" variant="destructive" disabled={busy} onClick={onConfirm}>{busy ? busyLabel : confirmLabel}</Button>
           </div>
-        </AlertDialog.Content>
-      </AlertDialog.Portal>
-    </AlertDialog.Root>
+        </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -79,12 +75,12 @@ export function Disclosure({
   children: ReactNode;
 }) {
   return (
-    <Collapsible.Root className="detail-disclosure" defaultOpen={defaultOpen}>
-      <Collapsible.Trigger className="detail-disclosure-trigger">
+    <Collapsible className="detail-disclosure" defaultOpen={defaultOpen}>
+      <CollapsibleTrigger className="detail-disclosure-trigger">
         <span>{eyebrow ? <small>{eyebrow}</small> : null}<strong>{title}</strong>{summary ? <em>{summary}</em> : null}</span>
         <ChevronDown aria-hidden="true" />
-      </Collapsible.Trigger>
-      <Collapsible.Content className="detail-disclosure-content">{children}</Collapsible.Content>
-    </Collapsible.Root>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="detail-disclosure-content">{children}</CollapsibleContent>
+    </Collapsible>
   );
 }
