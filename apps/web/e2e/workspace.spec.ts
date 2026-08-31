@@ -53,7 +53,7 @@ test("does not restore another workspace's browser draft", async ({ page }) => {
     view: "workspace",
   })));
 
-  await page.goto("/");
+  await page.goto("/workspace");
 
   await expect(page.getByLabel("Decision source")).toHaveValue("");
   await expect(page.getByText("Private draft belonging to reviewer A")).toHaveCount(0);
@@ -61,8 +61,7 @@ test("does not restore another workspace's browser draft", async ({ page }) => {
 
 test("keeps an unfinished decision available after visiting the library", async ({ page }) => {
   await mockBootstrap(page);
-  await page.goto("/");
-  await expect(page).toHaveURL(/\/workspace$/);
+  await page.goto("/workspace");
   await page.getByLabel("Decision source").fill("Draft decision that still needs review");
 
   await page.getByRole("button", { name: "All decisions" }).click();
@@ -104,7 +103,7 @@ test("clears a deleted decision from restored workspace state", async ({ page })
   await page.route(/\/v1\/decisions\/deleted-decision\/revisit-checks$/, (route) => route.fulfill({ status: 404, headers: corsHeaders, json: { detail: "Decision not found" } }));
   await page.addInitScript(() => localStorage.setItem("rationexa-workspace-draft-v1", JSON.stringify({ decisionId: "deleted-decision", workflowView: 4, view: "workspace" })));
 
-  await page.goto("/");
+  await page.goto("/workspace");
 
   await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible();
   await expect(page.getByText("The deleted decision was removed from your restored workspace")).toBeVisible();
@@ -124,7 +123,7 @@ test("delete confirmation stays visible and can be cancelled", async ({ page }) 
     created_at: "2026-08-28T00:00:00Z",
   };
   await mockBootstrap(page, [decision]);
-  await page.goto("/");
+  await page.goto("/workspace");
   await page.getByRole("button", { name: "All decisions" }).click();
   await page.getByRole("button", { name: "Delete Architecture decision" }).click();
 
@@ -157,7 +156,7 @@ test("unavailable models explain the problem and block extraction", async ({ pag
   await page.route(/\/v1\/workspace(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: workspace }));
   await page.route(/\/v1\/decisions(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: { items: [], total: 0 } }));
 
-  await page.goto("/");
+  await page.goto("/workspace");
   await page.getByLabel("Decision source").fill("We decided to use the pilot architecture.");
 
   await expect(page.getByText("Not installed. Run `ollama pull missing:latest`.")).toBeVisible();

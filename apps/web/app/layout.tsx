@@ -4,8 +4,8 @@ import "./styles.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Rationexa",
-  description: "Technical decision review intelligence",
+  title: "Rationexa — Human-reviewed decision memory",
+  description: "Preserve why decisions were made, map new evidence to their assumptions, and keep human judgment in control.",
 };
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         <Script id="rationexa-bootstrap-preload" strategy="beforeInteractive">
-          {`if(!location.pathname.startsWith("/share/")&&!location.pathname.startsWith("/account/")){let token;try{token=sessionStorage.getItem("rationexa-session-token")||localStorage.getItem("rationexa-session-token")}catch{}const headers=token?{Authorization:"Bearer "+token}:undefined;window.__rationexaBootstrapPromise=fetch(${JSON.stringify(bootstrapUrl)},{credentials:"include",cache:"no-store",headers})}`}
+          {`if(/^\/(workspace|library|usage|settings)(\/|$)/.test(location.pathname)){let token;try{token=sessionStorage.getItem("rationexa-session-token")||localStorage.getItem("rationexa-session-token")}catch{}const headers=token?{Authorization:"Bearer "+token}:undefined;window.__rationexaBootstrapPromise=fetch(${JSON.stringify(bootstrapUrl)},{credentials:"include",cache:"no-store",headers})}`}
         </Script>
         <Providers>{children}</Providers>
       </body>
