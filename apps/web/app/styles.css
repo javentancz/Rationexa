@@ -274,7 +274,7 @@ button { cursor:pointer; }
 .privacy-badge,.decision-badge { border:1px solid #cde0d3; border-radius:999px; padding:7px 10px; background:var(--accent-soft); color:var(--accent-dark); font-size:10px; font-weight:750; text-transform:capitalize; }
 .source-tabs { display:flex; gap:4px; width:fit-content; margin-bottom:14px; border-radius:9px; padding:3px; background:#eef1ee; }
 .source-tabs button { border:0; border-radius:7px; padding:7px 12px; background:transparent; color:var(--muted); font-size:12px; }
-.source-tabs button.active { background:#fff; color:var(--ink); font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.source-tabs button.active,.source-tabs button[data-state="active"] { background:#fff; color:var(--ink); font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,.08); }
 .field { display:grid; gap:7px; color:var(--muted); font-size:11px; font-weight:700; }
 .field input,.field textarea,.field select,.premise-card textarea,.premise-card select { width:100%; border:1px solid var(--line); border-radius:8px; outline:none; background:#fcfdfc; color:var(--ink); transition:border .15s,box-shadow .15s; }
 .field input,.field select { min-height:41px; padding:9px 11px; }
@@ -586,6 +586,7 @@ button { cursor:pointer; }
 .library-search { display:flex; align-items:center; gap:9px; min-height:43px; border:1px solid var(--line); border-radius:10px; padding:0 13px; background:var(--surface); box-shadow:0 1px 2px rgba(0,0,0,.02); }
 .library-search span { color:var(--subtle); font-size:18px; }
 .library-search input { width:100%; border:0; outline:0; background:transparent; color:var(--ink); font-size:12px; }
+.library-skeleton { display:grid; gap:12px; }
 .mobile-library-filters { display:none; }
 .library-draft-card { display:grid; grid-template-columns:minmax(0,1fr) 46px; gap:8px; align-items:stretch; }
 .library-draft-resume { display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:center; gap:12px; width:100%; border:1px solid #c8d5e6; border-radius:12px; padding:13px 16px; background:#f1f5fb; color:var(--ink); text-align:left; transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease; }

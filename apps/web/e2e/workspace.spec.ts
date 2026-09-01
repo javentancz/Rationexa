@@ -73,6 +73,23 @@ test("keeps an unfinished decision available after visiting the library", async 
   await expect(page.getByLabel("Decision source")).toHaveValue("Draft decision that still needs review");
 });
 
+test("switches import modes and opens the shadcn model picker", async ({ page }) => {
+  await mockBootstrap(page);
+  await page.goto("/workspace");
+
+  await page.getByRole("tab", { name: "Upload file" }).click();
+  await expect(page.getByLabel("Decision file")).toBeVisible();
+  await expect(page.getByLabel("Decision source")).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "Paste text" }).click();
+  await expect(page.getByLabel("Decision source")).toBeVisible();
+
+  await page.getByRole("button", { name: /Extraction model:/ }).click();
+  await expect(page.getByRole("listbox", { name: "Available AI models" })).toBeVisible();
+  await page.getByRole("button", { name: "Close model menu" }).click();
+  await expect(page.getByRole("listbox", { name: "Available AI models" })).toHaveCount(0);
+});
+
 test("uses clean paths for workspace sections", async ({ page }) => {
   await mockBootstrap(page);
   await page.route(/\/v1\/account(?:\?.*)?$/, (route) => route.fulfill({ status: 401, headers: corsHeaders, json: { detail: "Not authenticated" } }));

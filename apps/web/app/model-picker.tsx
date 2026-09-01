@@ -1,8 +1,8 @@
 "use client";
 
 import { Check, ChevronDown, Sparkles } from "lucide-react";
-import { Popover } from "radix-ui";
 import { useState } from "react";
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string; available: boolean; availability_reason?: string };
 
@@ -39,22 +39,20 @@ export function ModelPicker({ models, selectedId, recommendedId, onSelect, disab
     <span className="model-check">{model.id === selectedId ? <Check aria-hidden="true" /> : null}</span>
   </button>;
 
-  return <Popover.Root open={open} onOpenChange={setOpen}>
+  return <Popover open={open} onOpenChange={setOpen}>
     <div className={`model-picker ${compact ? "compact" : ""} ${open ? "open" : ""}`}>
-      <Popover.Trigger asChild>
+      <PopoverTrigger asChild>
         <button type="button" className="model-trigger" aria-label={`${label}: ${selected?.label ?? "Loading models"}`} disabled={disabled || !models.length}>
           <span className="model-trigger-icon"><Sparkles aria-hidden="true" /></span><span><small>{label}</small><strong>{selected?.label ?? "Loading models…"}</strong></span><span className="model-location">{selected?.provider === "deterministic" ? "Built-in" : selected?.location ?? ""}</span><span className="model-chevron"><ChevronDown aria-hidden="true" /></span>
         </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content className="model-menu" role="listbox" aria-label="Available AI models" side={compact ? "top" : "bottom"} align="end" sideOffset={8} collisionPadding={16} avoidCollisions>
-          <header><div><span className="overline">AI runtime</span><h3>Choose a model</h3></div><Popover.Close aria-label="Close model menu">×</Popover.Close></header>
+      </PopoverTrigger>
+        <PopoverContent className="model-menu" role="listbox" aria-label="Available AI models" side={compact ? "top" : "bottom"} align="end" sideOffset={8} collisionPadding={16} avoidCollisions>
+          <header><div><span className="overline">AI runtime</span><h3>Choose a model</h3></div><PopoverClose aria-label="Close model menu">×</PopoverClose></header>
           {recommended ? <div className="model-group"><span>Recommended for this workspace</span>{modelOption(recommended, true)}</div> : null}
           {localModels.length ? <div className="model-group"><span>Other local models</span>{localModels.map((model) => modelOption(model))}</div> : null}
           {hostedModels.length ? <div className="model-group"><span>Other hosted models</span>{hostedModels.map((model) => modelOption(model))}</div> : null}
           <footer><span className="runtime-dot" />{hasDeterministic ? "Built-in rules require no model or API key. " : ""}{hasOllama ? "Ollama models run only on a connected local runtime. " : ""}Hosted models appear after BYOK is configured.</footer>
-        </Popover.Content>
-      </Popover.Portal>
+        </PopoverContent>
     </div>
-  </Popover.Root>;
+  </Popover>;
 }

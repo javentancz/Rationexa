@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Check, FileSearch, History, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Card } from "@/components/ui/card";
 
 const steps = [
   { number: "01", title: "Import the decision", copy: "Paste a decision note, ADR, assessment, or proposal excerpt." },
@@ -27,7 +28,7 @@ export default function LandingPage() {
         <div className="landing-assurances"><span><Check aria-hidden="true" /> No sign-up required</span><span><Check aria-hidden="true" /> Free deterministic trial</span><span><Check aria-hidden="true" /> Optional BYOK</span></div>
       </div>
 
-      <div className="landing-product-preview" aria-label="Example decision review">
+      <Card className="landing-product-preview" aria-label="Example decision review">
         <div className="preview-top"><span>Decision memory</span><span className="preview-status">Human reviewed</span></div>
         <h2>Choose an identity provider</h2>
         <p>Which provider should power the customer portal?</p>
@@ -37,7 +38,7 @@ export default function LandingPage() {
           <article><span>Revisit condition</span><strong>Annual pricing rises above $24,000.</strong></article>
         </div>
         <div className="preview-update"><History aria-hidden="true" /><div><span>Later evidence</span><strong>External-user administration moved to next quarter.</strong></div><em>Needs review</em></div>
-      </div>
+      </Card>
     </section>
 
     <section className="landing-problem">
