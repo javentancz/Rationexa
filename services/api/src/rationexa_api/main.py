@@ -969,7 +969,8 @@ def create_decision_challenge(
         db,
         workspace_id=active_workspace_id(db, extract_session_token(route)),
     )
-    assert challenge is not None
+    if challenge is None:
+        raise HTTPException(status_code=500, detail="Challenge generation ended without a result")
     return challenge
 
 

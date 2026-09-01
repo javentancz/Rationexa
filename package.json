@@ -6,6 +6,8 @@
     "node": ">=24.19.0 <25"
   },
   "scripts": {
+    "api:contract:generate": "bash scripts/api-contract.sh generate",
+    "api:contract:check": "bash scripts/api-contract.sh check",
     "dev:web": "pnpm --filter @rationexa/web dev",
     "build:web": "pnpm --filter @rationexa/web build",
     "check": "pnpm --filter @rationexa/web check",

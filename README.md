@@ -125,9 +125,19 @@ pnpm validate
 ```
 
 This is the same validation entry point used by CI. It runs type checking,
-linting, the production web build, API tests, the production dependency audit,
-and browser tests. CI also installs the Playwright Chromium runtime through the
-same script.
+FastAPI-to-TypeScript contract drift checks, security linting, the production
+web build, API tests, Python and JavaScript dependency audits, and browser tests.
+CI also installs the Playwright Chromium runtime through the same script.
+
+FastAPI is the source of truth for frontend API response types. After changing
+a Pydantic request or response schema, regenerate the committed OpenAPI contract
+and TypeScript declarations:
+
+```bash
+pnpm api:contract:generate
+```
+
+`pnpm validate` fails when either generated artifact is stale.
 
 Run the same API suite in an isolated temporary PostgreSQL schema:
 

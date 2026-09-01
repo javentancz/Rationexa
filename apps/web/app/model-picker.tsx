@@ -3,8 +3,7 @@
 import { Check, ChevronDown, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-
-export type ModelOption = { id: string; provider: string; model: string; label: string; location: "local" | "hosted"; best_for: string; available: boolean; availability_reason?: string };
+import type { ModelOption } from "./workspace-types";
 
 type ModelPickerProps = {
   models: ModelOption[];

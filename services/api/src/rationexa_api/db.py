@@ -391,7 +391,8 @@ def _add_missing_workspace_columns() -> None:
             if "workspace_id" not in existing:
                 connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN workspace_id VARCHAR(36)"))
             connection.execute(
-                text(f"UPDATE {table_name} SET workspace_id = :workspace_id WHERE workspace_id IS NULL"),
+                # table_name comes from the fixed tuple above, never from request input.
+                text(f"UPDATE {table_name} SET workspace_id = :workspace_id WHERE workspace_id IS NULL"),  # noqa: S608
                 {"workspace_id": settings.local_workspace_id},
             )
 

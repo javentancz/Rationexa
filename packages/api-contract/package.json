@@ -1,0 +1,12 @@
+{
+  "name": "@rationexa/api-contract",
+  "private": true,
+  "scripts": {
+    "generate": "openapi-typescript openapi.json --output ../../apps/web/lib/api-contract.d.ts --export-type",
+    "check": "openapi-typescript openapi.json --output ../../apps/web/lib/api-contract.d.ts --export-type --check"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}

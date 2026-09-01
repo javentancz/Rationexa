@@ -11,6 +11,9 @@ else
   PYTHON_RUNNER="${PYTHON_RUNNER:-python}"
 fi
 
+echo "[validate] API contract"
+pnpm api:contract:check
+
 echo "[validate] TypeScript and lint"
 pnpm check
 
@@ -22,6 +25,9 @@ echo "[validate] Python lint"
 
 echo "[validate] API tests"
 "$PYTHON_RUNNER" -m pytest services/api/tests
+
+echo "[validate] Python dependency audit"
+"$PYTHON_RUNNER" -m pip_audit --local
 
 echo "[validate] Production dependency audit"
 pnpm audit --prod --audit-level high
