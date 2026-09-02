@@ -51,6 +51,13 @@ test("executes the workspace bootstrap preload without syntax or hydration error
 test("keeps the import stage legible in dark mode", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("theme", "dark"));
   await mockBootstrap(page);
+  await page.route(/\/v1\/account-settings(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: {
+    authenticated: true,
+    account: { id: "account-1", name: "Demo User", email: "reviewer@example.com", has_password: true, created_at: "2026-08-28T00:00:00Z" },
+    workspace: { ...workspace, mode: "authenticated_personal" },
+    sessions: [{ id: "session-1", current: true, created_at: "2026-08-28T00:00:00Z", expires_at: "2026-09-28T00:00:00Z" }],
+    secrets: [],
+  } }));
 
   await page.goto("/workspace");
 
@@ -60,6 +67,17 @@ test("keeps the import stage legible in dark mode", async ({ page }) => {
   const stageNumber = page.locator(".stage-number");
   await expect(stageNumber).toHaveCSS("color", "rgb(14, 20, 16)");
   await expect(stageNumber).toHaveCSS("background-color", "rgb(237, 244, 239)");
+  await expect(page.getByRole("tab", { name: "Paste text" })).toHaveCSS("background-color", "rgb(21, 29, 24)");
+  await expect(page.getByRole("tab", { name: "Paste text" })).toHaveCSS("color", "rgb(237, 244, 239)");
+  await expect(page.getByLabel("Decision source")).toHaveCSS("background-color", "rgb(21, 29, 24)");
+
+  await page.getByRole("button", { name: "All decisions" }).click();
+  await expect(page.locator(".library-empty")).toHaveCSS("background-color", "rgb(21, 29, 24)");
+  await expect(page.locator(".library-empty")).toHaveCSS("color", "rgb(237, 244, 239)");
+
+  await page.getByRole("button", { name: "Account and provider keys" }).click();
+  await expect(page.getByLabel("Display name")).toHaveCSS("background-color", "rgb(21, 29, 24)");
+  await expect(page.getByLabel("Display name")).toHaveCSS("color", "rgb(237, 244, 239)");
 });
 
 test("does not restore another workspace's browser draft", async ({ page }) => {

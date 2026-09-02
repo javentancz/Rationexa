@@ -270,9 +270,9 @@ button { cursor:pointer; }
 .section-heading h2 { margin:5px 0; font:500 28px/1.15 Georgia,serif; letter-spacing:-.02em; }
 .section-heading p { margin:0; color:var(--muted); font-size:14px; }
 .privacy-badge,.decision-badge { border:1px solid #cde0d3; border-radius:999px; padding:7px 10px; background:var(--accent-soft); color:var(--accent-dark); font-size:10px; font-weight:750; text-transform:capitalize; }
-.source-tabs { display:flex; gap:4px; width:fit-content; margin-bottom:14px; border-radius:9px; padding:3px; background:#eef1ee; }
+.source-tabs { display:flex; gap:4px; width:fit-content; margin-bottom:14px; border-radius:9px; padding:3px; background:var(--muted-background); }
 .source-tabs button { border:0; border-radius:7px; padding:7px 12px; background:transparent; color:var(--muted); font-size:12px; }
-.source-tabs button.active,.source-tabs button[data-state="active"] { background:#fff; color:var(--ink); font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.source-tabs button.active,.source-tabs button[data-state="active"] { background:var(--surface); color:var(--ink); font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,.08); }
 .field { display:grid; gap:7px; color:var(--muted); font-size:11px; font-weight:700; }
 .field input,.field textarea,.field select,.premise-card textarea,.premise-card select { width:100%; border:1px solid var(--line); border-radius:8px; outline:none; background:#fcfdfc; color:var(--ink); transition:border .15s,box-shadow .15s; }
 .field input,.field select { min-height:41px; padding:9px 11px; }
@@ -291,6 +291,9 @@ button { cursor:pointer; }
 .primary>svg { width:18px; height:18px; stroke-width:2.1; }
 .primary:hover { background:var(--accent-dark); }
 .primary:disabled { cursor:wait; opacity:.55; }
+.secondary { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid var(--line); border-radius:8px; padding:10px 14px; background:var(--surface); color:var(--ink); font-size:12px; font-weight:700; }
+.secondary:hover:not(:disabled) { border-color:color-mix(in srgb,var(--accent) 48%,var(--line)); background:var(--accent-soft); color:var(--accent-dark); }
+.secondary:disabled { cursor:not-allowed; background:var(--muted-background); color:var(--muted); opacity:.72; }
 .spinner { width:13px; height:13px; border:2px solid rgba(255,255,255,.45); border-top-color:#fff; border-radius:50%; animation:spin .8s linear infinite; }
 .spinner.dark { border-color:#c7d4cb; border-top-color:var(--accent); }
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -679,7 +682,7 @@ button { cursor:pointer; }
 .decision-row-date span,.decision-row-date small { color:var(--subtle); font-size:8px; text-transform:uppercase; }
 .decision-row-date strong { font-size:10px; line-height:1.3; }
 .row-arrow { color:var(--accent); font-size:17px; }
-.library-empty { display:grid; place-items:center; gap:8px; min-height:300px; border:1px dashed #b8c4bb; border-radius:13px; padding:30px; background:#fafcfa; text-align:center; }
+.library-empty { display:grid; place-items:center; gap:8px; min-height:300px; border:1px dashed #b8c4bb; border-radius:13px; padding:30px; background:var(--surface); color:var(--ink); text-align:center; }
 .library-empty-icon { display:grid; place-items:center; width:42px; height:42px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-size:18px; }
 .library-empty strong { font:500 20px Georgia,serif; }
 .library-empty p { max-width:430px; margin:0 0 7px; color:var(--muted); font-size:11px; line-height:1.5; }
@@ -821,13 +824,14 @@ button { cursor:pointer; }
 .account-login,.account-key-form{display:grid;gap:10px;max-width:340px}
 .account-login label,.account-key-form label{display:grid;gap:6px;font-size:12px;font-weight:600}
 .provider-choice-note{color:var(--muted);font-size:10px;font-weight:500;line-height:1.4}
-.account-login input,.account-key-form input,.account-key-form select,.provider-model-choice select{min-height:41px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fcfdfc;color:var(--ink);outline:none;transition:border .15s,box-shadow .15s}
+.account-login input,.account-key-form input,.account-key-form select,.provider-model-choice select{min-height:41px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);outline:none;transition:border .15s,box-shadow .15s}
+.account-login input::placeholder,.account-key-form input::placeholder{color:var(--muted);opacity:1}
 .account-login input:focus,.account-key-form input:focus,.account-key-form select:focus,.provider-model-choice select:focus{border-color:#7cab91;box-shadow:0 0 0 3px rgba(31,96,66,.09)}
 .account-hint{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px}
 .account-hint svg{width:13px;height:13px}
 .account-secrets{display:grid;gap:14px}
 .account-danger-zone{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,320px) auto;align-items:end;gap:14px;border:1px solid rgba(181,63,63,.28);border-radius:11px;padding:16px;background:rgba(181,63,63,.045)}
-.account-danger-zone>div{align-self:center}.account-danger-zone strong{color:var(--red);font-size:13px}.account-danger-zone p{margin:5px 0 0;color:var(--muted);font-size:11px;line-height:1.5}.account-danger-zone label{display:grid;gap:6px}.account-danger-zone label span{font-size:10px;font-weight:750}.account-danger-zone input{min-height:40px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;font:inherit}.account-danger-zone button{min-height:40px;white-space:nowrap}
+.account-danger-zone>div{align-self:center}.account-danger-zone strong{color:var(--red);font-size:13px}.account-danger-zone p{margin:5px 0 0;color:var(--muted);font-size:11px;line-height:1.5}.account-danger-zone label{display:grid;gap:6px}.account-danger-zone label span{font-size:10px;font-weight:750}.account-danger-zone input{min-height:40px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface);color:var(--ink);font:inherit}.account-danger-zone button{min-height:40px;white-space:nowrap}
 @media (max-width:760px){.account-danger-zone{grid-template-columns:1fr}.account-danger-zone button{width:100%}}
 .byok-heading{display:flex;align-items:flex-start;gap:12px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface-soft)}
 .byok-heading>svg{width:24px;height:24px;flex:0 0 auto;color:var(--green)}
@@ -1674,6 +1678,7 @@ button { cursor:pointer; }
 body,.sidebar,.workflow-pane,.workspace,.workbench-shell,.card,.topbar,.landing-page { transition:background-color .18s ease,color .18s ease,border-color .18s ease; }
 .dark .sidebar,.dark .workflow-pane,.dark .workspace,.dark .workbench-shell,.dark .share-header { background:var(--background); }
 .dark .topbar { background:color-mix(in srgb,var(--background) 92%,transparent); }
+.dark .brand-mark { background:var(--primary); color:var(--primary-foreground); }
 .dark .stage-number { color:#0e1410; }
 .dark .detail-disclosure,.dark .detail-disclosure-trigger,.dark .finalize-summary-grid>div,.dark .finalize-counts>div,.dark .finalize-premise-preview article,
 .dark .library-panel-toggle,.dark .workflow-toggle,.dark .library-hover-zone,.dark .workflow-steps button:hover:not(:disabled),.dark .workflow-steps button>span:first-child,
@@ -1688,7 +1693,11 @@ body,.sidebar,.workflow-pane,.workspace,.workbench-shell,.card,.topbar,.landing-
 .dark .pane-search,.dark .snapshot-grid>div,.dark .snapshot-premises article,.dark .premise-actions button,.dark .record-meta>div,
 .dark .challenge-grid article,.dark .share-item,.dark .history-strip,.dark .composer-input,.dark .compare-models,.dark .comparison-column,
 .dark .account-key-list li,.dark .account-management-card,.dark .share-premise,.dark .share-revisit { background:color-mix(in srgb,var(--surface) 72%,var(--background)); }
-.dark .field input,.dark .field textarea,.dark .field select,.dark .premise-card textarea,.dark .premise-card select,.dark .upload-zone { background:var(--surface); }
+.dark .field input,.dark .field textarea,.dark .field select,.dark .premise-card textarea,.dark .premise-card select,.dark .upload-zone,
+.dark .account-login input,.dark .account-key-form input,.dark .account-key-form select,.dark .provider-model-choice select,.dark .account-danger-zone input { background:var(--surface); color:var(--ink); }
+.dark .account-login input::placeholder,.dark .account-key-form input::placeholder,.dark .field input::placeholder,.dark .field textarea::placeholder { color:var(--muted); opacity:1; }
+.dark .account-key-form select option,.dark .provider-model-choice select option { background:var(--surface); color:var(--ink); }
+.dark .library-empty { border-color:var(--line); background:var(--surface); color:var(--ink); }
 .dark .landing-page { background:var(--background); }
 .dark .landing-nav { background:color-mix(in srgb,var(--background) 88%,transparent); }
 .dark .landing-nav .landing-nav-cta { background:var(--foreground); color:var(--background); }
