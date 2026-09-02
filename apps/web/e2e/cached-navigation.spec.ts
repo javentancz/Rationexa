@@ -54,13 +54,20 @@ test("renders the saved workspace immediately while a hard-refresh revalidation 
 
   let releaseBootstrap!: () => void;
   const bootstrapGate = new Promise<void>((resolve) => { releaseBootstrap = resolve; });
+  const bootstrapFinished = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === "/v1/bootstrap" && response.request().method() === "GET"
+  ));
   await page.route("**/v1/bootstrap", async (route) => {
     await bootstrapGate;
     await route.continue();
   });
 
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible({ timeout: 1_000 });
-  releaseBootstrap();
-  await page.unroute("**/v1/bootstrap");
+  try {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible({ timeout: 1_000 });
+  } finally {
+    releaseBootstrap();
+    await bootstrapFinished;
+    await page.unroute("**/v1/bootstrap");
+  }
 });
