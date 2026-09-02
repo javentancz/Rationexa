@@ -44,8 +44,9 @@ Set `CRON_SECRET` in the production API project to a random value of at least 16
 characters. Vercel invokes `GET /v1/maintenance/cleanup-guests` once daily with
 that value in the `Authorization: Bearer ...` header. The endpoint deletes guest
 workspaces older than `GUEST_WORKSPACE_TTL_HOURS` in bounded batches controlled
-by `GUEST_CLEANUP_BATCH_SIZE`; it never selects registered accounts. Guest
-creation also performs a small opportunistic cleanup as a fallback.
+by `GUEST_CLEANUP_BATCH_SIZE`; it never selects registered accounts. Cleanup is
+kept off the visitor bootstrap path so an expired-workspace sweep cannot delay a
+new user's first screen.
 
 The checked-in schedule is daily because Vercel Hobby projects do not support a
 shorter interval. Monitor `guest_cleanup_complete` logs and increase the batch

@@ -183,7 +183,9 @@ async def add_operational_headers(request: Request, call_next):
         )
         raise
     duration_ms = (perf_counter() - started_at) * 1000
-    response.headers["Server-Timing"] = f'app;dur={duration_ms:.1f};desc="Rationexa API"'
+    endpoint_timing = response.headers.get("Server-Timing")
+    app_timing = f'app;dur={duration_ms:.1f};desc="Rationexa API"'
+    response.headers["Server-Timing"] = f"{endpoint_timing}, {app_timing}" if endpoint_timing else app_timing
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -415,8 +417,14 @@ def record_product_event(
     )
 
 
-def model_catalog(db: Session, workspace: WorkspaceRow | None) -> ModelCatalogRead:
-    account = db.get(AccountRow, workspace.owner_account_id) if workspace is not None else None
+def model_catalog(
+    db: Session,
+    workspace: WorkspaceRow | None,
+    *,
+    account: AccountRow | None = None,
+) -> ModelCatalogRead:
+    if workspace is not None and account is None:
+        account = db.get(AccountRow, workspace.owner_account_id)
     models = (
         available_models(settings.model_copy(update={"ai_provider": "deterministic"}))
         if workspace is None or is_guest_account(account)
@@ -1023,7 +1031,27 @@ def list_decisions(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> DecisionListRead:
-    filters = [DecisionRow.workspace_id == active_workspace_id(db, extract_session_token(route))]
+    return decision_list_for_workspace(
+        db,
+        active_workspace_id(db, extract_session_token(route)),
+        q=q,
+        criticality=criticality,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def decision_list_for_workspace(
+    db: Session,
+    workspace_id: str,
+    *,
+    q: str | None = None,
+    criticality: Criticality | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> DecisionListRead:
+    """List one workspace without resolving its session more than once."""
+    filters = [DecisionRow.workspace_id == workspace_id]
     if q and q.strip():
         pattern = f"%{q.strip()}%"
         filters.append(
@@ -1037,14 +1065,34 @@ def list_decisions(
     if criticality:
         filters.append(DecisionRow.criticality == criticality.value)
 
-    premise_count = func.count(func.distinct(PremiseRow.id)).label("premise_count")
-    revisit_count = func.count(func.distinct(RevisitRow.id)).label("revisit_count")
+    premise_count = (
+        select(func.count(PremiseRow.id))
+        .where(PremiseRow.decision_id == DecisionRow.id)
+        .correlate(DecisionRow)
+        .scalar_subquery()
+        .label("premise_count")
+    )
+    revisit_count = (
+        select(func.count(RevisitRow.id))
+        .where(RevisitRow.decision_id == DecisionRow.id)
+        .correlate(DecisionRow)
+        .scalar_subquery()
+        .label("revisit_count")
+    )
     pending_revisit_count = (
-        func.count(func.distinct(RevisitRow.id))
-        .filter(RevisitRow.status == "needs_review")
+        select(func.count(RevisitRow.id))
+        .where(RevisitRow.decision_id == DecisionRow.id, RevisitRow.status == "needs_review")
+        .correlate(DecisionRow)
+        .scalar_subquery()
         .label("pending_revisit_count")
     )
-    last_revisited_at = func.max(RevisitRow.created_at).label("last_revisited_at")
+    last_revisited_at = (
+        select(func.max(RevisitRow.created_at))
+        .where(RevisitRow.decision_id == DecisionRow.id)
+        .correlate(DecisionRow)
+        .scalar_subquery()
+        .label("last_revisited_at")
+    )
     statement = (
         select(
             DecisionRow,
@@ -1052,17 +1100,19 @@ def list_decisions(
             revisit_count,
             pending_revisit_count,
             last_revisited_at,
+            func.count().over().label("total_count"),
         )
-        .outerjoin(PremiseRow, PremiseRow.decision_id == DecisionRow.id)
-        .outerjoin(RevisitRow, RevisitRow.decision_id == DecisionRow.id)
         .where(*filters)
-        .group_by(DecisionRow.id)
         .order_by(DecisionRow.created_at.desc())
         .limit(limit)
         .offset(offset)
     )
     rows = db.execute(statement).all()
-    total = db.scalar(select(func.count()).select_from(DecisionRow).where(*filters)) or 0
+    total = (
+        rows[0].total_count
+        if rows
+        else (db.scalar(select(func.count()).select_from(DecisionRow).where(*filters)) or 0)
+    )
     return DecisionListRead(
         items=[
             DecisionListItem(
@@ -1078,7 +1128,7 @@ def list_decisions(
                 last_revisited_at=as_utc(last_revisited),
                 created_at=as_utc(decision.created_at),
             )
-            for decision, premises, revisits, pending, last_revisited in rows
+            for decision, premises, revisits, pending, last_revisited, _ in rows
         ],
         total=total,
     )
@@ -1145,7 +1195,6 @@ def scheduled_guest_cleanup(route: Request, db: Db) -> GuestCleanupRead:
 
 
 def create_guest_workspace(response: Response, db: Session) -> WorkspaceRow:
-    cleanup_expired_guest_workspaces(db)
     account = AccountRow(name="Guest reviewer")
     db.add(account)
     db.flush()
@@ -1161,27 +1210,51 @@ def create_guest_workspace(response: Response, db: Session) -> WorkspaceRow:
 @app.get("/v1/bootstrap", response_model=WorkspaceBootstrapRead)
 def workspace_bootstrap(route: Request, response: Response, db: Db) -> WorkspaceBootstrapRead:
     """Load the initial workspace in one serverless round trip."""
+    auth_started = perf_counter()
     token = extract_session_token(route)
-    if settings.hosted_mode and resolve_session(token, db) is None:
+    account = resolve_session(token, db) if token else None
+    newly_created_guest = False
+    if settings.hosted_mode and account is None:
         workspace = create_guest_workspace(response, db)
+        newly_created_guest = True
         account = db.get(AccountRow, workspace.owner_account_id)
         if account is None:
             raise HTTPException(status_code=503, detail="Guest workspace could not be initialized")
-        return WorkspaceBootstrapRead(
-            models=model_catalog(db, workspace),
-            workspace=workspace_read(workspace, account),
-            library=DecisionListRead(items=[], total=0),
-            guest=True,
-        )
-    workspace = active_workspace(db, token)
-    account = db.get(AccountRow, workspace.owner_account_id)
-    if account is None:
-        raise HTTPException(status_code=503, detail="Workspace account is unavailable")
+        guest = True
+    elif account is not None:
+        workspace = account_workspace(db, account.id)
+        if workspace is None:
+            raise HTTPException(status_code=403, detail="This account does not have an accessible workspace.")
+        guest = is_guest_account(account)
+    else:
+        workspace = active_workspace(db, token)
+        account = db.get(AccountRow, workspace.owner_account_id)
+        if account is None:
+            raise HTTPException(status_code=503, detail="Workspace account is unavailable")
+        guest = False
+    auth_ms = (perf_counter() - auth_started) * 1000
+
+    models_started = perf_counter()
+    models = model_catalog(db, workspace, account=account)
+    models_ms = (perf_counter() - models_started) * 1000
+
+    library_started = perf_counter()
+    library = (
+        DecisionListRead(items=[], total=0)
+        if newly_created_guest
+        else decision_list_for_workspace(db, workspace.id)
+    )
+    library_ms = (perf_counter() - library_started) * 1000
+    response.headers["Server-Timing"] = (
+        f'auth;dur={auth_ms:.1f};desc="Session and workspace", '
+        f'models;dur={models_ms:.1f};desc="Model catalog", '
+        f'library;dur={library_ms:.1f};desc="Decision query"'
+    )
     return WorkspaceBootstrapRead(
-        models=model_catalog(db, workspace),
+        models=models,
         workspace=workspace_read(workspace, account),
-        library=list_decisions(route, db),
-        guest=is_guest_account(account),
+        library=library,
+        guest=guest,
     )
 
 

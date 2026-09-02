@@ -372,17 +372,17 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
 
   return (
     <section className="usage-section account-section">
-      <div className="usage-section-heading">
-        <div><span className="overline">Workspace setup</span><h2>Account &amp; AI connections</h2></div>
-        <span>{authenticated ? "Private workspace · encrypted BYOK" : workspace?.mode === "guest_personal" ? "Temporary private guest workspace" : workspace ? "Local development workspace" : "Sign in required · private workspace"}</span>
+      <div className="account-page-heading">
+        <div><span className="workspace-context">Private workspace settings</span><h2>Account &amp; AI connections</h2><p>Manage your profile, active sessions, and hosted model providers in one place.</p></div>
+        <span className="account-status"><ShieldCheck aria-hidden="true" />{authenticated ? "Encrypted BYOK" : workspace?.mode === "guest_personal" ? "Private guest trial" : workspace ? "Local development" : "Sign in required"}</span>
       </div>
       {error ? <p className="account-error">{error}</p> : null}
-      <div className="account-body">
-        <section className="onboarding-path" aria-label="Workspace onboarding progress">
+      <div className={`account-body ${authenticated ? "authenticated" : "guest"}`}>
+        {!authenticated ? <section className="onboarding-path" aria-label="Workspace onboarding progress">
           <article className={workspace ? "complete" : "current"}><span>{workspace ? <Check aria-hidden="true" /> : "1"}</span><div><strong>Try privately</strong><p>Use deterministic rules in an isolated guest workspace.</p></div></article>
           <article className={authenticated ? "complete" : workspace?.mode === "guest_personal" ? "current" : ""}><span>{authenticated ? <Check aria-hidden="true" /> : "2"}</span><div><strong>Keep your workspace</strong><p>Create an account only when you want durable history.</p></div></article>
           <article className={secrets.some((secret) => secret.configured) ? "complete" : authenticated ? "current" : ""}><span>{secrets.some((secret) => secret.configured) ? <Check aria-hidden="true" /> : "3"}</span><div><strong>Connect a model</strong><p>Add one provider key, verify it, then choose an available model.</p></div></article>
-        </section>
+        </section> : null}
         <div className="account-identity">
           <span className="account-avatar"><UserRound aria-hidden="true" /></span>
           <div>

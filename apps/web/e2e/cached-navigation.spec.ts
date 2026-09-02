@@ -31,6 +31,7 @@ test("reuses workspace and account data when moving between application tabs", a
   await page.getByRole("button", { name: "Account and provider keys" }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole("heading", { name: "Account & AI connections" })).toBeVisible();
+  await expect(page.getByText("Workspace & provider keys", { exact: true })).toHaveCount(0);
   const accountRequestsAfterInitialLoad = accountSettingsRequests;
   expect(accountRequestsAfterInitialLoad).toBe(1);
   await page.getByRole("button", { name: "All decisions" }).click();
@@ -56,6 +57,7 @@ test("renders a fresh saved workspace without refetching it on hard refresh", as
 
   await page.goto("/library");
   await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible();
+  await expect(page.getByText("Your records", { exact: true })).toHaveCSS("text-decoration-line", "none");
   await expect.poll(() => page.evaluate(() => (
     Array.from({ length: sessionStorage.length }, (_, index) => sessionStorage.key(index))
       .some((key) => key?.startsWith("rationexa-refresh-v1:workspace-bootstrap"))

@@ -180,6 +180,10 @@ def test_stage_one_vertical_slice() -> None:
         assert bootstrap.json()["models"]["default_model_id"] == "deterministic/rules-v1"
         assert bootstrap.json()["workspace"]["id"] == workspace.json()["id"]
         assert isinstance(bootstrap.json()["library"]["items"], list)
+        assert all(
+            metric in bootstrap.headers["server-timing"]
+            for metric in ("auth;dur=", "models;dur=", "library;dur=", "app;dur=")
+        )
 
         artifact = client.post(
             "/v1/artifacts",
@@ -679,6 +683,10 @@ def test_stage_two_decision_library_search_and_revisit_history() -> None:
         assert search.json()["total"] == 1
         assert search.json()["items"][0]["id"] == vendor["id"]
         assert search.json()["items"][0]["premise_count"] == len(vendor["premises"])
+
+        out_of_range = client.get("/v1/decisions", params={"q": "Library Atlas", "offset": 10})
+        assert out_of_range.json()["items"] == []
+        assert out_of_range.json()["total"] == 1
 
         revisit = client.post(
             f"/v1/decisions/{vendor['id']}/revisit-checks",
