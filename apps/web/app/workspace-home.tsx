@@ -103,7 +103,6 @@ export default function Home() {
   const [shareDeleteBusy, setShareDeleteBusy] = useState(false);
   const [workflowView, setWorkflowView] = useState<WorkflowStep>(1);
   const [libraryPaneCollapsed, setLibraryPaneCollapsed] = useState(false);
-  const [libraryPanePeeking, setLibraryPanePeeking] = useState(false);
   const [workflowPaneCollapsed, setWorkflowPaneCollapsed] = useState(false);
   const [challenge, setChallenge] = useState<DecisionChallenge | null>(null);
   const [challengeNotes, setChallengeNotes] = useState("");
@@ -118,6 +117,11 @@ export default function Home() {
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const restoredSession = useRef(false);
   const cachedBootstrap = useMemo(() => readRefreshSnapshot<WorkspaceBootstrap>("workspace-bootstrap"), []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 760px)");
+    if (media.matches) setLibraryPaneCollapsed(true);
+  }, []);
 
   const navigateTo = useCallback((nextView: WorkspaceView, replace = false) => {
     setView(nextView);
@@ -1004,20 +1008,20 @@ export default function Home() {
   ) : null;
 
    return (
-       <div className={`app-shell ${libraryPaneCollapsed ? "library-collapsed" : ""} ${libraryPanePeeking ? "library-peeking" : ""} ${workflowPaneCollapsed ? "workflow-collapsed" : ""}`}>
-      {libraryPaneCollapsed ? <><div className="library-edge-reveal" aria-hidden="true" onMouseEnter={() => setLibraryPanePeeking(true)} /><button type="button" className="library-hover-zone" aria-label="Open decision libraries" onFocus={() => setLibraryPanePeeking(true)} onClick={() => { setLibraryPaneCollapsed(false); setLibraryPanePeeking(false); }}><PanelLeftOpen aria-hidden="true" /></button></> : null}
-      {!libraryPaneCollapsed ? <button type="button" className="mobile-library-scrim" aria-label="Close decision libraries" onClick={() => { setLibraryPaneCollapsed(true); setLibraryPanePeeking(false); }} /> : null}
-      <aside className="sidebar library-pane" onMouseLeave={() => { if (libraryPaneCollapsed) setLibraryPanePeeking(false); }}>
-        <header className="pane-brand"><div className="brand"><span className="brand-mark">R</span><span className="pane-label">Rationexa</span></div><Hint label={libraryPaneCollapsed ? "Keep panel open" : "Collapse panel"} side="bottom"><button type="button" className="library-panel-toggle" aria-label={libraryPaneCollapsed ? "Keep decision libraries open" : "Collapse decision libraries"} aria-expanded={!libraryPaneCollapsed} onClick={() => { setLibraryPaneCollapsed(!libraryPaneCollapsed); setLibraryPanePeeking(false); }}>{libraryPaneCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}</button></Hint></header>
-        <Hint label="New decision review" disabled={!libraryPaneCollapsed || libraryPanePeeking}><button className="new-decision" onClick={requestNewDecision}><Plus aria-hidden="true" /><span className="pane-label">New decision review</span></button></Hint>
+       <div className={`app-shell ${libraryPaneCollapsed ? "library-collapsed" : ""} ${workflowPaneCollapsed ? "workflow-collapsed" : ""}`}>
+      {libraryPaneCollapsed ? <Hint label="Open navigation" side="right"><button type="button" className="library-hover-zone" aria-label="Open navigation" aria-expanded="false" onClick={() => setLibraryPaneCollapsed(false)}><PanelLeftOpen aria-hidden="true" /></button></Hint> : null}
+      {!libraryPaneCollapsed ? <button type="button" className="mobile-library-scrim" aria-label="Close navigation" onClick={() => setLibraryPaneCollapsed(true)} /> : null}
+      <aside className="sidebar library-pane">
+        <header className="pane-brand"><div className="brand"><span className="brand-mark">R</span><span className="pane-label">Rationexa</span></div><Hint label="Collapse navigation" side="bottom"><button type="button" className="library-panel-toggle" aria-label="Collapse navigation" aria-expanded={!libraryPaneCollapsed} onClick={() => setLibraryPaneCollapsed(true)}><PanelLeftClose aria-hidden="true" /></button></Hint></header>
+        <button className="new-decision" onClick={requestNewDecision}><Plus aria-hidden="true" /><span className="pane-label">New decision review</span></button>
         <div className="pane-section pane-label"><span className="pane-kicker">Decision libraries</span></div>
         <nav className="library-nav" aria-label="Decision libraries">
           {(["all", "critical", "important", "routine"] as ("all" | Criticality)[]).map((value) => {
             const label = value === "all" ? "All decisions" : value[0].toUpperCase() + value.slice(1);
-            return <Hint key={value} label={label} disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item ${view === "library" && libraryCriticality === value ? "active" : ""}`} aria-label={label} onClick={() => { setLibraryCriticality(value); navigateTo("library"); }}><span className="nav-icon"><LibraryNavIcon value={value} /></span><span className="pane-label">{label}</span>{value === "all" && libraryCriticality === "all" ? <small className="pane-label">{library.total}</small> : null}</button></Hint>;
+            return <button key={value} type="button" className={`nav-item ${view === "library" && libraryCriticality === value ? "active" : ""}`} aria-label={label} onClick={() => { setLibraryCriticality(value); navigateTo("library"); }}><span className="nav-icon"><LibraryNavIcon value={value} /></span><span className="pane-label">{label}</span>{value === "all" && libraryCriticality === "all" ? <small className="pane-label">{library.total}</small> : null}</button>;
           })}
-          <Hint label="Usage and cost" disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item usage-nav ${view === "usage" ? "active" : ""}`} aria-label="Usage and cost" onMouseEnter={prefetchUsage} onFocus={prefetchUsage} onClick={() => navigateTo("usage")}><span className="nav-icon"><ChartNoAxesColumn aria-hidden="true" /></span><span className="pane-label">Usage &amp; cost</span></button></Hint>
-          <Hint label="Account and provider keys" disabled={!libraryPaneCollapsed || libraryPanePeeking}><button type="button" className={`nav-item usage-nav ${view === "settings" ? "active" : ""}`} aria-label="Account and provider keys" onMouseEnter={prefetchAccountSettings} onFocus={prefetchAccountSettings} onClick={() => navigateTo("settings")}><span className="nav-icon"><Settings aria-hidden="true" /></span><span className="pane-label">Account &amp; keys</span></button></Hint>
+          <button type="button" className={`nav-item usage-nav ${view === "usage" ? "active" : ""}`} aria-label="Usage and cost" onMouseEnter={prefetchUsage} onFocus={prefetchUsage} onClick={() => navigateTo("usage")}><span className="nav-icon"><ChartNoAxesColumn aria-hidden="true" /></span><span className="pane-label">Usage &amp; cost</span></button>
+          <button type="button" className={`nav-item usage-nav ${view === "settings" ? "active" : ""}`} aria-label="Account and provider keys" onMouseEnter={prefetchAccountSettings} onFocus={prefetchAccountSettings} onClick={() => navigateTo("settings")}><span className="nav-icon"><Settings aria-hidden="true" /></span><span className="pane-label">Account &amp; keys</span></button>
         </nav>
         <section className="decision-conversations pane-label" aria-label="Saved decisions">
           <div className="pane-section-heading"><span>Decision conversations</span>{libraryLoading ? <span className="spinner dark" /> : null}</div>

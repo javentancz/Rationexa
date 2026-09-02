@@ -103,6 +103,31 @@ test("uses clean paths for workspace sections", async ({ page }) => {
   await expect(page.url()).not.toContain("#");
 });
 
+test("opens collapsed navigation only after an explicit click", async ({ page }) => {
+  await mockBootstrap(page);
+  await page.goto("/workspace");
+
+  await page.getByRole("button", { name: "Collapse navigation" }).click();
+  await expect(page.getByRole("button", { name: "Open navigation" })).toBeVisible();
+  await page.mouse.move(1, 320);
+  await expect(page.getByRole("button", { name: "All decisions" })).toBeHidden();
+
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await expect(page.getByRole("button", { name: "All decisions" })).toBeVisible();
+});
+
+test("uses an explicit navigation drawer on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockBootstrap(page);
+  await page.goto("/workspace");
+
+  await expect(page.getByRole("button", { name: "Open navigation" })).toBeVisible();
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await expect(page.getByRole("button", { name: "Account and provider keys" })).toBeVisible();
+  await page.getByRole("button", { name: "Close navigation" }).click({ position: { x: 360, y: 400 } });
+  await expect(page.getByRole("button", { name: "Open navigation" })).toBeVisible();
+});
+
 test("keeps a clean password-reset URL available while signed out", async ({ page }) => {
   await page.route(/\/v1\/bootstrap(?:\?.*)?$/, (route) => route.fulfill({ status: 401, headers: corsHeaders, json: { detail: "Sign in required" } }));
   await page.route(/\/v1\/account(?:\?.*)?$/, (route) => route.fulfill({ status: 401, headers: corsHeaders, json: { detail: "Not authenticated" } }));

@@ -39,3 +39,13 @@ test("persists the selected light and dark appearance", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Light" }).click();
   await expect(page.locator("html")).not.toHaveClass(/dark/);
 });
+
+test("keeps the landing story readable without horizontal scrolling on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await expect(page.getByRole("link", { name: "Rationexa home" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Try a sample decision" }).first()).toBeVisible();
+  await expect(page.getByText("Every decision has a living trail.")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
