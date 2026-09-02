@@ -21,8 +21,8 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
   }
 
   await page.getByRole("button", { name: "Continue to finalize →" }).click();
-  await expect(page.getByRole("heading", { name: "Confirm the permanent record" })).toBeVisible();
-  await page.getByRole("button", { name: "Finalize decision" }).click();
+  await expect(page.getByRole("heading", { name: "Review the record before it becomes memory" })).toBeVisible();
+  await page.getByRole("button", { name: "Finalize and save" }).click();
   await expect(page.getByText("Decision finalized")).toBeVisible();
 
   await page.getByRole("button", { name: "Create share link" }).click();

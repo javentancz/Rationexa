@@ -30,13 +30,13 @@ test("reuses workspace and account data when moving between application tabs", a
   await expect(page.getByRole("heading", { name: "Bring in a decision" })).toBeVisible();
   await page.getByRole("button", { name: "Account and provider keys" }).click();
   await expect(page).toHaveURL(/\/settings$/);
-  await expect(page.getByRole("heading", { name: "Your AI runtime" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Account & AI connections" })).toBeVisible();
   const accountRequestsAfterInitialLoad = accountSettingsRequests;
   expect(accountRequestsAfterInitialLoad).toBe(1);
   await page.getByRole("button", { name: "All decisions" }).click();
   await expect(page).toHaveURL(/\/library$/);
   await page.getByRole("button", { name: "Account and provider keys" }).click();
-  await expect(page.getByRole("heading", { name: "Your AI runtime" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Account & AI connections" })).toBeVisible();
   await page.getByRole("button", { name: "New decision review" }).click();
   await expect(page).toHaveURL(/\/workspace$/);
 

@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { KeyRound, LogIn, LogOut, Monitor, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { Check, KeyRound, LogIn, LogOut, Monitor, ShieldCheck, Sparkles, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch, confirmPasswordReset, login, logout, register, requestPasswordReset, setAuthenticatedState, setSessionToken } from "./api";
 import { ConfirmDialog } from "./ui";
@@ -373,11 +373,16 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
   return (
     <section className="usage-section account-section">
       <div className="usage-section-heading">
-        <div><span className="overline">Models &amp; provider keys</span><h2>Your AI runtime</h2></div>
+        <div><span className="overline">Workspace setup</span><h2>Account &amp; AI connections</h2></div>
         <span>{authenticated ? "Private workspace · encrypted BYOK" : workspace?.mode === "guest_personal" ? "Temporary private guest workspace" : workspace ? "Local development workspace" : "Sign in required · private workspace"}</span>
       </div>
       {error ? <p className="account-error">{error}</p> : null}
       <div className="account-body">
+        <section className="onboarding-path" aria-label="Workspace onboarding progress">
+          <article className={workspace ? "complete" : "current"}><span>{workspace ? <Check aria-hidden="true" /> : "1"}</span><div><strong>Try privately</strong><p>Use deterministic rules in an isolated guest workspace.</p></div></article>
+          <article className={authenticated ? "complete" : workspace?.mode === "guest_personal" ? "current" : ""}><span>{authenticated ? <Check aria-hidden="true" /> : "2"}</span><div><strong>Keep your workspace</strong><p>Create an account only when you want durable history.</p></div></article>
+          <article className={secrets.some((secret) => secret.configured) ? "complete" : authenticated ? "current" : ""}><span>{secrets.some((secret) => secret.configured) ? <Check aria-hidden="true" /> : "3"}</span><div><strong>Connect a model</strong><p>Add one provider key, verify it, then choose an available model.</p></div></article>
+        </section>
         <div className="account-identity">
           <span className="account-avatar"><UserRound aria-hidden="true" /></span>
           <div>
@@ -423,9 +428,9 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
         ) : null}
         <div className="account-secrets">
           <div className="byok-heading">
-            <KeyRound aria-hidden="true" />
+            <Sparkles aria-hidden="true" />
             <div>
-              <strong>Bring your own API key</strong>
+              <strong>Connect a hosted model with your own key</strong>
               <p>{authenticated ? "Choose the platform that issued your key, load its live model catalog, then activate one model. Keys cannot be safely auto-detected because provider formats overlap." : workspace?.mode === "guest_personal" ? "Deterministic rules are available in this temporary browser workspace. Create an account to preserve its decisions and unlock encrypted BYOK." : workspace ? "Local development can use built-in models without storing a shared key." : "Sign in or create a private workspace before connecting a provider. Every account receives an isolated decision library and encrypted BYOK storage."}</p>
             </div>
           </div>
