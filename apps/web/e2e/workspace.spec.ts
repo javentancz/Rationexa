@@ -126,6 +126,8 @@ test("uses an explicit navigation drawer on mobile", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Account and provider keys" })).toBeVisible();
   await page.getByRole("button", { name: "Close navigation" }).click({ position: { x: 360, y: 400 } });
   await expect(page.getByRole("button", { name: "Open navigation" })).toBeVisible();
+  await expect(page.getByLabel("Decision source")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test("keeps a clean password-reset URL available while signed out", async ({ page }) => {

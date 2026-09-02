@@ -357,7 +357,6 @@ export default function Home() {
     const review = reviews[premise.candidate_id];
     return review?.action === "confirm" && attentionKinds.has(review.kind) && !premise.anchor;
   }) : [], [criticality, premises, reviews]);
-  const activePremise = premises.find((premise) => premise.candidate_id === selectedPremise) ?? premises[0];
   const selectedModel = models.find((model) => model.id === selectedModelId);
   const comparisonModel = models.find((model) => model.id === comparisonModelId);
   const auditEvents = useMemo<AuditEvent[]>(() => {
@@ -1088,10 +1087,10 @@ export default function Home() {
         {view === "workspace" && extraction && draft && (workflowView === 2 || workflowView === 3) ? (
           <>
             {!decision && workflowView === 2 ? <>
-              <section className="review-layout">
+              <section className="review-layout review-layout-aligned">
               <div className="review-main">
                 <section className="card decision-summary">
-                  <div className="section-heading compact"><div><span className="overline">Decision record · {extraction.model}</span><h2>Review the extracted decision</h2></div><button className="text-button" onClick={requestNewDecision}>Start over</button></div>
+                  <div className="review-stage-heading"><span className="stage-number">02</span><div><span className="overline">Human review · extracted by {extraction.model}</span><h2>Review the extracted decision</h2><p>Correct the record fields first, then review every premise against its exact source excerpt.</p></div><button className="text-button" onClick={requestNewDecision}>Start over</button></div>
                   <div className="field-grid">
                     <label className="field full"><span>Decision title</span><input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
                     <label className="field full"><span>Decision question</span><input value={draft.question} onChange={(event) => updateDraft("question", event.target.value)} /></label>
@@ -1102,27 +1101,21 @@ export default function Home() {
                 </section>
 
                 <section className="premise-section">
-                  <div className="section-heading compact"><div><span className="overline">Premise review</span><h2>Verify what the decision depends on</h2></div><div className="review-counts"><span>{counts.confirm} confirmed</span><span>{counts.attention} need attention</span></div></div>
+                  <div className="premise-section-heading"><div><span className="overline">Premise review</span><h2>Verify what the decision depends on</h2><p>AI suggestions remain provisional. Compare each statement with its source, then record your judgment.</p></div><div className="review-counts"><span>{counts.confirm} confirmed</span><span>{counts.unknown} unknown</span><span>{counts.attention} need attention</span></div></div>
                   <div className="premise-list">
                     {premises.map((premise, index) => {
                       const review = reviews[premise.candidate_id];
                       const attention = Boolean(premise.attention_reason || attentionKinds.has(review.kind));
-                      return <article key={premise.candidate_id} className={`premise-card ${selectedPremise === premise.candidate_id ? "selected" : ""} action-${review.action}`} onClick={() => setSelectedPremise(premise.candidate_id)}>
-                        <div className="premise-top"><span className="premise-number">P{index + 1}</span><select aria-label={`Premise ${index + 1} type`} value={review.kind} onClick={(event) => event.stopPropagation()} onChange={(event) => updateReview(premise.candidate_id, { kind: event.target.value })}>{premiseKinds.map((kind) => <option key={kind} value={kind}>{kind.replaceAll("_", " ")}</option>)}</select>{attention ? <span className="attention-badge">Review carefully</span> : null}</div>
-                        <textarea aria-label={`Premise ${index + 1} statement`} rows={2} value={review.statement} onClick={(event) => event.stopPropagation()} onChange={(event) => updateReview(premise.candidate_id, { statement: event.target.value })} />
-                        <div className="premise-actions" onClick={(event) => event.stopPropagation()}>{(["confirm", "unknown", "reject"] as ReviewAction[]).map((action) => <button key={action} type="button" className={review.action === action ? "active" : ""} onClick={() => updateReview(premise.candidate_id, { action })}>{action === "confirm" ? "✓ Confirm" : action === "unknown" ? "? Keep unknown" : "× Reject"}</button>)}</div>
+                      return <article key={premise.candidate_id} className={`premise-card premise-review-card ${selectedPremise === premise.candidate_id ? "selected" : ""} action-${review.action}`} onFocus={() => setSelectedPremise(premise.candidate_id)}>
+                        <header className="premise-review-header"><span className="premise-number">P{index + 1}</span><div><small>AI-suggested premise</small><select aria-label={`Premise ${index + 1} type`} value={review.kind} onChange={(event) => updateReview(premise.candidate_id, { kind: event.target.value })}>{premiseKinds.map((kind) => <option key={kind} value={kind}>{kind.replaceAll("_", " ")}</option>)}</select></div>{attention ? <span className="attention-badge">Needs careful review</span> : <span className="source-anchored-badge">Source anchored</span>}</header>
+                        <label className="premise-statement-field"><span>Editable statement</span><textarea aria-label={`Premise ${index + 1} statement`} rows={2} value={review.statement} onChange={(event) => updateReview(premise.candidate_id, { statement: event.target.value })} /></label>
+                        <div className={`premise-source-preview ${premise.anchor ? "anchored" : "missing"}`}><div><span>Exact source excerpt</span>{premise.anchor ? <em>Verified anchor</em> : <em>No anchor</em>}</div>{premise.anchor ? <blockquote>{premise.anchor.exact_excerpt}</blockquote> : <p>No validated source excerpt was found. Preserve this as unknown or reject it if the source does not support the statement.</p>}{premise.attention_reason ? <p className="attention-reason">{premise.attention_reason}</p> : null}</div>
+                        <div className="premise-judgment"><div><strong>Your judgment</strong><small>This controls whether the premise is preserved.</small></div><div className="premise-actions">{(["confirm", "unknown", "reject"] as ReviewAction[]).map((action) => <button key={action} type="button" aria-pressed={review.action === action} className={review.action === action ? "active" : ""} onClick={() => updateReview(premise.candidate_id, { action })}><span>{action === "confirm" ? "✓" : action === "unknown" ? "?" : "×"}</span>{action === "confirm" ? "Confirm" : action === "unknown" ? "Keep unknown" : "Reject"}</button>)}</div></div>
                       </article>;
                     })}
                   </div>
                 </section>
               </div>
-
-              <aside className="source-panel card">
-                <span className="overline">Source evidence</span><h3>{activePremise ? `Premise ${premises.indexOf(activePremise) + 1}` : "No premise selected"}</h3>
-                {activePremise?.anchor ? <blockquote>{activePremise.anchor.exact_excerpt}</blockquote> : <div className="no-anchor">No validated source anchor</div>}
-                {activePremise?.attention_reason ? <p className="attention-reason">{activePremise.attention_reason}</p> : null}
-                <div className="source-help"><strong>Why this matters</strong><p>Compare the extracted statement with the exact source before confirming it.</p></div>
-              </aside>
               </section>
               <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Review complete?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before continuing.` : `${counts.confirm} premises confirmed · ${counts.unknown} preserved as unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "review" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0 || unanchoredCritical.length > 0} onClick={saveReview}>{busyPhase === "review" ? <><span className="spinner" />Saving review…</> : "Continue to finalize →"}</button></section>
             </> : !decision && workflowView === 3 ? <FinalizeConfirmation title={draft.title} question={draft.question} chosenOption={draft.chosenOption} rationale={draft.rationale} criticality={criticality} counts={counts} premises={premises} reviews={reviews} busy={busyPhase === "finalize"} onBack={() => setWorkflowView(2)} onFinalize={finalizeDecision} /> : decision && workflowView === 3 ? <section className="card finalized-summary">

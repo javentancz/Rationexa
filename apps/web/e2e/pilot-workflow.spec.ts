@@ -14,6 +14,8 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
   const premiseCards = page.locator(".premise-card");
   const premiseCount = await premiseCards.count();
   expect(premiseCount).toBeGreaterThan(0);
+  await expect(premiseCards.first().locator(".premise-source-preview")).toBeVisible();
+  await expect(premiseCards.first().getByText("Your judgment")).toBeVisible();
   for (let index = 0; index < premiseCount; index += 1) {
     await premiseCards.nth(index).getByRole("button", { name: "✓ Confirm" }).click();
   }
