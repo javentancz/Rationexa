@@ -1,5 +1,18 @@
 import type { NextConfig } from "next";
 
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "img-src 'self' https://vercel.live https://vercel.com data: blob:",
+  "font-src 'self' https://vercel.live https://assets.vercel.com data:",
+  "style-src 'self' https://vercel.live 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' https://vercel.live",
+  "connect-src 'self' https: wss://ws-us3.pusher.com http://localhost:* http://127.0.0.1:*",
+  "frame-src https://vercel.live",
+].join("; ");
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   async headers() {
@@ -12,7 +25,7 @@ const nextConfig: NextConfig = {
         { key: "X-Frame-Options", value: "DENY" },
         {
           key: "Content-Security-Policy",
-          value: "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*",
+          value: contentSecurityPolicy,
         },
       ],
     }];

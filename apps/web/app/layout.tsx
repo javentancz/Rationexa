@@ -11,6 +11,8 @@ export const metadata: Metadata = {
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const bootstrapUrl = `${apiUrl.replace(/\/$/, "")}/v1/bootstrap`;
 const apiOrigin = /^https?:\/\//.test(apiUrl) ? new URL(apiUrl).origin : null;
+const workspacePaths = ["/workspace", "/library", "/usage", "/settings"];
+const bootstrapPreloadScript = `{const path=location.pathname;if(${JSON.stringify(workspacePaths)}.some(route=>path===route||path.startsWith(route+"/"))){let token;try{token=sessionStorage.getItem("rationexa-session-token")||localStorage.getItem("rationexa-session-token")}catch{}const headers=token?{Authorization:"Bearer "+token}:undefined;window.__rationexaBootstrapPromise=fetch(${JSON.stringify(bootstrapUrl)},{credentials:"include",cache:"no-store",headers})}}`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
@@ -21,7 +23,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         <Script id="rationexa-bootstrap-preload" strategy="beforeInteractive">
-          {`if(/^\/(workspace|library|usage|settings)(\/|$)/.test(location.pathname)){let token;try{token=sessionStorage.getItem("rationexa-session-token")||localStorage.getItem("rationexa-session-token")}catch{}const headers=token?{Authorization:"Bearer "+token}:undefined;window.__rationexaBootstrapPromise=fetch(${JSON.stringify(bootstrapUrl)},{credentials:"include",cache:"no-store",headers})}`}
+          {bootstrapPreloadScript}
         </Script>
         <Providers>{children}</Providers>
       </body>

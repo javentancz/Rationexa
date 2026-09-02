@@ -37,6 +37,17 @@ async function mockBootstrap(page: Page, decisions: unknown[] = [], activeWorksp
   await page.route(/\/v1\/decisions(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: { items: decisions, total: decisions.length } }));
 }
 
+test("executes the workspace bootstrap preload without syntax or hydration errors", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await mockBootstrap(page);
+
+  await page.goto("/workspace");
+
+  await expect(page.getByRole("heading", { name: "Bring in a decision" })).toBeVisible();
+  expect(pageErrors.filter((message) => /Invalid regular expression|hydration|Minified React error #418/i.test(message))).toEqual([]);
+});
+
 test("does not restore another workspace's browser draft", async ({ page }) => {
   const privateWorkspace = {
     ...workspace,

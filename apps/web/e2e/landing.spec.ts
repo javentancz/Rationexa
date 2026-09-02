@@ -1,5 +1,14 @@
 import { expect, test } from "playwright/test";
 
+test("allows the Vercel staging toolbar through the content security policy", async ({ page }) => {
+  const response = await page.goto("/");
+  const policy = response?.headers()["content-security-policy"] ?? "";
+
+  expect(policy).toContain("script-src 'self' 'unsafe-inline' https://vercel.live");
+  expect(policy).toContain("frame-src https://vercel.live");
+  expect(policy).toContain("wss://ws-us3.pusher.com");
+});
+
 test("presents the product without loading private workspace data", async ({ page }) => {
   let bootstrapRequests = 0;
   page.on("request", (request) => {
