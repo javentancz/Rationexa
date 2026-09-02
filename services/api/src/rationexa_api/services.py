@@ -3,13 +3,13 @@ import io
 import re
 from pathlib import Path
 
-from pypdf import PdfReader
-
 from .schemas import Relationship, RevisitFinding, SourceAnchor
 
 
 def extract_artifact_text(content: bytes, media_type: str) -> tuple[str, str]:
     if media_type == "application/pdf":
+        from pypdf import PdfReader
+
         reader = PdfReader(io.BytesIO(content))
         if reader.is_encrypted:
             raise ValueError("Encrypted PDFs are not supported in Stage 1")

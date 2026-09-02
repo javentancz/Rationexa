@@ -1,5 +1,7 @@
 "use client";
 
+import { clearRefreshSnapshots } from "./refresh-cache";
+
 export const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const SESSION_KEY = "rationexa-session-token";
@@ -23,6 +25,7 @@ export function setSessionToken(token: string | null): void {
   // supports bearer sessions issued before the cookie migration.
   if (token) window.sessionStorage.setItem(SESSION_KEY, token);
   else {
+    clearRefreshSnapshots();
     window.localStorage.removeItem(SESSION_KEY);
     window.sessionStorage.removeItem(SESSION_KEY);
     window.localStorage.removeItem(AUTH_MARKER_KEY);
@@ -31,8 +34,18 @@ export function setSessionToken(token: string | null): void {
 
 export function setAuthenticatedState(authenticated: boolean): void {
   if (typeof window === "undefined") return;
-  if (authenticated) window.localStorage.setItem(AUTH_MARKER_KEY, "true");
-  else setSessionToken(null);
+  const wasAuthenticated = window.localStorage.getItem(AUTH_MARKER_KEY) === "true";
+  const hadClientSession = wasAuthenticated
+    || Boolean(window.localStorage.getItem(SESSION_KEY))
+    || Boolean(window.sessionStorage.getItem(SESSION_KEY));
+  if (authenticated) {
+    if (!wasAuthenticated) clearRefreshSnapshots();
+    window.localStorage.setItem(AUTH_MARKER_KEY, "true");
+  } else if (hadClientSession) {
+    setSessionToken(null);
+  } else {
+    window.localStorage.removeItem(AUTH_MARKER_KEY);
+  }
 }
 
 export function handleAuthenticationResponse(response: Response): void {

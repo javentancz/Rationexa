@@ -17,6 +17,7 @@ import { accountSettingsKey, decisionWorkspaceKey, fetchAccountSettings, fetchDe
 import { browserShareUrl, clearPersistedDecision, evidenceDraftsKey, formatDate, formatDateTime, guestWorkspaceId, provenanceLabel, readEvidenceDraft, workspacePaths, workspaceSessionKey, workspaceViewFromPath, writeEvidenceDraft } from "./workspace-utils";
 import type { AuditEvent, ComparisonRun, Criticality, Decision, DecisionChallenge, DecisionDraft, DecisionLibrary, Extraction, Finding, FindingJudgment, Job, ModelCatalog, ModelOption, PersonalWorkspace, PersistedWorkspaceSession, PremiseReview, RevisitResult, ReviewAction, Share, UsageSummary, PilotMetrics, WorkflowStep, WorkspaceBootstrap, WorkspaceView } from "./workspace-types";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { readRefreshSnapshot, writeRefreshSnapshot } from "./refresh-cache";
 
 declare global {
   interface Window {
@@ -116,6 +117,7 @@ export default function Home() {
   const [sessionRestored, setSessionRestored] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const restoredSession = useRef(false);
+  const cachedBootstrap = useMemo(() => readRefreshSnapshot<WorkspaceBootstrap>("workspace-bootstrap"), []);
 
   const navigateTo = useCallback((nextView: WorkspaceView, replace = false) => {
     setView(nextView);
@@ -141,8 +143,17 @@ export default function Home() {
   const bootstrapQuery = useQuery({
     queryKey: ["workspace-bootstrap"],
     queryFn: loadWorkspaceBootstrap,
+    initialData: cachedBootstrap?.value,
+    initialDataUpdatedAt: cachedBootstrap?.savedAt,
+    refetchOnMount: "always",
     staleTime: 5 * 60_000,
   });
+
+  useEffect(() => {
+    if (bootstrapQuery.data && (!cachedBootstrap || bootstrapQuery.dataUpdatedAt > cachedBootstrap.savedAt)) {
+      writeRefreshSnapshot("workspace-bootstrap", bootstrapQuery.data);
+    }
+  }, [bootstrapQuery.data, bootstrapQuery.dataUpdatedAt, cachedBootstrap]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedLibraryQuery(libraryQuery.trim()), 250);
@@ -164,7 +175,7 @@ export default function Home() {
     if (bootstrapQuery.data.guest) setAuthenticatedState(false);
     setModels(catalog.models);
     setPersonalWorkspace(workspace);
-    if (workspace) queryClient.setQueryData<DecisionLibrary>(["decisions", workspace.id, ""], (current) => current ?? initialLibrary);
+    if (workspace) queryClient.setQueryData<DecisionLibrary>(["decisions", workspace.id, ""], initialLibrary);
     setRecommendedModelId(catalog.default_model_id);
     setSelectedModelId((current) => catalog.models.some((model) => model.id === current) ? current : catalog.default_model_id);
     setComparisonModelId((current) => catalog.models.some((model) => model.id === current)
@@ -635,13 +646,21 @@ export default function Home() {
     await queryClient.invalidateQueries({ queryKey: ["decisions", activeWorkspaceId] });
   }
 
-  async function loadUsage() {
+  async function loadUsage(force = false) {
+    const cacheResource = `usage-dashboard:${activeWorkspaceId ?? "anonymous"}`;
+    const cached = readRefreshSnapshot<Awaited<ReturnType<typeof fetchUsageDashboard>>>(cacheResource);
+    if (!usage && cached) {
+      setUsage(cached.value.usage);
+      setPilotMetrics(cached.value.pilot_metrics);
+    }
     setUsageLoading(true);
     setError(null);
     try {
+      if (force) await queryClient.invalidateQueries({ queryKey: usageDashboardKey(activeWorkspaceId), exact: true, refetchType: "none" });
       const dashboard = await queryClient.fetchQuery({ queryKey: usageDashboardKey(activeWorkspaceId), queryFn: fetchUsageDashboard, staleTime: 5 * 60_000 });
       setUsage(dashboard.usage);
       setPilotMetrics(dashboard.pilot_metrics);
+      writeRefreshSnapshot(cacheResource, dashboard);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load workspace usage");
     } finally {
@@ -1039,7 +1058,7 @@ export default function Home() {
 
         {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} onDiscardDraft={() => setConfirmingDraftDiscard(true)} library={library} loading={libraryLoading} refreshing={decisionLibraryQuery.isFetching && !decisionLibraryQuery.isPending} guest={guestMode} onOpenAccount={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} onPrefetchDecision={prefetchDecision} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={() => { resetWorkspace(); navigateTo("workspace"); }} formatDateTime={formatDateTime} /> : null}
 
-        {view === "usage" ? <UsageView guest={guestMode} usage={usage} pilotMetrics={pilotMetrics} loading={usageLoading} onRefresh={() => { void loadUsage(); }} onOpenSettings={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} /> : null}
+        {view === "usage" ? <UsageView guest={guestMode} usage={usage} pilotMetrics={pilotMetrics} loading={usageLoading} onRefresh={() => { void loadUsage(true); }} onOpenSettings={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} /> : null}
 
         {view === "settings" ? <section className="usage-view"><div className="usage-intro"><span className="usage-intro-icon"><Settings aria-hidden="true" /></span><div><strong>Workspace &amp; provider keys</strong><p>Use built-in deterministic rules without a key, or add a hosted-provider key to your private workspace. Keys are encrypted at rest and never appear in shared records.</p></div></div><AccountPanel workspaceId={activeWorkspaceId} onConfigurationChanged={(preserveGuestDraft) => { void handleWorkspaceChanged(preserveGuestDraft); }} onModelConfigurationChanged={() => { void handleModelConfigurationChanged(); }} onWorkspaceProfileChanged={() => { void workspaceQuery.refetch(); }} /></section> : null}
 

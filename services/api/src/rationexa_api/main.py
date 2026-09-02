@@ -52,7 +52,6 @@ from .db import (
 from .exports import export_filename, render_decision_markdown
 from .jobs import job_manager
 from .notifications import send_password_reset_email
-from .pdf_export import render_decision_pdf
 from .prompts import CHALLENGE_PROMPT_VERSION, EXTRACTION_PROMPT_VERSION, REVISIT_PROMPT_VERSION
 from .providers import (
     ExtractionProvider,
@@ -1219,6 +1218,8 @@ def export_decision_markdown(route: Request, decision_id: str, db: Db) -> Respon
 
 @app.get("/v1/decisions/{decision_id}/export/pdf")
 def export_decision_pdf(route: Request, decision_id: str, db: Db) -> Response:
+    from .pdf_export import render_decision_pdf
+
     workspace_id = active_workspace_id(db, extract_session_token(route))
     decision = workspace_decision(db, decision_id, workspace_id)
     if decision is None:

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { apiFetch, confirmPasswordReset, login, logout, register, requestPasswordReset, setAuthenticatedState, setSessionToken } from "./api";
 import { ConfirmDialog } from "./ui";
 import { accountSettingsKey, fetchAccountSettings } from "./workspace-api";
+import { readRefreshSnapshot, writeRefreshSnapshot } from "./refresh-cache";
 import type { Account as AccountRead, AccountSettings as AccountSettingsSnapshot, PersonalWorkspace as WorkspaceRead, Secret as SecretRead, SessionSummary } from "./workspace-types";
 
 type ProviderModels = { models: string[] };
@@ -60,6 +61,22 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
   const [confirmingAccountDelete, setConfirmingAccountDelete] = useState(false);
   const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
   const selectedProvider = providerOptions.find((provider) => provider.id === providerEntry) ?? providerOptions[0];
+  const settingsCacheResource = `account-settings:${workspaceId ?? "anonymous"}`;
+
+  function applySnapshot(snapshot: AccountSettingsSnapshot) {
+    setAuthenticated(snapshot.authenticated);
+    if (snapshot.authenticated) setAuthenticatedState(true);
+    setAccount(snapshot.account);
+    setWorkspace(snapshot.workspace);
+    setSessions(snapshot.sessions);
+    setProfileName(snapshot.account.name);
+    setWorkspaceName(snapshot.workspace?.name ?? "");
+    setSecrets(snapshot.secrets);
+    setProviderModelSelection((current) => snapshot.secrets.reduce<Record<string, string>>((next, entry) => {
+      if (entry.selected_model) next[entry.provider] = entry.selected_model;
+      return next;
+    }, { ...current }));
+  }
 
   function invalidateAccountSettings() {
     void queryClient.invalidateQueries({ queryKey: accountSettingsKey(workspaceId), exact: true, refetchType: "none" });
@@ -75,18 +92,8 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
         staleTime: 5 * 60_000,
         queryFn: fetchAccountSettings,
       });
-      setAuthenticated(snapshot.authenticated);
-      if (snapshot.authenticated) setAuthenticatedState(true);
-      setAccount(snapshot.account);
-      setWorkspace(snapshot.workspace);
-      setSessions(snapshot.sessions);
-      setProfileName(snapshot.account.name);
-      setWorkspaceName(snapshot.workspace?.name ?? "");
-      setSecrets(snapshot.secrets);
-      setProviderModelSelection((current) => snapshot.secrets.reduce<Record<string, string>>((next, entry) => {
-        if (entry.selected_model) next[entry.provider] = entry.selected_model;
-        return next;
-      }, { ...current }));
+      applySnapshot(snapshot);
+      writeRefreshSnapshot(settingsCacheResource, snapshot);
     } catch (caught) {
       setAccount(null);
       setWorkspace(null);
@@ -104,6 +111,8 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
       setResetToken(resetTokenFromUrl);
       setAuthMode("reset");
     }
+    const cached = readRefreshSnapshot<AccountSettingsSnapshot>(settingsCacheResource);
+    if (cached) applySnapshot(cached.value);
     void refresh();
     const recover = () => { void refresh(true); };
     window.addEventListener("rationexa-auth-expired", recover);

@@ -43,3 +43,24 @@ test("reuses workspace and account data when moving between application tabs", a
   expect(bootstrapRequests).toBe(1);
   expect(accountSettingsRequests).toBe(accountRequestsAfterInitialLoad);
 });
+
+test("renders the saved workspace immediately while a hard-refresh revalidation is pending", async ({ page }) => {
+  await page.goto("/library");
+  await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (
+    Array.from({ length: sessionStorage.length }, (_, index) => sessionStorage.key(index))
+      .some((key) => key?.startsWith("rationexa-refresh-v1:workspace-bootstrap"))
+  ))).toBe(true);
+
+  let releaseBootstrap!: () => void;
+  const bootstrapGate = new Promise<void>((resolve) => { releaseBootstrap = resolve; });
+  await page.route("**/v1/bootstrap", async (route) => {
+    await bootstrapGate;
+    await route.continue();
+  });
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible({ timeout: 1_000 });
+  releaseBootstrap();
+  await page.unroute("**/v1/bootstrap");
+});

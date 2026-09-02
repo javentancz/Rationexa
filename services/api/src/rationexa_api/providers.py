@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from uuid import uuid4
 
 import httpx
-from openai import OpenAI
 
 from .config import Settings
 from .prompts import CHALLENGE_INSTRUCTIONS, EXTRACTION_INSTRUCTIONS, REVISIT_INSTRUCTIONS
@@ -277,6 +276,8 @@ class OpenAIResponsesProvider(ExtractionProvider):
         if not settings.openai_api_key:
             raise ValueError("OPENAI_API_KEY is required when AI_PROVIDER=openai")
         self.model = settings.openai_model
+        from openai import OpenAI
+
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.last_usage = {}
 
@@ -339,6 +340,8 @@ class OpenAICompatibleProvider(ExtractionProvider):
     def __init__(self, provider: str, model: str, api_key: str, base_url: str):
         self.name = provider
         self.model = model
+        from openai import OpenAI
+
         self.client = OpenAI(api_key=api_key, base_url=base_url.rstrip("/"))
         self.last_usage = {}
 
