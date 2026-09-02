@@ -48,6 +48,20 @@ test("executes the workspace bootstrap preload without syntax or hydration error
   expect(pageErrors.filter((message) => /Invalid regular expression|hydration|Minified React error #418/i.test(message))).toEqual([]);
 });
 
+test("keeps the import stage legible in dark mode", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("theme", "dark"));
+  await mockBootstrap(page);
+
+  await page.goto("/workspace");
+
+  await expect(page.getByText("Step 1 of 4 · Import")).toBeVisible();
+  await expect(page.getByText("Start with the source")).toBeVisible();
+  await expect(page.getByText("Decision memory / Import")).toHaveCount(0);
+  const stageNumber = page.locator(".stage-number");
+  await expect(stageNumber).toHaveCSS("color", "rgb(14, 20, 16)");
+  await expect(stageNumber).toHaveCSS("background-color", "rgb(237, 244, 239)");
+});
+
 test("does not restore another workspace's browser draft", async ({ page }) => {
   const privateWorkspace = {
     ...workspace,

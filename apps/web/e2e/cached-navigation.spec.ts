@@ -44,30 +44,27 @@ test("reuses workspace and account data when moving between application tabs", a
   expect(accountSettingsRequests).toBe(accountRequestsAfterInitialLoad);
 });
 
-test("renders the saved workspace immediately while a hard-refresh revalidation is pending", async ({ page }) => {
+test("renders a fresh saved workspace without refetching it on hard refresh", async ({ page }) => {
+  let bootstrapRequests = 0;
+  const hydrationErrors: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/v1/bootstrap") bootstrapRequests += 1;
+  });
+  page.on("pageerror", (error) => {
+    if (error.message.includes("Hydration failed")) hydrationErrors.push(error.message);
+  });
+
   await page.goto("/library");
   await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => (
     Array.from({ length: sessionStorage.length }, (_, index) => sessionStorage.key(index))
       .some((key) => key?.startsWith("rationexa-refresh-v1:workspace-bootstrap"))
   ))).toBe(true);
+  const requestsAfterInitialLoad = bootstrapRequests;
 
-  let releaseBootstrap!: () => void;
-  const bootstrapGate = new Promise<void>((resolve) => { releaseBootstrap = resolve; });
-  const bootstrapFinished = page.waitForResponse((response) => (
-    new URL(response.url()).pathname === "/v1/bootstrap" && response.request().method() === "GET"
-  ));
-  await page.route("**/v1/bootstrap", async (route) => {
-    await bootstrapGate;
-    await route.continue();
-  });
-
-  try {
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible({ timeout: 1_000 });
-  } finally {
-    releaseBootstrap();
-    await bootstrapFinished;
-    await page.unroute("**/v1/bootstrap");
-  }
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible({ timeout: 1_000 });
+  await page.waitForTimeout(250);
+  expect(bootstrapRequests).toBe(requestsAfterInitialLoad);
+  expect(hydrationErrors).toEqual([]);
 });

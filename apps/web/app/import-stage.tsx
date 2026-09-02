@@ -29,7 +29,7 @@ type Props = {
 
 export function ImportStage({ sourceMode, onSourceModeChange, source, onSourceChange, file, onFileChange, models, selectedModelId, recommendedModelId, onModelSelect, selectedModel, extracting, draftSavedAt, guest, formatDateTime, onExtract }: Props) {
   return <section className="card import-card">
-    <div className="import-heading"><span className="stage-number">01</span><div><span className="overline">Import decision context</span><h2>Bring in a decision</h2><p>Use the original note, ADR, assessment, or proposal. Rationexa will suggest structure without changing the source.</p></div><Badge variant="secondary" className="privacy-badge"><ShieldCheck aria-hidden="true" />{guest ? "Private browser trial" : "Private workspace"}</Badge></div>
+    <div className="import-heading"><span className="stage-number">01</span><div><span className="stage-label">Start with the source</span><h2>Bring in a decision</h2><p>Use the original note, ADR, assessment, or proposal. Rationexa will suggest structure without changing the source.</p></div><Badge variant="secondary" className="privacy-badge"><ShieldCheck aria-hidden="true" />{guest ? "Private browser trial" : "Private workspace"}</Badge></div>
     <div className="import-workspace">
       <form onSubmit={onExtract} className="import-source-panel">
         <div className="import-source-toolbar"><div><strong>Decision source</strong><small>Paste text or upload one supported document</small></div><Tabs value={sourceMode} onValueChange={(value) => onSourceModeChange(value as "paste" | "file")}><TabsList className="source-tabs"><TabsTrigger value="paste">Paste text</TabsTrigger><TabsTrigger value="file">Upload file</TabsTrigger></TabsList></Tabs></div>

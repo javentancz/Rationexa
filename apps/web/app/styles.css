@@ -223,6 +223,7 @@ button { cursor:pointer; }
 .workspace { min-width:0; width:100%; height:100%; margin:0; overflow-y:auto; padding:0 26px 80px; background:#fbfcfa; }
 .topbar { position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:space-between; gap:24px; min-height:82px; border-bottom:1px solid var(--line); background:rgba(251,252,250,.94); backdrop-filter:blur(12px); }
 .topbar h1 { margin:4px 0 0; font-family:Georgia,serif; font-size:27px; font-weight:500; letter-spacing:-.02em; }
+.workspace-context { color:var(--muted); font-size:12px; font-weight:650; letter-spacing:.01em; }
 .overline { color:var(--accent); font-size:11px; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
 .runtime { display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px; padding:7px 11px; background:var(--surface); color:var(--muted); font-size:11px; }
 .runtime-dot { width:7px; height:7px; border-radius:50%; background:#38a169; box-shadow:0 0 0 3px #e3f4e8; }
@@ -1100,6 +1101,7 @@ button { cursor:pointer; }
 }
 /* Import and human-review workspace. */
 .stage-number { display:grid; place-items:center; flex:0 0 48px; width:48px; height:48px; border-radius:14px; background:var(--ink); color:#fff; font-size:13px; font-weight:850; letter-spacing:.04em; }
+.stage-label { color:var(--accent); font-size:12px; font-weight:750; letter-spacing:.01em; }
 .import-card { max-width:1240px; margin-inline:auto; padding:34px; }
 .import-heading,.review-stage-heading { display:flex; align-items:flex-start; gap:16px; margin-bottom:28px; }
 .import-heading>div,.review-stage-heading>div { min-width:0; }
@@ -1645,6 +1647,7 @@ button { cursor:pointer; }
 body,.sidebar,.workflow-pane,.workspace,.workbench-shell,.card,.topbar,.landing-page { transition:background-color .18s ease,color .18s ease,border-color .18s ease; }
 .dark .sidebar,.dark .workflow-pane,.dark .workspace,.dark .workbench-shell,.dark .share-header { background:var(--background); }
 .dark .topbar { background:color-mix(in srgb,var(--background) 92%,transparent); }
+.dark .stage-number { color:#0e1410; }
 .dark .detail-disclosure,.dark .detail-disclosure-trigger,.dark .finalize-summary-grid>div,.dark .finalize-counts>div,.dark .finalize-premise-preview article,
 .dark .library-panel-toggle,.dark .workflow-toggle,.dark .library-hover-zone,.dark .workflow-steps button:hover:not(:disabled),.dark .workflow-steps button>span:first-child,
 .dark .workflow-steps li.active button,.dark .workflow-conversations button:hover,.dark .workflow-conversations button.active,.dark .workflow-library-link:hover,

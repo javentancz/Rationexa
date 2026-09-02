@@ -116,7 +116,8 @@ export default function Home() {
   const [sessionRestored, setSessionRestored] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const restoredSession = useRef(false);
-  const cachedBootstrap = useMemo(() => readRefreshSnapshot<WorkspaceBootstrap>("workspace-bootstrap"), []);
+  const cachedBootstrap = useRef<{ savedAt: number; value: WorkspaceBootstrap } | null>(null);
+  const [bootstrapCacheChecked, setBootstrapCacheChecked] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 760px)");
@@ -144,20 +145,28 @@ export default function Home() {
     toast.info("Sample decision loaded — review or edit it before extraction");
   }, [router]);
 
+  useEffect(() => {
+    const cached = readRefreshSnapshot<WorkspaceBootstrap>("workspace-bootstrap", 5 * 60_000);
+    cachedBootstrap.current = cached;
+    if (cached) queryClient.setQueryData(["workspace-bootstrap"], cached.value, { updatedAt: cached.savedAt });
+    setBootstrapCacheChecked(true);
+  }, [queryClient]);
+
   const bootstrapQuery = useQuery({
     queryKey: ["workspace-bootstrap"],
     queryFn: loadWorkspaceBootstrap,
-    initialData: cachedBootstrap?.value,
-    initialDataUpdatedAt: cachedBootstrap?.savedAt,
-    refetchOnMount: "always",
+    enabled: bootstrapCacheChecked,
+    refetchOnMount: false,
     staleTime: 5 * 60_000,
   });
 
   useEffect(() => {
-    if (bootstrapQuery.data && (!cachedBootstrap || bootstrapQuery.dataUpdatedAt > cachedBootstrap.savedAt)) {
+    const cached = cachedBootstrap.current;
+    if (bootstrapQuery.data && (!cached || bootstrapQuery.dataUpdatedAt > cached.savedAt)) {
       writeRefreshSnapshot("workspace-bootstrap", bootstrapQuery.data);
+      cachedBootstrap.current = { savedAt: bootstrapQuery.dataUpdatedAt, value: bootstrapQuery.data };
     }
-  }, [bootstrapQuery.data, bootstrapQuery.dataUpdatedAt, cachedBootstrap]);
+  }, [bootstrapQuery.data, bootstrapQuery.dataUpdatedAt]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedLibraryQuery(libraryQuery.trim()), 250);
@@ -256,7 +265,7 @@ export default function Home() {
 
   useEffect(() => {
     if (restoredSession.current) return;
-    if (bootstrapQuery.isLoading) return;
+    if (!bootstrapCacheChecked || bootstrapQuery.isLoading) return;
     restoredSession.current = true;
     const restore = async () => {
       try {
@@ -306,7 +315,7 @@ export default function Home() {
       }
     };
     void restore();
-  }, [bootstrapQuery.data, bootstrapQuery.isLoading, navigateTo]);
+  }, [bootstrapCacheChecked, bootstrapQuery.data, bootstrapQuery.isLoading, navigateTo]);
 
   useEffect(() => {
     if (!sessionRestored || !bootstrapQuery.data) return;
@@ -1054,7 +1063,7 @@ export default function Home() {
 
       <main id="workspace" className="workspace">
         <header className="topbar">
-          <div><span className="overline">{view === "library" ? "Decision memory / Library" : view === "usage" ? "Workspace / Usage" : view === "settings" ? "Workspace / Account" : `Decision memory / ${workflowView === 1 ? "Import" : workflowView === 2 ? "Review" : workflowView === 3 ? "Finalize" : "Revisit"}`}</span><h1>{view === "library" ? "Decision library" : view === "usage" ? "Usage & cost" : view === "settings" ? "Account & keys" : draft?.title || decision?.title || "New decision review"}</h1></div>
+          <div><span className="workspace-context">{view === "library" ? "Your saved decisions" : view === "usage" ? "Workspace insights" : view === "settings" ? "Workspace settings" : `Step ${workflowView} of 4 · ${workflowView === 1 ? "Import" : workflowView === 2 ? "Review" : workflowView === 3 ? "Finalize" : "Revisit"}`}</span><h1>{view === "library" ? "Decision library" : view === "usage" ? "Usage & cost" : view === "settings" ? "Account & keys" : draft?.title || decision?.title || "New decision review"}</h1></div>
         </header>
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
@@ -1118,18 +1127,11 @@ export default function Home() {
               </div>
               </section>
               <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Review complete?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before continuing.` : `${counts.confirm} premises confirmed · ${counts.unknown} preserved as unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "review" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0 || unanchoredCritical.length > 0} onClick={saveReview}>{busyPhase === "review" ? <><span className="spinner" />Saving review…</> : "Continue to finalize →"}</button></section>
-            </> : !decision && workflowView === 3 ? <FinalizeConfirmation title={draft.title} question={draft.question} chosenOption={draft.chosenOption} rationale={draft.rationale} criticality={criticality} counts={counts} premises={premises} reviews={reviews} busy={busyPhase === "finalize"} onBack={() => setWorkflowView(2)} onFinalize={finalizeDecision} /> : decision && workflowView === 3 ? <section className="card finalized-summary">
-                           <div className="finalized-heading"><div className="finalized-check"><Check aria-hidden="true" /></div><div><span className="overline">Finalized decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div>{recordActions}</div>
-              <div className="record-meta"><div><span>Chosen option</span><strong>{draft.chosenOption || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Extracted by</span><strong>{extraction.model}</strong></div></div>
-              <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
-                {challengePanel}
-                {sharePanel}
-              <div className="stage-continue"><span>The decision is saved. Revisit it whenever new evidence appears.</span><button type="button" className="primary" onClick={() => setWorkflowView(4)}>Continue to revisit →</button></div>
-              </section> : null}
+            </> : !decision && workflowView === 3 ? <FinalizeConfirmation title={draft.title} question={draft.question} chosenOption={draft.chosenOption} rationale={draft.rationale} criticality={criticality} counts={counts} premises={premises} reviews={reviews} busy={busyPhase === "finalize"} onBack={() => setWorkflowView(2)} onFinalize={finalizeDecision} /> : null}
             </>
         ) : null}
 
-        {view === "workspace" && workflowView === 3 && decision && !extraction ? <section className="card finalized-summary">
+        {view === "workspace" && workflowView === 3 && decision ? <section className="card finalized-summary">
           <div className="finalized-heading"><div className="finalized-check"><Check aria-hidden="true" /></div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div>{recordActions}</div>
           <div className="record-meta"><div><span>Chosen option</span><strong>{decision.chosen_option || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Saved</span><strong>{formatDateTime(decision.created_at)}</strong></div></div>
            <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>

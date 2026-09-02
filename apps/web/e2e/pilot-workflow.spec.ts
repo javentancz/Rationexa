@@ -24,6 +24,8 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
   await expect(page.getByRole("heading", { name: "Review the record before it becomes memory" })).toBeVisible();
   await page.getByRole("button", { name: "Finalize and save" }).click();
   await expect(page.getByText("Decision finalized")).toBeVisible();
+  await expect(page.locator(".finalized-summary")).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: "Continue the decision conversation" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Create share link" }).click();
   const shareCode = page.locator(".share-link code");
@@ -31,6 +33,8 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
   await expect(shareCode).not.toContainText("intentionally-wrong-api-origin.example");
 
   await page.getByRole("button", { name: "Continue to revisit →" }).click();
+  await expect(page.getByRole("heading", { name: "Continue the decision conversation" })).toBeVisible();
+  await expect(page.getByLabel("Evidence review process")).toContainText("You decide what matters");
   await page.getByLabel("New evidence").fill("Vendor B now supports external users for all enterprise plans.");
   await page.getByRole("button", { name: "Check evidence against premises" }).click();
   await expect(page.getByText("Evidence check complete")).toBeVisible();

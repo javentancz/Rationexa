@@ -1,5 +1,6 @@
 import type { Preview } from "@storybook/nextjs-vite";
 import { Providers } from "../app/providers";
+import "../app/styles.css";
 
 const preview: Preview = {
   decorators: [

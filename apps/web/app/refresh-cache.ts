@@ -10,14 +10,14 @@ function cacheKey(resource: string): string {
   return `${CACHE_PREFIX}${resource}`;
 }
 
-export function readRefreshSnapshot<T>(resource: string): RefreshSnapshot<T> | null {
+export function readRefreshSnapshot<T>(resource: string, maxAgeMs = CACHE_MAX_AGE_MS): RefreshSnapshot<T> | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem(cacheKey(resource));
     if (!raw) return null;
     const snapshot = JSON.parse(raw) as Partial<RefreshSnapshot<T>>;
     if (typeof snapshot.savedAt !== "number" || snapshot.value === undefined) return null;
-    if (Date.now() - snapshot.savedAt > CACHE_MAX_AGE_MS) {
+    if (Date.now() - snapshot.savedAt > maxAgeMs) {
       window.sessionStorage.removeItem(cacheKey(resource));
       return null;
     }
