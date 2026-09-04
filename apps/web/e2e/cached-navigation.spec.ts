@@ -45,6 +45,28 @@ test("reuses workspace and account data when moving between application tabs", a
   expect(accountSettingsRequests).toBe(accountRequestsAfterInitialLoad);
 });
 
+test("filters decision criticality locally without fetching another library", async ({ page }) => {
+  let decisionListRequests = 0;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/v1/decisions" && request.method() === "GET") decisionListRequests += 1;
+  });
+
+  await page.goto("/library");
+  await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible();
+  const requestsAfterLoad = decisionListRequests;
+
+  await page.getByRole("button", { name: "Critical", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Critical", exact: true })).toHaveClass(/active/);
+  await page.getByRole("button", { name: "Important", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Important", exact: true })).toHaveClass(/active/);
+  await page.getByRole("button", { name: "Routine", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Routine", exact: true })).toHaveClass(/active/);
+  await page.getByRole("button", { name: "All decisions", exact: true }).click();
+
+  expect(decisionListRequests).toBe(requestsAfterLoad);
+});
+
 test("renders a fresh saved workspace without refetching it on hard refresh", async ({ page }) => {
   let bootstrapRequests = 0;
   const hydrationErrors: string[] = [];

@@ -199,9 +199,8 @@ export default function Home() {
   const libraryParams = useMemo(() => {
     const params = new URLSearchParams();
     if (debouncedLibraryQuery) params.set("q", debouncedLibraryQuery);
-    if (libraryCriticality !== "all") params.set("criticality", libraryCriticality);
     return params.toString();
-  }, [debouncedLibraryQuery, libraryCriticality]);
+  }, [debouncedLibraryQuery]);
   const activeWorkspaceId = bootstrapQuery.data?.workspace?.id ?? personalWorkspace?.id;
   const guestMode = bootstrapQuery.data?.guest === true;
   const draftWorkspaceId = activeWorkspaceId ?? guestWorkspaceId;
@@ -214,7 +213,12 @@ export default function Home() {
     placeholderData: (previous) => previous,
     staleTime: 5 * 60_000,
   });
-  const library = decisionLibraryQuery.data ?? { items: [], total: 0 };
+  const unfilteredLibrary = decisionLibraryQuery.data ?? { items: [], total: 0 };
+  const library = useMemo<DecisionLibrary>(() => {
+    if (libraryCriticality === "all") return unfilteredLibrary;
+    const items = unfilteredLibrary.items.filter((item) => item.criticality === libraryCriticality);
+    return { items, total: items.length };
+  }, [libraryCriticality, unfilteredLibrary]);
   const libraryLoading = decisionLibraryQuery.isPending && library.items.length === 0;
 
   const modelCatalogQuery = useQuery({
