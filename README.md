@@ -81,6 +81,19 @@ Open `http://localhost:3000`.
 
 The Compose database is exposed on `localhost:5433`. The API applies pending Alembic migrations at startup. SQLite remains supported for an offline demo by setting `DATABASE_URL=sqlite:///./rationexa.db`, but PostgreSQL is the supported pilot database.
 
+Vercel disables request-time database maintenance with
+`STARTUP_DATABASE_MAINTENANCE=false` so a cold request does not inspect or
+migrate the schema before serving traffic. Apply migrations as a release step
+before deploying API code that depends on a new schema:
+
+```bash
+cd services/api
+../../.venv/bin/alembic upgrade head
+```
+
+Keep startup maintenance enabled for local development and long-running
+deployments unless their release pipeline applies migrations explicitly.
+
 ### Move existing SQLite data to PostgreSQL
 
 Stop the API, start the empty PostgreSQL service, and run the guarded one-time copy command from the repository root:

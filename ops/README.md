@@ -13,6 +13,22 @@ secret manager. Never bake them into an image or backup archive.
 
 Route traffic only when `/readyz` returns `200`.
 
+## Serverless release migrations
+
+The Vercel API configuration sets `STARTUP_DATABASE_MAINTENANCE=false` to keep
+schema inspection, Alembic upgrades, and interrupted-job recovery out of the
+request cold-start path. Before deploying any API revision that introduces a
+database migration, run the migration once against the staging database from a
+trusted release environment:
+
+```bash
+cd services/api
+../../.venv/bin/alembic upgrade head
+```
+
+Do not route a schema-dependent deployment until that command succeeds. Local
+and long-running environments keep startup maintenance enabled by default.
+
 ## Private Vercel staging
 
 Rationexa uses two Vercel projects: a Next.js web project rooted at `apps/web`

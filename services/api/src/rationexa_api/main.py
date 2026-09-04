@@ -148,10 +148,13 @@ CONSEQUENTIAL_KINDS = {
 async def lifespan(_: FastAPI):
     if settings.artifact_storage == "filesystem":
         settings.artifact_dir.mkdir(parents=True, exist_ok=True)
-    init_db()
-    recovered_jobs = job_manager.recover_interrupted()
-    if recovered_jobs:
-        logger.warning("recovered_interrupted_jobs count=%s", recovered_jobs)
+    if settings.startup_database_maintenance:
+        init_db()
+        recovered_jobs = job_manager.recover_interrupted()
+        if recovered_jobs:
+            logger.warning("recovered_interrupted_jobs count=%s", recovered_jobs)
+    else:
+        logger.info("startup_database_maintenance disabled; expecting a release migration")
     yield
 
 

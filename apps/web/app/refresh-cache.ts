@@ -1,5 +1,8 @@
 const CACHE_PREFIX = "rationexa-refresh-v1:";
-const CACHE_MAX_AGE_MS = 30 * 60_000;
+// Keep a last-known-good view available across ordinary refreshes and short
+// outages. TanStack Query still treats snapshots older than five minutes as
+// stale and revalidates them in the background.
+export const REFRESH_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60_000;
 
 type RefreshSnapshot<T> = {
   savedAt: number;
@@ -10,7 +13,7 @@ function cacheKey(resource: string): string {
   return `${CACHE_PREFIX}${resource}`;
 }
 
-export function readRefreshSnapshot<T>(resource: string, maxAgeMs = CACHE_MAX_AGE_MS): RefreshSnapshot<T> | null {
+export function readRefreshSnapshot<T>(resource: string, maxAgeMs = REFRESH_SNAPSHOT_MAX_AGE_MS): RefreshSnapshot<T> | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem(cacheKey(resource));

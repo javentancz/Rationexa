@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     ollama_status_cache_seconds: float = 15
     provider_model_cache_seconds: float = 60
     job_execution_mode: Literal["inline", "thread"] = "inline"
+    # Local and long-running deployments can safely maintain the schema and
+    # recover interrupted jobs during process startup. Serverless deployments
+    # should run migrations as a release step so cold requests do not wait for
+    # database inspection and job recovery.
+    startup_database_maintenance: bool = True
     # Fail closed when a deployment forgets to set HOSTED_MODE. Local
     # development explicitly opts into the single-user workspace in .env.
     hosted_mode: bool = True

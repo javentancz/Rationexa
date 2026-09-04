@@ -70,3 +70,34 @@ test("renders a fresh saved workspace without refetching it on hard refresh", as
   expect(bootstrapRequests).toBe(requestsAfterInitialLoad);
   expect(hydrationErrors).toEqual([]);
 });
+
+test("renders a stale saved workspace while hard-refresh revalidation is pending", async ({ page }) => {
+  await page.goto("/library");
+  await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (
+    Array.from({ length: sessionStorage.length }, (_, index) => sessionStorage.key(index))
+      .some((key) => key?.startsWith("rationexa-refresh-v1:workspace-bootstrap"))
+  ))).toBe(true);
+
+  const cachedBootstrap = await page.evaluate(() => {
+    const key = Array.from({ length: sessionStorage.length }, (_, index) => sessionStorage.key(index))
+      .find((candidate) => candidate?.startsWith("rationexa-refresh-v1:workspace-bootstrap"));
+    if (!key) throw new Error("Workspace bootstrap snapshot was not saved");
+    const snapshot = JSON.parse(sessionStorage.getItem(key) ?? "null");
+    snapshot.savedAt = Date.now() - 6 * 60_000;
+    sessionStorage.setItem(key, JSON.stringify(snapshot));
+    return snapshot.value;
+  });
+
+  let releaseRevalidation!: () => void;
+  const revalidationGate = new Promise<void>((resolve) => { releaseRevalidation = resolve; });
+  await page.route(/\/v1\/bootstrap(?:\?.*)?$/, async (route) => {
+    await revalidationGate;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(cachedBootstrap) });
+  });
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible({ timeout: 1_000 });
+  await expect(page.getByText("Your records", { exact: true })).toBeVisible();
+  releaseRevalidation();
+});

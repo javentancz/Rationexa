@@ -146,7 +146,7 @@ export default function Home() {
   }, [router]);
 
   useEffect(() => {
-    const cached = readRefreshSnapshot<WorkspaceBootstrap>("workspace-bootstrap", 5 * 60_000);
+    const cached = readRefreshSnapshot<WorkspaceBootstrap>("workspace-bootstrap");
     cachedBootstrap.current = cached;
     if (cached) queryClient.setQueryData(["workspace-bootstrap"], cached.value, { updatedAt: cached.savedAt });
     setBootstrapCacheChecked(true);
