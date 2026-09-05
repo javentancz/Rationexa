@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+const scriptSources = ["'self'", "'unsafe-inline'", "https://vercel.live"];
+if (process.env.NODE_ENV === "development") scriptSources.push("'unsafe-eval'");
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -8,7 +11,7 @@ const contentSecurityPolicy = [
   "img-src 'self' https://vercel.live https://vercel.com data: blob:",
   "font-src 'self' https://vercel.live https://assets.vercel.com data:",
   "style-src 'self' https://vercel.live 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline' https://vercel.live",
+  `script-src ${scriptSources.join(" ")}`,
   "connect-src 'self' https: wss://ws-us3.pusher.com http://localhost:* http://127.0.0.1:*",
   "frame-src https://vercel.live",
 ].join("; ");

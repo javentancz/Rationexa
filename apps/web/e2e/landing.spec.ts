@@ -5,6 +5,7 @@ test("allows the Vercel staging toolbar through the content security policy", as
   const policy = response?.headers()["content-security-policy"] ?? "";
 
   expect(policy).toContain("script-src 'self' 'unsafe-inline' https://vercel.live");
+  if (process.env.CI !== "true") expect(policy).toContain("'unsafe-eval'");
   expect(policy).toContain("frame-src https://vercel.live");
   expect(policy).toContain("wss://ws-us3.pusher.com");
 });
@@ -20,6 +21,16 @@ test("presents the product without loading private workspace data", async ({ pag
   await expect(page.getByRole("heading", { name: /Remember why a decision was made/ })).toBeVisible();
   await expect(page.getByText("No sign-up required")).toBeVisible();
   expect(bootstrapRequests).toBe(0);
+});
+
+test("keeps the landing navigation fixed in view while scrolling", async ({ page }) => {
+  await page.goto("/");
+
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(navigation).toBeVisible();
+  await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight / 2 }));
+
+  await expect.poll(async () => navigation.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBe(0);
 });
 
 test("loads an editable sample into an isolated guest workflow", async ({ page }) => {

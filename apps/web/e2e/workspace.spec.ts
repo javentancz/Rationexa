@@ -48,6 +48,18 @@ test("executes the workspace bootstrap preload without syntax or hydration error
   expect(pageErrors.filter((message) => /Invalid regular expression|hydration|Minified React error #418/i.test(message))).toEqual([]);
 });
 
+test("gives the decision content more room than the workflow rail on desktop", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await mockBootstrap(page);
+  await page.goto("/workspace");
+
+  const workflowWidth = await page.locator(".workflow-pane").evaluate((element) => element.getBoundingClientRect().width);
+  const workspaceWidth = await page.locator(".workspace").evaluate((element) => element.getBoundingClientRect().width);
+
+  expect(workflowWidth).toBeLessThanOrEqual(262);
+  expect(workspaceWidth).toBeGreaterThan(1000);
+});
+
 test("keeps the import stage legible in dark mode", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("theme", "dark"));
   await mockBootstrap(page);
