@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, KeyRound, LogIn, LogOut, Monitor, ShieldCheck, Sparkles, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, Check, KeyRound, LogIn, LogOut, MailCheck, Monitor, ShieldCheck, Sparkles, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch, confirmPasswordReset, login, logout, register, requestPasswordReset, setAuthenticatedState, setSessionToken } from "./api";
 import { ConfirmDialog } from "./ui";
@@ -45,6 +45,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
   const [workspaceName, setWorkspaceName] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [keyEntry, setKeyEntry] = useState("");
@@ -171,12 +172,17 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
 
   async function handleResetConfirm(event: FormEvent) {
     event.preventDefault();
+    if (newPassword !== confirmNewPassword) {
+      setError("The new passwords do not match");
+      return;
+    }
     setAuthBusy(true);
     setError(null);
     try {
       await confirmPasswordReset(resetToken, newPassword);
       setResetToken("");
       setNewPassword("");
+      setConfirmNewPassword("");
       setResetMessage(null);
       setAuthMode("login");
       router.replace("/settings");
@@ -460,16 +466,18 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
         {!authenticated ? (
           <details className="optional-sign-in" open={!workspace || workspace.mode === "guest_personal"}>
             <summary>{workspace?.mode === "guest_personal" ? "Keep this trial workspace and add BYOK" : workspace ? "Optional: use a private pilot workspace" : "Sign in or create your private workspace"}</summary>
-            <div className="auth-mode-toggle" role="tablist" aria-label="Account action"><button type="button" role="tab" aria-selected={authMode === "login"} className={authMode === "login" ? "active" : ""} onClick={() => setAuthMode("login")}>Sign in</button><button type="button" role="tab" aria-selected={authMode === "register"} className={authMode === "register" ? "active" : ""} onClick={() => setAuthMode("register")}>Create workspace</button><button type="button" role="tab" aria-selected={authMode === "reset"} className={authMode === "reset" ? "active" : ""} onClick={() => setAuthMode("reset")}>Reset password</button></div>
-            <form onSubmit={authMode === "login" ? handleLogin : authMode === "register" ? handleRegister : resetToken ? handleResetConfirm : handleResetRequest} className="account-login">
+            {authMode === "reset" ? <div className="password-reset-heading">{!resetMessage || resetToken ? <button type="button" className="text-button" onClick={() => { setAuthMode("login"); setResetMessage(null); setError(null); }}><ArrowLeft aria-hidden="true" />Back to sign in</button> : null}<div><strong>{resetToken ? "Create a new password" : "Reset your password"}</strong><p>{resetToken ? "Choose a new password for your private workspace. Every other signed-in session will be revoked." : "Enter your account email and we’ll send a single-use reset link that expires in 30 minutes."}</p></div></div> : <div className="auth-mode-toggle" role="tablist" aria-label="Account action"><button type="button" role="tab" aria-selected={authMode === "login"} className={authMode === "login" ? "active" : ""} onClick={() => setAuthMode("login")}>Sign in</button><button type="button" role="tab" aria-selected={authMode === "register"} className={authMode === "register" ? "active" : ""} onClick={() => setAuthMode("register")}>Create workspace</button></div>}
+            {authMode === "reset" && resetMessage && !resetToken ? <div className="password-reset-sent" role="status"><MailCheck aria-hidden="true" /><div><strong>Check your email</strong><p>{resetMessage} If it exists, open the link in that email to create a new password.</p></div><button type="button" className="secondary" onClick={() => { setResetMessage(null); setAuthMode("login"); }}>Back to sign in</button></div> : <form onSubmit={authMode === "login" ? handleLogin : authMode === "register" ? handleRegister : resetToken ? handleResetConfirm : handleResetRequest} className="account-login">
               {authMode === "register" ? <label><span>Display name</span><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Pilot reviewer" /></label> : null}
               {authMode !== "reset" || !resetToken ? <label><span>Email</span><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label> : null}
               {authMode === "reset" && resetToken ? <label><span>One-time reset token</span><input required value={resetToken} onChange={(event) => setResetToken(event.target.value)} /></label> : null}
               {authMode === "reset" && resetToken ? <label><span>New password</span><input type="password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="At least 8 characters" /></label> : null}
+              {authMode === "reset" && resetToken ? <label><span>Confirm new password</span><input type="password" minLength={8} required value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} placeholder="Enter the new password again" /></label> : null}
               {authMode !== "reset" ? <label><span>Password</span><input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" /></label> : null}
-              {resetMessage ? <p className="account-hint">{resetMessage}</p> : null}
+              {authMode === "login" ? <button type="button" className="forgot-password-link" onClick={() => { setAuthMode("reset"); setResetToken(""); setResetMessage(null); setError(null); }}>Forgot password?</button> : null}
               <button type="submit" className="primary" disabled={authBusy}>{authBusy ? "Working…" : <><LogIn aria-hidden="true" />{authMode === "login" ? "Sign in" : authMode === "register" ? "Create private workspace" : resetToken ? "Set new password" : "Send reset link"}</>}</button>
             </form>
+            }
           </details>
         ) : null}
       </div>

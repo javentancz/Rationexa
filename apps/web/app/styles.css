@@ -857,6 +857,18 @@ button { cursor:pointer; }
 .auth-mode-toggle{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:12px 0;padding:4px;border-radius:10px;background:var(--paper)}
 .auth-mode-toggle button{min-height:38px;border:0;border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-weight:700;cursor:pointer}
 .auth-mode-toggle button.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 4px rgba(20,42,31,.1)}
+.forgot-password-link{justify-self:end;border:0;padding:1px 0;background:transparent;color:var(--accent);font-size:12px;font-weight:700}
+.forgot-password-link:hover,.forgot-password-link:focus-visible{color:var(--accent-dark);text-decoration:underline;text-underline-offset:3px}
+.password-reset-heading{display:grid;gap:14px;margin:12px 0 16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.password-reset-heading>.text-button{justify-self:start}
+.password-reset-heading>div{display:grid;gap:5px}
+.password-reset-heading strong{font:500 24px/1.15 Georgia,serif}
+.password-reset-heading p,.password-reset-sent p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
+.password-reset-sent{display:grid;grid-template-columns:42px minmax(0,1fr);align-items:start;gap:13px;max-width:680px;border:1px solid #b9d4c2;border-radius:13px;padding:16px;background:var(--accent-soft)}
+.password-reset-sent>svg{width:24px;height:24px;color:var(--accent)}
+.password-reset-sent>div{display:grid;gap:5px}
+.password-reset-sent>.secondary{grid-column:2;justify-self:start}
+@media (max-width:520px){.password-reset-sent{grid-template-columns:1fr}.password-reset-sent>.secondary{grid-column:1;width:100%}}
 .model-option.unavailable{opacity:.58;cursor:not-allowed}
 .model-option-copy .unavailable-badge{background:#ecefed;color:#647069}
 .account-key-list strong{font-size:12px}
@@ -1650,7 +1662,10 @@ button { cursor:pointer; }
 }
 @media (max-width:760px) {
   html:has(.landing-page),body:has(.landing-page) { height:auto; overflow:auto; }
-  .landing-nav { padding:12px 16px; }
+  html:has(.landing-page) { scroll-padding-top:calc(72px + env(safe-area-inset-top)); }
+  body:has(.landing-page) { overflow-x:clip; }
+  .landing-page { overflow:visible; padding-top:calc(66px + env(safe-area-inset-top)); }
+  .landing-nav { position:fixed; inset:0 0 auto; z-index:1000; min-height:66px; padding:calc(10px + env(safe-area-inset-top)) 16px 10px; }
   .landing-nav-links { display:none; }
   .landing-nav-actions { margin-left:auto; }
   .landing-nav .landing-nav-cta { width:42px; padding:0; font-size:0; }

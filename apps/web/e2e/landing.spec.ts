@@ -94,5 +94,8 @@ test("keeps the landing story readable without horizontal scrolling on mobile", 
   await expect(page.getByRole("link", { name: "Rationexa home" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Try a sample decision" }).first()).toBeVisible();
   await expect(page.getByText("Every decision has a living trail.")).toBeVisible();
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight / 2 }));
+  await expect.poll(async () => navigation.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

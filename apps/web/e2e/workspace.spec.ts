@@ -215,6 +215,29 @@ test("keeps a clean password-reset URL available while signed out", async ({ pag
   await expect(page.url()).not.toContain("#");
 });
 
+test("offers password recovery directly from sign in", async ({ page }) => {
+  const guestWorkspace = { ...workspace, id: "guest-workspace", account_id: "guest-account", account_name: "Guest reviewer", mode: "guest_personal" };
+  await mockBootstrap(page, [], guestWorkspace);
+  await page.route(/\/v1\/account-settings(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: {
+    authenticated: false,
+    account: { id: "guest-account", name: "Guest reviewer", email: null, has_password: false, created_at: "2026-08-28T00:00:00Z" },
+    workspace: guestWorkspace,
+    sessions: [],
+    secrets: [],
+  } }));
+  await page.route(/\/v1\/auth\/password-reset\/request$/, (route) => route.fulfill({ headers: corsHeaders, json: {
+    message: "If that account exists, a password reset link has been prepared.",
+  } }));
+  await page.goto("/settings");
+
+  await page.getByRole("button", { name: "Forgot password?" }).click();
+  await expect(page.getByText("Reset your password", { exact: true })).toBeVisible();
+  await page.getByLabel("Email").fill("reviewer@example.com");
+  await page.getByRole("button", { name: "Send reset link" }).click();
+  await expect(page.getByText("Check your email")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back to sign in" })).toBeVisible();
+});
+
 test("clears a deleted decision from restored workspace state", async ({ page }) => {
   await mockBootstrap(page);
   await page.route(/\/v1\/decisions\/deleted-decision$/, (route) => route.fulfill({ status: 404, headers: corsHeaders, json: { detail: "Decision not found" } }));
