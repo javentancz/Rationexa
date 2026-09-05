@@ -433,6 +433,17 @@ export default function Home() {
   const hasCurrentDraft = !decision && Boolean(source.trim() || extraction || draft);
   const currentDraftTitle = draft?.title?.trim() || file?.name || source.trim().split("\n")[0]?.slice(0, 56) || "Untitled decision";
   const currentDraftStep = extraction ? (workflowView === 3 ? "Finalize" : "Review") : "Import";
+  function openWorkflowStep(number: WorkflowStep) {
+    navigateTo("workspace");
+    if (number <= stage) {
+      setWorkflowView(number);
+      return;
+    }
+    const requiredStep = stage === 1 ? "Import" : stage === 2 ? "Review" : "Finalize";
+    toast.info(`Complete ${requiredStep} to unlock this step`, {
+      description: "Your current work is preserved while you finish the required stage.",
+    });
+  }
   function initializeExtraction(next: Extraction) {
     setExtraction(next);
     setDraft({ title: next.result.title, question: next.result.decision_question, context: next.result.context ?? "", chosenOption: next.result.chosen_option ?? "", rationale: next.result.rationale ?? "" });
@@ -1058,7 +1069,7 @@ export default function Home() {
           {(["Import", "Review", "Finalize", "Revisit"] as const).map((label, index) => {
             const number = (index + 1) as WorkflowStep;
             const available = view === "workspace" && number <= stage;
-            return <li key={label} className={number === workflowView && view === "workspace" ? "active" : number < stage ? "complete" : ""}><button type="button" disabled={!available} aria-current={number === workflowView && view === "workspace" ? "step" : undefined} aria-label={label} onClick={() => { navigateTo("workspace"); setWorkflowView(number); }}><span>{number < stage ? <Check aria-hidden="true" /> : number}</span><span className="pane-label"><strong>{label}</strong><small>{label === "Import" ? "Original decision source" : label === "Review" ? "Human premise review" : label === "Finalize" ? "Saved record and sharing" : "Evidence conversations"}</small></span></button></li>;
+            return <li key={label} className={number === workflowView && view === "workspace" ? "active" : number < stage ? "complete" : !available ? "locked" : ""}><button type="button" data-locked={!available || undefined} aria-current={number === workflowView && view === "workspace" ? "step" : undefined} aria-label={`${label}${available ? "" : " (locked)"}`} onClick={() => openWorkflowStep(number)}><span>{number < stage ? <Check aria-hidden="true" /> : number}</span><span className="pane-label"><strong>{label}</strong><small>{label === "Import" ? "Original decision source" : label === "Review" ? "Human premise review" : label === "Finalize" ? "Saved record and sharing" : "Evidence conversations"}</small></span></button></li>;
           })}
         </ol>
         {decision ? <section className="workflow-conversations pane-label"><div className="pane-section-heading"><span>Revisit conversations</span><small>{revisitHistory.length}</small></div>{revisitHistory.length ? <div>{revisitHistory.map((run) => <button type="button" key={run.id} className={expandedHistoryId === run.id ? "active" : ""} onClick={() => { navigateTo("workspace"); setWorkflowView(4); setExpandedHistoryId(run.id); }}><span className="workflow-conversation-copy"><strong>{run.evidence_filename || "New evidence"}</strong><small>{formatDateTime(run.created_at)}</small></span><em>{run.findings.length}</em></button>)}</div> : <p>No evidence checks yet.</p>}</section> : <div className="workflow-empty pane-label"><ListChecks aria-hidden="true" /><strong>{view === "library" ? "Choose a conversation" : "Start with Import"}</strong><p>{view === "library" ? "Select a saved decision from the library to inspect its workflow." : "Bring in a decision source to begin."}</p></div>}

@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, Check, CircleCheck, FileSearch, Fingerprint, History, KeyRound, LockKeyhole, MessageSquareText, ScanSearch, ShieldCheck, Sparkles, UserCheck, Waypoints } from "lucide-react";
+import { ArrowRight, Check, CircleCheck, FileSearch, Fingerprint, History, KeyRound, LockKeyhole, ScanSearch, ShieldCheck, Sparkles, UserCheck, Waypoints } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LandingWorkflowPreview } from "./landing-workflow-preview";
 
 const workflow = [
   { number: "01", title: "Import", copy: "Start with a decision note, ADR, assessment, or proposal excerpt.", icon: FileSearch },
@@ -29,19 +30,7 @@ export default function LandingPage() {
         <div className="landing-assurances">{assurances.map((item) => <span key={item}><Check aria-hidden="true" />{item}</span>)}</div>
       </div>
 
-      <div className="landing-product-stage" aria-label="Example decision review">
-        <div className="landing-stage-glow" />
-        <div className="landing-app-window">
-          <div className="landing-window-bar"><div><i /><i /><i /></div><span>Decision memory / Revisit</span><em>Human reviewed</em></div>
-          <div className="landing-workflow-rail" aria-label="Decision workflow">{workflow.map((step, index) => <div className={index === 3 ? "active" : "complete"} key={step.number}><span>{index === 3 ? "4" : <Check aria-hidden="true" />}</span><strong>{step.title}</strong></div>)}</div>
-          <div className="landing-decision-panel">
-            <div className="landing-decision-heading"><div><span>Saved decision</span><h2>Choose an identity provider</h2><p>Which provider should power the customer portal?</p></div><b>Important</b></div>
-            <div className="landing-premise-grid"><article><span>P1 · Assumption</span><strong>External-user administration will ship before pilot launch.</strong><small>Source excerpt preserved</small></article><article><span>P2 · Hard constraint</span><strong>Audit logs must remain available for 12 months.</strong><small>Human confirmed</small></article></div>
-            <div className="landing-evidence-message"><div className="landing-message-icon"><MessageSquareText aria-hidden="true" /></div><div><span>New evidence · Today, 10:42 AM</span><strong>External-user administration moved to next quarter.</strong><p>Conflicts with P1 · exact evidence retained</p></div><em>Needs review</em></div>
-          </div>
-        </div>
-        <div className="landing-float-note"><ShieldCheck aria-hidden="true" /><span><strong>AI proposes</strong><small>A human confirms</small></span></div>
-      </div>
+      <LandingWorkflowPreview />
     </section>
 
     <section className="landing-trust-strip" aria-label="Product principles"><span><ScanSearch aria-hidden="true" /><strong>Source-grounded</strong><small>Exact excerpts stay attached</small></span><span><UserCheck aria-hidden="true" /><strong>Human-reviewed</strong><small>No silent decision changes</small></span><span><Fingerprint aria-hidden="true" /><strong>Traceable</strong><small>Model and prompt provenance</small></span><span><LockKeyhole aria-hidden="true" /><strong>Private by default</strong><small>Isolated guest and user workspaces</small></span></section>

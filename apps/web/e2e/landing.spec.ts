@@ -23,6 +23,33 @@ test("presents the product without loading private workspace data", async ({ pag
   expect(bootstrapRequests).toBe(0);
 });
 
+test("lets visitors inspect all four workflow stages in the product preview", async ({ page }) => {
+  await page.goto("/");
+
+  const stages = [
+    { tab: "Import", content: "Bring in a decision" },
+    { tab: "Review", content: "Confirm what mattered" },
+    { tab: "Finalize", content: "Save the reviewed record" },
+    { tab: "Revisit", content: "Choose an identity provider" },
+  ];
+
+  for (const stage of stages) {
+    const tab = page.getByRole("tab", { name: new RegExp(`^\\d ${stage.tab}$`) });
+    await tab.click();
+    await expect(tab).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tabpanel").getByRole("heading", { name: stage.content })).toBeVisible();
+  }
+});
+
+test("keeps the landing logo legible in dark mode", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("theme", "dark"));
+  await page.goto("/");
+
+  const mark = page.getByRole("navigation", { name: "Main navigation" }).getByLabel("Rationexa home").locator("span");
+  await expect(mark).toHaveCSS("background-color", "rgb(119, 189, 145)");
+  await expect(mark).toHaveCSS("color", "rgb(12, 26, 17)");
+});
+
 test("keeps the landing navigation fixed in view while scrolling", async ({ page }) => {
   await page.goto("/");
 

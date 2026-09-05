@@ -185,6 +185,25 @@ test("uses an explicit navigation drawer on mobile", async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test("keeps mobile workflow navigation pinned and gives locked steps feedback", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockBootstrap(page);
+  await page.goto("/workspace");
+
+  const workflow = page.locator(".workflow-pane");
+  const initialTop = await workflow.evaluate((element) => element.getBoundingClientRect().top);
+  await page.locator(".workspace").evaluate((element) => { element.scrollTop = 700; });
+  const scrolledTop = await workflow.evaluate((element) => element.getBoundingClientRect().top);
+  expect(Math.abs(scrolledTop - initialTop)).toBeLessThanOrEqual(1);
+
+  const reviewStep = page.getByRole("button", { name: "Review (locked)" });
+  await expect(reviewStep).toBeEnabled();
+  await expect(reviewStep).toHaveAttribute("data-locked", "true");
+  await reviewStep.click();
+  await expect(page.getByText("Complete Import to unlock this step")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Import" })).toHaveAttribute("aria-current", "step");
+});
+
 test("keeps a clean password-reset URL available while signed out", async ({ page }) => {
   await page.route(/\/v1\/bootstrap(?:\?.*)?$/, (route) => route.fulfill({ status: 401, headers: corsHeaders, json: { detail: "Sign in required" } }));
   await page.route(/\/v1\/account(?:\?.*)?$/, (route) => route.fulfill({ status: 401, headers: corsHeaders, json: { detail: "Not authenticated" } }));
