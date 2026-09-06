@@ -77,6 +77,8 @@ def test_share_link_round_trips_read_only_record_and_revoke() -> None:
 
         reading = client.get(f"/v1/shares/{share['token']}")
         assert reading.status_code == 200
+        assert reading.headers["cache-control"] == "private, no-store, max-age=0"
+        assert reading.headers["pragma"] == "no-cache"
         body = reading.json()
         assert body["title"] == "Shared vendor decision"
         assert body["premises"]
@@ -90,6 +92,7 @@ def test_share_link_round_trips_read_only_record_and_revoke() -> None:
 
         after_revoke = client.get(f"/v1/shares/{share['token']}")
         assert after_revoke.status_code == 404
+        assert after_revoke.headers["cache-control"] == "private, no-store, max-age=0"
 
         deleted = client.delete(f"/v1/decisions/{decision['id']}/shares/{share['id']}/record")
         assert deleted.status_code == 204
@@ -126,7 +129,9 @@ def test_expired_share_link_is_not_served() -> None:
         assert created.status_code == 201
         token = created.json()["token"]
 
-        assert client.get(f"/v1/shares/{token}").status_code == 404
+        expired = client.get(f"/v1/shares/{token}")
+        assert expired.status_code == 404
+        assert expired.headers["cache-control"] == "private, no-store, max-age=0"
 
 
 def test_shared_record_never_leaks_provider_secrets_or_private_artifacts() -> None:

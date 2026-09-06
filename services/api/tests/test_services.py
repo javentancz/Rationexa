@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from rationexa_api.schemas import Relationship, SourceAnchor
-from rationexa_api.services import compare_premise, meaningful_terms, validate_anchor
+from rationexa_api.services import compare_premise, locate_source_excerpt, meaningful_terms, validate_anchor
 
 REAL_CASE = (
     Path(__file__).parents[3] / "packages" / "evals" / "real_cases" / "ingress-nginx-retirement" / "new-evidence.md"
@@ -29,6 +29,22 @@ def test_invented_anchor_is_rejected() -> None:
     assert validate_anchor(proposed, source) is None
 
 
+def test_anchor_normalizes_browser_typography_but_preserves_raw_offsets() -> None:
+    source = 'Decision:\r\nVendor\u00a0B uses “EU-only” storage — with audit logs.'
+    candidate = 'Vendor B uses "EU-only" storage - with audit logs.'
+
+    located = locate_source_excerpt(candidate, source)
+
+    assert located is not None
+    excerpt, start, end = located
+    assert excerpt == 'Vendor\u00a0B uses “EU-only” storage — with audit logs.'
+    assert source[start:end] == excerpt
+    validated = validate_anchor(SourceAnchor(exact_excerpt=candidate, start_offset=0, end_offset=1), source)
+    assert validated is not None
+    assert (validated.start_offset, validated.end_offset) == (start, end)
+    assert validated.exact_excerpt == excerpt
+
+
 def test_revisit_detects_negation_change() -> None:
     result = compare_premise(
         premise_id="premise-1",
@@ -41,6 +57,40 @@ def test_revisit_detects_negation_change() -> None:
     assert result is not None
     assert result.relationship == Relationship.CONTRADICTS
     assert result.source_fallback_performed is True
+
+
+def test_revisit_preserves_ambiguous_evidence_as_unclear() -> None:
+    result = compare_premise(
+        premise_id="premise-1",
+        premise_statement="Vendor pricing will remain within the approved annual limit.",
+        old_excerpt="Vendor pricing will remain within the approved annual limit.",
+        new_evidence="Vendor pricing might change next year, but no new annual limit is confirmed.",
+        criticality="important",
+    )
+
+    assert result is not None
+    assert result.relationship == Relationship.UNCLEAR
+    assert result.missing_context_question is not None
+
+
+def test_revisit_distinguishes_negation_from_continued_support() -> None:
+    contradicted = compare_premise(
+        premise_id="premise-1",
+        premise_statement="Vendor B supports SAML for enterprise tenants.",
+        old_excerpt="Vendor B supports SAML for enterprise tenants.",
+        new_evidence="Vendor B no longer supports SAML for enterprise tenants.",
+        criticality="critical",
+    )
+    supported = compare_premise(
+        premise_id="premise-1",
+        premise_statement="Vendor B supports SAML for enterprise tenants.",
+        old_excerpt="Vendor B supports SAML for enterprise tenants.",
+        new_evidence="Vendor B still supports SAML for enterprise tenants.",
+        criticality="critical",
+    )
+
+    assert contradicted is not None and contradicted.relationship == Relationship.CONTRADICTS
+    assert supported is not None and supported.relationship == Relationship.SUPPORTS
 
 
 def test_meaningful_terms_keeps_short_version_identifiers() -> None:

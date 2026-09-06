@@ -1,9 +1,22 @@
 import hashlib
 import io
 import re
+import unicodedata
 from pathlib import Path
 
 from .schemas import Relationship, RevisitFinding, SourceAnchor
+
+SOURCE_PUNCTUATION_EQUIVALENTS = str.maketrans(
+    {
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2212": "-",
+    }
+)
 
 
 def extract_artifact_text(content: bytes, media_type: str) -> tuple[str, str]:
@@ -40,16 +53,65 @@ def persist_artifact(content: bytes, artifact_dir: Path, filename: str) -> tuple
 def validate_anchor(anchor: SourceAnchor | None, source_text: str) -> SourceAnchor | None:
     if anchor is None:
         return None
-    excerpt = anchor.exact_excerpt
-    start = source_text.find(excerpt)
-    if start < 0:
+    located = locate_source_excerpt(anchor.exact_excerpt, source_text)
+    if located is None:
         return None
+    excerpt, start, end = located
     return SourceAnchor(
         exact_excerpt=excerpt,
         start_offset=start,
-        end_offset=start + len(excerpt),
+        end_offset=end,
         page_number=_page_at_offset(source_text, start),
     )
+
+
+def locate_source_excerpt(candidate: str, source_text: str) -> tuple[str, int, int] | None:
+    """Locate a quote after safe typography/whitespace normalization.
+
+    Matching is normalized, but the returned text and offsets always address the
+    untouched source. This keeps browser/PDF typography differences from
+    discarding a valid quote without weakening the grounding boundary.
+    """
+    candidate = candidate.strip()
+    if not candidate:
+        return None
+    exact_start = source_text.find(candidate)
+    if exact_start >= 0:
+        return candidate, exact_start, exact_start + len(candidate)
+
+    normalized_source, starts, ends = _normalize_source_for_matching(source_text)
+    normalized_candidate, _, _ = _normalize_source_for_matching(candidate)
+    normalized_candidate = normalized_candidate.strip()
+    if not normalized_candidate:
+        return None
+    normalized_start = normalized_source.find(normalized_candidate)
+    if normalized_start < 0:
+        return None
+    normalized_end = normalized_start + len(normalized_candidate)
+    source_start = starts[normalized_start]
+    source_end = ends[normalized_end - 1]
+    return source_text[source_start:source_end], source_start, source_end
+
+
+def _normalize_source_for_matching(value: str) -> tuple[str, list[int], list[int]]:
+    normalized: list[str] = []
+    starts: list[int] = []
+    ends: list[int] = []
+    for source_index, source_character in enumerate(value):
+        expanded = unicodedata.normalize("NFKC", source_character).translate(SOURCE_PUNCTUATION_EQUIVALENTS)
+        for character in expanded:
+            if character.isspace():
+                if normalized and normalized[-1] == " ":
+                    ends[-1] = source_index + 1
+                else:
+                    normalized.append(" ")
+                    starts.append(source_index)
+                    ends.append(source_index + 1)
+                continue
+            normalized.append(character)
+            starts.append(source_index)
+            ends.append(source_index + 1)
+    return "".join(normalized), starts, ends
 
 
 def _page_at_offset(source_text: str, offset: int) -> int | None:
@@ -97,9 +159,15 @@ def compare_premise(
     old_negative = any(cue in old_lower for cue in NEGATION_CUES)
     new_negative = any(cue in new_lower for cue in NEGATION_CUES)
     changed = any(cue in new_lower for cue in CHANGE_CUES)
+    hedging_cues = ("might", "maybe", "could", "possibly", "perhaps", "unconfirmed")
+    ambiguous = any(cue in new_lower for cue in hedging_cues) or bool(
+        re.search(r"\b(?:not|no)\b.{0,48}\bconfirmed\b", new_lower)
+    )
 
     if old_negative != new_negative and (changed or overlap >= 2):
         relationship = Relationship.CONTRADICTS
+    elif ambiguous:
+        relationship = Relationship.UNCLEAR
     elif any(cue in new_lower for cue in ("deprecated", "retired", "replaced by")):
         relationship = Relationship.SUPERSEDES
     elif any(cue in new_lower for cue in ("reduced", "lower", "limited", "weaker")):

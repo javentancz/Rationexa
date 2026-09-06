@@ -642,22 +642,19 @@ def _normalize_extraction(result: ExtractionResult, source_text: str | None = No
 
 def _repair_source_anchor(premise: CandidatePremise, source_text: str) -> SourceAnchor | None:
     """Ground a model anchor deterministically or recover one from a verbatim statement."""
+    from .services import locate_source_excerpt
+
     candidates = []
     if premise.anchor is not None:
         candidates.append(premise.anchor.exact_excerpt)
     candidates.append(premise.statement)
 
     for candidate in candidates:
-        excerpt = _ground_excerpt(candidate, source_text)
-        if excerpt is None:
+        located = locate_source_excerpt(candidate, source_text)
+        if located is None:
             continue
-        start = source_text.find(excerpt)
-        if start >= 0:
-            return SourceAnchor(
-                exact_excerpt=excerpt,
-                start_offset=start,
-                end_offset=start + len(excerpt),
-            )
+        excerpt, start, end = located
+        return SourceAnchor(exact_excerpt=excerpt, start_offset=start, end_offset=end)
     return None
 
 
@@ -967,17 +964,11 @@ def _direct_requirement_support(statement: str, excerpt: str) -> bool:
 
 
 def _ground_excerpt(candidate: str, source_text: str) -> str | None:
-    """Return the exact source span, tolerating whitespace collapsed by a model."""
-    candidate = candidate.strip()
-    if not candidate:
-        return None
-    if candidate in source_text:
-        return candidate
-    tokens = candidate.split()
-    if not tokens:
-        return None
-    match = re.search(r"\s+".join(re.escape(token) for token in tokens), source_text)
-    return match.group(0) if match else None
+    """Return the exact raw source span after safe text normalization."""
+    from .services import locate_source_excerpt
+
+    located = locate_source_excerpt(candidate, source_text)
+    return located[0] if located is not None else None
 
 
 def available_models(settings: Settings, *, include_openai: bool = False) -> list[ModelOption]:

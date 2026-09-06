@@ -63,6 +63,15 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
   const shareCode = page.locator(".share-link code");
   await expect(shareCode).toContainText(`${new URL(page.url()).origin}/share/`);
   await expect(shareCode).not.toContainText("intentionally-wrong-api-origin.example");
+  const shareUrl = await shareCode.innerText();
+  const sharedPage = await page.context().newPage();
+  await sharedPage.goto(shareUrl);
+  const sharedHeader = sharedPage.locator(".share-header");
+  await expect(sharedHeader).toHaveCSS("position", "sticky");
+  await expect(sharedPage.getByRole("link", { name: "Rationexa home" })).toHaveAttribute("href", "/");
+  await sharedPage.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect.poll(async () => Math.round((await sharedHeader.boundingBox())?.y ?? -1)).toBe(0);
+  await sharedPage.close();
 
   await page.getByRole("button", { name: "Continue to revisit →" }).click();
   await expect(page.getByRole("heading", { name: "Continue the decision conversation" })).toBeVisible();
