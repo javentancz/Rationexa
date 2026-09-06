@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AccountPanel } from "./account-panel";
-import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Settings, Sparkles, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Settings, Sparkles, Trash2, UserRound, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ConfirmDialog, Disclosure, Hint } from "./ui";
@@ -65,6 +65,7 @@ export default function Home() {
   const [sourceMode, setSourceMode] = useState<"paste" | "file">("paste");
   const [file, setFile] = useState<File | null>(null);
   const [evidence, setEvidence] = useState("");
+  const [guidedSample, setGuidedSample] = useState(false);
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
@@ -138,7 +139,12 @@ export default function Home() {
   }, [pathname, router]);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("sample") !== "vendor-review") return;
+    const isRequested = new URLSearchParams(window.location.search).get("sample") === "vendor-review";
+    const isActive = window.sessionStorage.getItem("rationexa-guided-sample-v1") === "active";
+    if (!isRequested && !isActive) return;
+    setGuidedSample(true);
+    window.sessionStorage.setItem("rationexa-guided-sample-v1", "active");
+    if (!isRequested) return;
     setSource("Decision: Choose an identity provider for the customer portal.\n\nWe selected Vendor B because it supports SAML, fits the current budget, and is expected to add external-user administration before the pilot launches. The security team requires audit logs to remain available for at least 12 months.\n\nRevisit this decision if Vendor B delays external-user administration, changes its audit-log retention, or increases annual pricing above $24,000.");
     setSourceMode("paste");
     setWorkflowView(1);
@@ -434,6 +440,12 @@ export default function Home() {
   const hasCurrentDraft = !decision && Boolean(source.trim() || extraction || draft);
   const currentDraftTitle = draft?.title?.trim() || file?.name || source.trim().split("\n")[0]?.slice(0, 56) || "Untitled decision";
   const currentDraftStep = extraction ? (workflowView === 3 ? "Finalize" : "Review") : "Import";
+  const guidedStep = [
+    { title: "Start with the original reasoning", copy: "The example source is ready. Read it, then run deterministic extraction to identify the decision and its premises." },
+    { title: "Decide what belongs in the record", copy: "Check every proposed premise against its source. Confirm it, preserve it as unknown, or reject it—each judgment is valid." },
+    { title: "Confirm the human-reviewed record", copy: "Review the summary before saving. This is the point where the draft becomes durable decision memory." },
+    { title: "Test the decision against change", copy: "Add the delayed delivery update below. Rationexa will map it to the preserved assumption; you make the final judgment." },
+  ][workflowView - 1];
   function openWorkflowStep(number: WorkflowStep) {
     navigateTo("workspace");
     if (number <= stage) {
@@ -1083,6 +1095,8 @@ export default function Home() {
         </header>
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
+
+        {view === "workspace" && guidedSample ? <section className="guided-sample-banner" aria-label="Guided example"><span className="guided-sample-step">{workflowView}</span><div><small>Guided example · Step {workflowView} of 4</small><strong>{guidedStep.title}</strong><p>{guidedStep.copy}</p>{workflowView === 4 && decision ? <button type="button" onClick={() => setEvidence("Vendor B delayed external-user administration until next quarter, after the planned pilot launch.")}>Use the sample evidence →</button> : null}</div><button type="button" className="guided-sample-exit" aria-label="Exit guided example" onClick={() => { setGuidedSample(false); window.sessionStorage.removeItem("rationexa-guided-sample-v1"); }}><X aria-hidden="true" /></button></section> : null}
 
         {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} onDiscardDraft={() => setConfirmingDraftDiscard(true)} library={library} loading={libraryLoading} refreshing={decisionLibraryQuery.isFetching && !decisionLibraryQuery.isPending} guest={guestMode} onOpenAccount={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} onPrefetchDecision={prefetchDecision} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={() => { resetWorkspace(); navigateTo("workspace"); }} formatDateTime={formatDateTime} /> : null}
 

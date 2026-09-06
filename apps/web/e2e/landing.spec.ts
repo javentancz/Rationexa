@@ -23,6 +23,17 @@ test("presents the product without loading private workspace data", async ({ pag
   expect(bootstrapRequests).toBe(0);
 });
 
+test("explains the product through one concrete decision story", async ({ page }) => {
+  await page.goto("/");
+
+  const example = page.getByLabel("Example decision timeline");
+  await expect(page.getByRole("heading", { name: "See the moment a reasonable decision becomes questionable." })).toBeVisible();
+  await expect(example).toContainText("Choose Vendor B");
+  await expect(example).toContainText("Delivery moves to next quarter");
+  await expect(example).toContainText("Rationexa surfaces the conflict");
+  await expect(page.getByRole("link", { name: "Walk through this decision" })).toHaveAttribute("href", "/workspace?sample=vendor-review");
+});
+
 test("lets visitors inspect all four workflow stages in the product preview", async ({ page }) => {
   await page.goto("/");
 
@@ -66,6 +77,7 @@ test("loads an editable sample into an isolated guest workflow", async ({ page }
 
   await expect(page).toHaveURL(/\/workspace$/);
   await expect(page.getByRole("heading", { name: "Bring in a decision" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Guided example" })).toContainText("Start with the original reasoning");
   await expect(page.getByLabel("Decision source")).toHaveValue(/Choose an identity provider/);
   await expect(page.getByLabel("Decision source")).toHaveValue(/audit logs/);
 });

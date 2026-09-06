@@ -17,7 +17,7 @@ export default function LandingPage() {
   return <main className="landing-page">
     <nav className="landing-nav" aria-label="Main navigation">
       <Link className="landing-brand" href="/" aria-label="Rationexa home"><span>R</span><strong>Rationexa</strong></Link>
-      <div className="landing-nav-links"><a href="#product">Product</a><a href="#how-it-works">How it works</a><a href="#privacy">Privacy</a></div>
+      <div className="landing-nav-links"><a href="#product">Product</a><a href="#example">Example</a><a href="#how-it-works">How it works</a><a href="#privacy">Privacy</a></div>
       <div className="landing-nav-actions"><ThemeToggle /><Link className="landing-nav-cta" href="/workspace">Open workspace <ArrowRight aria-hidden="true" /></Link></div>
     </nav>
 
@@ -34,6 +34,17 @@ export default function LandingPage() {
     </section>
 
     <section className="landing-trust-strip" aria-label="Product principles"><span><ScanSearch aria-hidden="true" /><strong>Source-grounded</strong><small>Exact excerpts stay attached</small></span><span><UserCheck aria-hidden="true" /><strong>Human-reviewed</strong><small>No silent decision changes</small></span><span><Fingerprint aria-hidden="true" /><strong>Traceable</strong><small>Model and prompt provenance</small></span><span><LockKeyhole aria-hidden="true" /><strong>Private by default</strong><small>Isolated guest and user workspaces</small></span></section>
+
+    <section id="example" className="landing-example">
+      <div className="landing-section-heading"><span className="landing-eyebrow">One decision, over time</span><h2>See the moment a reasonable decision becomes questionable.</h2><p>Rationexa is useful after the meeting ends: it keeps the reasoning attached, then shows exactly what new evidence affects.</p></div>
+      <div className="landing-example-timeline" aria-label="Example decision timeline">
+        <article><span>01 · Decide</span><strong>Choose Vendor B</strong><p>It supports SAML, fits the budget, and appears ready for the pilot.</p></article>
+        <article><span>02 · Preserve why</span><strong>External-user administration must ship before launch</strong><p>A reviewer confirms this assumption and keeps its exact source excerpt.</p></article>
+        <article className="changed"><span>03 · Something changes</span><strong>Delivery moves to next quarter</strong><p>New evidence now conflicts with the assumption behind the choice.</p></article>
+        <article className="human"><span>04 · Human judgment</span><strong>Revisit the decision—or explain why not</strong><p>Rationexa surfaces the conflict. A person decides what the organization should do.</p></article>
+      </div>
+      <div className="landing-example-action"><div><strong>This is the guided example inside the product.</strong><span>No account or model key is required.</span></div><Link className="landing-primary" href="/workspace?sample=vendor-review">Walk through this decision <ArrowRight aria-hidden="true" /></Link></div>
+    </section>
 
     <section className="landing-contrast">
       <div className="landing-section-heading"><span className="landing-eyebrow">The missing layer</span><h2>Most tools preserve the answer. Rationexa preserves the reasoning that made it defensible.</h2></div>
