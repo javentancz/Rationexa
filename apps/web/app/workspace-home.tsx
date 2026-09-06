@@ -118,6 +118,7 @@ export default function Home() {
   const [sessionRestored, setSessionRestored] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const restoredSession = useRef(false);
+  const guidedSampleRequested = useRef(false);
   const cachedBootstrap = useRef<{ savedAt: number; value: WorkspaceBootstrap } | null>(null);
   const [bootstrapCacheChecked, setBootstrapCacheChecked] = useState(false);
 
@@ -142,6 +143,7 @@ export default function Home() {
     const isRequested = new URLSearchParams(window.location.search).get("sample") === "vendor-review";
     const isActive = window.sessionStorage.getItem("rationexa-guided-sample-v1") === "active";
     if (!isRequested && !isActive) return;
+    guidedSampleRequested.current = isRequested;
     setGuidedSample(true);
     window.sessionStorage.setItem("rationexa-guided-sample-v1", "active");
     if (!isRequested) return;
@@ -284,6 +286,9 @@ export default function Home() {
           setView("settings");
           return;
         }
+        // An explicit guided-example launch is a new draft. Do not let a
+        // previously persisted workspace session overwrite its sample source.
+        if (guidedSampleRequested.current) return;
         const activeWorkspace = bootstrapQuery.data?.workspace;
         const restoredWorkspaceId = activeWorkspace?.id ?? (bootstrapQuery.data?.guest ? guestWorkspaceId : null);
         if (!restoredWorkspaceId) return;

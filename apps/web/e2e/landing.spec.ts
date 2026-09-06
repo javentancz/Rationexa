@@ -73,6 +73,20 @@ test("keeps the landing navigation fixed in view while scrolling", async ({ page
 
 test("loads an editable sample into an isolated guest workflow", async ({ page }) => {
   await page.goto("/");
+  await page.evaluate(() => {
+    localStorage.setItem("rationexa-workspace-draft-v1", JSON.stringify({
+      workspaceId: "guest-browser",
+      source: "",
+      evidence: "",
+      sourceMode: "paste",
+      view: "workspace",
+      workflowView: 1,
+      selectedModelId: "rules-v1",
+      comparisonModelId: "",
+      compareMode: false,
+      criticality: "important",
+    }));
+  });
   await page.getByRole("link", { name: "Try a sample decision" }).first().click();
 
   await expect(page).toHaveURL(/\/workspace$/);
