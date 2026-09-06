@@ -145,6 +145,36 @@ def test_ground_excerpt_recovers_exact_source_whitespace() -> None:
     assert _ground_excerpt("an invented quote", source) is None
 
 
+def test_deterministic_revisit_reports_every_affected_premise() -> None:
+    provider = get_provider(Settings(ai_provider="deterministic"))
+    premises = [
+        RevisitPremiseInput(
+            premise_id="saml",
+            kind="hard_constraint",
+            statement="Vendor B supports SAML for enterprise tenants.",
+            old_excerpt="Vendor B supports SAML for enterprise tenants.",
+        ),
+        RevisitPremiseInput(
+            premise_id="budget",
+            kind="assumption",
+            statement="Vendor B pricing will remain within the approved annual limit.",
+            old_excerpt="Vendor B pricing will remain within the approved annual limit.",
+        ),
+    ]
+
+    findings = provider.revisit(
+        premises,
+        (
+            "Vendor B no longer supports SAML for enterprise tenants. "
+            "Vendor B pricing increased beyond the approved annual limit."
+        ),
+        "critical",
+    )
+
+    assert {finding.premise_id for finding in findings} == {"saml", "budget"}
+    assert all(finding.relationship == Relationship.CONTRADICTS for finding in findings)
+
+
 def test_requirement_support_requires_direct_subject_and_outcome_overlap() -> None:
     requirement = "The project needs a repeatable local Node.js toolchain."
 

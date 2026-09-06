@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     auth_rate_limit_attempts: int = 10
     auth_rate_limit_window_seconds: int = 60
+    compute_rate_limit_attempts: int = 30
+    compute_rate_limit_window_seconds: int = 60
     password_reset_ttl_minutes: int = 30
     password_reset_dev_mode: bool = False
     smtp_host: str | None = None

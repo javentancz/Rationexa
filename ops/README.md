@@ -81,7 +81,8 @@ never enable it in staging or production.
 
 Registration, login, and password-reset endpoints use database-backed throttling.
 Keep an edge or reverse-proxy limit as a second layer against volumetric abuse.
-Tune `AUTH_RATE_LIMIT_ATTEMPTS` and `AUTH_RATE_LIMIT_WINDOW_SECONDS` for the pilot.
+Tune `AUTH_RATE_LIMIT_ATTEMPTS`, `AUTH_RATE_LIMIT_WINDOW_SECONDS`, `COMPUTE_RATE_LIMIT_ATTEMPTS`, and
+`COMPUTE_RATE_LIMIT_WINDOW_SECONDS` for the pilot. Compute limits apply per workspace and operation type.
 
 Custom OpenAI-compatible endpoints are disabled in hosted mode unless their DNS
 host appears in `CUSTOM_PROVIDER_ALLOWED_HOSTS`. Resolved private, loopback, and

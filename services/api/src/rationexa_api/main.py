@@ -264,11 +264,22 @@ def clear_session_cookie(response: Response) -> None:
     )
 
 
-def enforce_auth_rate_limit(request: Request, db: Session, action: str, identity: str) -> None:
+def enforce_persistent_rate_limit(
+    request: Request,
+    db: Session,
+    action: str,
+    identity: str,
+    *,
+    attempts_allowed: int,
+    window_seconds: int,
+    detail: str,
+) -> None:
     client_host = request.client.host if request.client else "unknown"
     fingerprint = sha256(f"{action}\0{client_host}\0{identity.strip().lower()}".encode()).hexdigest()
-    cutoff = now_utc() - timedelta(seconds=settings.auth_rate_limit_window_seconds)
-    db.execute(delete(AuthAttemptRow).where(AuthAttemptRow.created_at < cutoff))
+    cutoff = now_utc() - timedelta(seconds=window_seconds)
+    retention_seconds = max(settings.auth_rate_limit_window_seconds, settings.compute_rate_limit_window_seconds)
+    retention_cutoff = now_utc() - timedelta(seconds=retention_seconds)
+    db.execute(delete(AuthAttemptRow).where(AuthAttemptRow.created_at < retention_cutoff))
     attempts = (
         db.scalar(
             select(func.count(AuthAttemptRow.id)).where(
@@ -278,14 +289,38 @@ def enforce_auth_rate_limit(request: Request, db: Session, action: str, identity
         )
         or 0
     )
-    if attempts >= settings.auth_rate_limit_attempts:
+    if attempts >= attempts_allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many authentication attempts. Wait briefly and try again.",
-            headers={"Retry-After": str(settings.auth_rate_limit_window_seconds)},
+            detail=detail,
+            headers={"Retry-After": str(window_seconds)},
         )
     db.add(AuthAttemptRow(fingerprint=fingerprint))
     db.commit()
+
+
+def enforce_auth_rate_limit(request: Request, db: Session, action: str, identity: str) -> None:
+    enforce_persistent_rate_limit(
+        request,
+        db,
+        action,
+        identity,
+        attempts_allowed=settings.auth_rate_limit_attempts,
+        window_seconds=settings.auth_rate_limit_window_seconds,
+        detail="Too many authentication attempts. Wait briefly and try again.",
+    )
+
+
+def enforce_compute_rate_limit(request: Request, db: Session, action: str, workspace_id: str) -> None:
+    enforce_persistent_rate_limit(
+        request,
+        db,
+        f"compute-{action}",
+        workspace_id,
+        attempts_allowed=settings.compute_rate_limit_attempts,
+        window_seconds=settings.compute_rate_limit_window_seconds,
+        detail="Too many AI operations were started. Wait briefly and try again.",
+    )
 
 
 def account_workspace(db: Session, account_id: str) -> WorkspaceRow | None:
@@ -690,7 +725,9 @@ async def upload_artifact(route: Request, file: UploadFile, db: Db) -> ArtifactR
 
 @app.post("/v1/decisions/extractions", response_model=ExtractionRead, status_code=status.HTTP_201_CREATED)
 def create_extraction(route: Request, payload: ExtractionRequest, db: Db) -> ExtractionRead:
-    return perform_extraction(payload, db, workspace_id=active_workspace_id(db, extract_session_token(route)))
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    enforce_compute_rate_limit(route, db, "extraction", workspace_id)
+    return perform_extraction(payload, db, workspace_id=workspace_id)
 
 
 def perform_extraction(
@@ -999,11 +1036,13 @@ def create_decision_challenge(
     payload: DecisionChallengeRequest,
     db: Db,
 ) -> DecisionChallengeRead:
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    enforce_compute_rate_limit(route, db, "challenge", workspace_id)
     challenge = perform_challenge(
         decision_id,
         payload,
         db,
-        workspace_id=active_workspace_id(db, extract_session_token(route)),
+        workspace_id=workspace_id,
     )
     if challenge is None:
         raise HTTPException(status_code=500, detail="Challenge generation ended without a result")
@@ -1453,11 +1492,13 @@ def get_shared_decisions(token: str, db: Db) -> ShareDecisionRead:
     status_code=status.HTTP_201_CREATED,
 )
 def create_revisit(route: Request, decision_id: str, payload: RevisitRequest, db: Db) -> RevisitRead:
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    enforce_compute_rate_limit(route, db, "revisit", workspace_id)
     return perform_revisit(
         decision_id,
         payload,
         db,
-        workspace_id=active_workspace_id(db, extract_session_token(route)),
+        workspace_id=workspace_id,
     )
 
 
@@ -1585,6 +1626,7 @@ def record_revisit_judgment(
 @app.post("/v1/decisions/extractions/jobs", response_model=JobRead, status_code=status.HTTP_202_ACCEPTED)
 def create_extraction_job(route: Request, payload: ExtractionRequest, db: Db) -> JobRead:
     workspace_id = active_workspace_id(db, extract_session_token(route))
+    enforce_compute_rate_limit(route, db, "extraction", workspace_id)
     if workspace_artifact(db, payload.artifact_id, workspace_id) is None:
         raise HTTPException(status_code=404, detail="Artifact not found")
     try:
@@ -1614,6 +1656,7 @@ def create_extraction_job(route: Request, payload: ExtractionRequest, db: Db) ->
 )
 def create_revisit_job(route: Request, decision_id: str, payload: RevisitRequest, db: Db) -> JobRead:
     workspace_id = active_workspace_id(db, extract_session_token(route))
+    enforce_compute_rate_limit(route, db, "revisit", workspace_id)
     if workspace_decision(db, decision_id, workspace_id) is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     try:
@@ -1643,6 +1686,7 @@ def create_revisit_job(route: Request, decision_id: str, payload: RevisitRequest
 )
 def create_challenge_job(route: Request, decision_id: str, payload: DecisionChallengeRequest, db: Db) -> JobRead:
     workspace_id = active_workspace_id(db, extract_session_token(route))
+    enforce_compute_rate_limit(route, db, "challenge", workspace_id)
     if workspace_decision(db, decision_id, workspace_id) is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     try:

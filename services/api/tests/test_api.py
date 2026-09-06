@@ -4,7 +4,7 @@ from alembic.runtime.migration import MigrationContext
 from fastapi.testclient import TestClient
 from sqlalchemy import func, inspect, select
 
-from rationexa_api.config import get_settings
+from rationexa_api.config import Settings, get_settings
 from rationexa_api.db import (
     AccountRow,
     ArtifactRow,
@@ -53,6 +53,30 @@ def test_database_artifact_storage_preserves_original_bytes() -> None:
                 assert artifact.binary_content == b"durable evidence"
     finally:
         settings.artifact_storage = original_storage
+
+
+def test_compute_rate_limit_is_workspace_scoped_and_contextual(monkeypatch) -> None:
+    from rationexa_api import main
+
+    monkeypatch.setattr(
+        main,
+        "settings",
+        Settings(compute_rate_limit_attempts=2, compute_rate_limit_window_seconds=90),
+    )
+    with TestClient(app) as client:
+        artifact = client.post(
+            "/v1/artifacts",
+            json={"filename": "rate-limit.txt", "media_type": "text/plain", "content": "We decided to keep it local."},
+        ).json()
+        payload = {"artifact_id": artifact["id"], "model_id": "deterministic/rules-v1"}
+
+        assert client.post("/v1/decisions/extractions", json=payload).status_code == 201
+        assert client.post("/v1/decisions/extractions", json=payload).status_code == 201
+        limited = client.post("/v1/decisions/extractions", json=payload)
+
+        assert limited.status_code == 429
+        assert limited.headers["retry-after"] == "90"
+        assert limited.json()["detail"] == "Too many AI operations were started. Wait briefly and try again."
 
 
 def create_finalized_decision(

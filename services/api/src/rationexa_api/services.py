@@ -168,6 +168,8 @@ def compare_premise(
         relationship = Relationship.CONTRADICTS
     elif ambiguous:
         relationship = Relationship.UNCLEAR
+    elif any(cue in new_lower for cue in ("exceeds", "exceeded", "beyond the", "over budget", "above the limit")):
+        relationship = Relationship.CONTRADICTS
     elif any(cue in new_lower for cue in ("deprecated", "retired", "replaced by")):
         relationship = Relationship.SUPERSEDES
     elif any(cue in new_lower for cue in ("reduced", "lower", "limited", "weaker")):
