@@ -1,8 +1,95 @@
 # Rationexa
 
-Rationexa is a human-in-the-loop decision memory for technical teams. It preserves a decision, its premises, and exact source evidence, then helps a reviewer examine whether later evidence weakens, supports, or changes what the decision depended on.
+[![CI](https://github.com/javentancz/Rationexa/actions/workflows/ci.yml/badge.svg)](https://github.com/javentancz/Rationexa/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-AI output is always a review aid. Rationexa does not autonomously reverse decisions, declare organizational truth, or assign business materiality.
+> Teams remember what they decided. They forget why it was reasonable, which
+> assumptions mattered, and when those assumptions stopped being true.
+
+Rationexa is a human-in-the-loop decision memory for technical teams. It turns
+an ADR, proposal, meeting note, or short decision memo into a source-grounded
+record of the decision and its premises. When new evidence arrives, Rationexa
+maps it back to those preserved premises so a person can decide whether action
+is warranted.
+
+For example: a team selects an identity provider because it supports SAML,
+fits the current budget, and promises external-user administration before a
+pilot. Three months later, the roadmap slips. Rationexa shows exactly which
+preserved premise the new evidence conflicts with; it does not silently change
+the decision.
+
+**AI proposes; a human confirms.** Model output is always a review aid.
+Rationexa does not autonomously reverse decisions, declare organizational
+truth, or assign business materiality.
+
+## What the workflow preserves
+
+1. **Import** the original decision source.
+2. **Review** candidate assumptions, constraints, unknowns, and exact excerpts.
+3. **Finalize** only the premises a human confirms.
+4. **Revisit** the record when later evidence supports, weakens, or conflicts
+   with those premises.
+
+The built-in deterministic runtime needs no model key. Registered workspaces
+may connect an encrypted BYOK provider and explicitly activate a model. Public
+share links are read-only, expiring, revocable, and exclude provider keys and
+private source artifacts.
+
+## Choose how to use it
+
+- **Try the hosted preview:** open the
+  [staging application](https://rationexa-web-staging.vercel.app/) and use a
+  browser-isolated guest workspace with deterministic rules. It is a pilot
+  environment, not a production SLA.
+- **Run it yourself:** clone this repository and follow the deterministic local
+  trial below. PostgreSQL is the supported shared deployment database.
+- **Improve the project:** start with a
+  [good first issue](https://github.com/javentancz/Rationexa/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22),
+  report a bug through the structured issue form, or open a feature request for
+  a larger proposal before writing a pull request.
+
+## Five-minute local trial
+
+The Compose file starts PostgreSQL; the API and web development servers run on
+the host for fast iteration. Deterministic extraction avoids downloading a
+model or configuring a provider key.
+
+Requirements: Node.js 24.19, pnpm 11.23, Python 3.14, and Docker.
+
+```bash
+git clone https://github.com/javentancz/Rationexa.git
+cd Rationexa
+nvm use
+corepack enable
+pnpm install
+cp .env.example .env
+docker compose up -d db
+python3.14 -m venv .venv
+.venv/bin/pip install -e 'services/api[dev]'
+AI_PROVIDER=deterministic .venv/bin/uvicorn rationexa_api.main:app --reload --port 8000
+```
+
+In another terminal:
+
+```bash
+pnpm dev:web
+```
+
+Open `http://localhost:3000`, choose **Try a sample decision**, and complete
+Import → Review → Finalize → Revisit. The default local profile is intended for
+one developer; hosted mode creates a separate cookie-bound guest workspace for
+each browser profile.
+
+## Repository map
+
+```text
+apps/web          Next.js 16 and React 19 client
+services/api      FastAPI, SQLAlchemy, Alembic, PostgreSQL/SQLite API
+packages/evals    Development regression cases and holdout controls
+packages/api-contract  Generated OpenAPI-to-TypeScript contract
+docs/adr          Durable architecture decisions
+ops               Pilot deployment, recovery, backup, and restore guidance
+```
 
 ## Status
 
@@ -17,7 +104,10 @@ Stage 1 established the trusted Import → Review → Finalize → Revisit workf
 - model, provider, prompt, latency, token, runtime, and known-cost provenance;
 - local Ollama models and encrypted bring-your-own-key (BYOK) providers with live connection checks;
 - Alembic database migrations and supervised-pilot repeat-use metrics.
-- a shadcn component foundation with persistent light, dark, and system themes.
+- a shadcn component foundation with persistent light, dark, and system themes;
+- workspace-scoped authentication, encrypted BYOK, compute throttling, share
+  sanitization, database timing, backup/restore tooling, and automated browser
+  regression coverage.
 
 The next milestone is a supervised user pilot. The checked-in 30-case suite is a development regression set, not independent proof of production accuracy.
 
@@ -49,7 +139,7 @@ workspace. Separate physical databases per user are not required for pilot
 isolation; PostgreSQL stores all tenants while the API returns `404` for a
 record owned by another workspace.
 
-## Run locally
+## Full local development setup
 
 Requirements:
 
@@ -176,3 +266,22 @@ Staging environment, password recovery, health-check, backup, and restore
 instructions are in [Pilot operations](ops/README.md).
 
 The durable Stage 1 safety boundary is recorded in [ADR-0001](docs/adr/0001-stage-1-trust-boundary.md).
+
+## Contributing and security
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
+opening a pull request and [SECURITY.md](SECURITY.md) before reporting a
+vulnerability. Do not place provider keys, session tokens, private source
+material, production data, or holdout evaluation cases in public issues.
+
+Useful contributions are not limited to feature code. Reproducible bug reports,
+accessibility fixes, documentation, deterministic-rule edge cases, PostgreSQL
+performance measurements, and sanitized real-world decision examples are all
+valuable. Larger product or schema changes should begin with an issue so work
+is not duplicated and the human-review boundary is agreed before implementation.
+
+## License
+
+The source code is licensed under the [Apache License 2.0](LICENSE). The
+license does not grant permission to use the Rationexa name or logo to identify
+derived products or services; see [NOTICE](NOTICE).

@@ -2213,6 +2213,7 @@ def test_provider_connection(route: Request, provider: str, db: Db) -> SecretCon
     configuration = get_provider_config(db, workspace.id, provider)
     if configuration is None:
         raise HTTPException(status_code=404, detail="Connect this provider before testing it")
+    enforce_compute_rate_limit(route, db, "provider-connection", workspace.id)
     started_at = perf_counter()
     try:
         models = _cached_provider_model_ids(provider, configuration, force=True)

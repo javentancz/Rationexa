@@ -840,6 +840,48 @@ def test_provider_connection_failure_is_contextual(monkeypatch) -> None:
         assert "Could not load models from this provider" in tested.json()["detail"]
 
 
+def test_provider_connection_checks_are_rate_limited(monkeypatch) -> None:
+    from rationexa_api import main
+
+    class ModelResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"data": [{"id": "anthropic/claude-test"}]}
+
+    monkeypatch.setattr(
+        main,
+        "settings",
+        Settings(
+            compute_rate_limit_attempts=2,
+            compute_rate_limit_window_seconds=90,
+            secret_encryption_key="LVOw0rMnwHO0RjG21UEe89Y8ldVc49I2H0nJX1CPzbk=",
+        ),
+    )
+    monkeypatch.setattr(main.httpx, "get", lambda *args, **kwargs: ModelResponse())
+
+    with TestClient(app) as client:
+        session = client.post(
+            "/v1/auth/register",
+            json={"email": "limited-provider@rationexa.local", "name": "Limited Provider", "password": "limited-pass"},
+        ).json()
+        headers = {"Authorization": f"Bearer {session['session_token']}"}
+        connected = client.post(
+            "/v1/secrets",
+            headers=headers,
+            json={"provider": "openrouter", "key": "sk-or-limited"},
+        )
+        assert connected.status_code == 201
+
+        assert client.post("/v1/secrets/openrouter/test", headers=headers).status_code == 200
+        assert client.post("/v1/secrets/openrouter/test", headers=headers).status_code == 200
+        limited = client.post("/v1/secrets/openrouter/test", headers=headers)
+
+        assert limited.status_code == 429
+        assert limited.headers["retry-after"] == "90"
+
+
 def test_model_catalog_marks_missing_ollama_models_unavailable(monkeypatch) -> None:
     from rationexa_api import main
 

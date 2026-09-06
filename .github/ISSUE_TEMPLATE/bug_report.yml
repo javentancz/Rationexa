@@ -1,0 +1,63 @@
+name: Bug report
+description: Report reproducible incorrect behavior
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Do not include provider keys, session tokens, personal data, private
+        source material, or security vulnerabilities. Report vulnerabilities
+        through the private channel in SECURITY.md.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected area
+      options:
+        - Import
+        - Review
+        - Finalize
+        - Revisit
+        - Decision library
+        - Account or BYOK
+        - Sharing or export
+        - API or database
+        - Documentation or tooling
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Commit SHA, deployment URL, or browser-visible version.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, operating system, viewport, and local or hosted deployment.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, tokens, personal data, and private source material.
+          required: true
+        - label: This is not a security vulnerability requiring private disclosure.
+          required: true

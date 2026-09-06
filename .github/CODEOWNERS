@@ -1,0 +1,7 @@
+* @javentancz
+
+# Security and automation policy should always receive maintainer review.
+/SECURITY.md @javentancz
+/.github/ @javentancz
+/services/api/src/rationexa_api/secrets.py @javentancz
+/services/api/src/rationexa_api/share_service.py @javentancz

@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "rationexa-api"
 version = "0.2.0"
 description = "Rationexa human-in-the-loop decision memory and review API"
+license = "Apache-2.0"
 requires-python = ">=3.14,<3.15"
 dependencies = [
   "alembic>=1.19.1,<2",
