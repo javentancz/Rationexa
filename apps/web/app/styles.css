@@ -1156,11 +1156,12 @@ button { cursor:pointer; }
 .import-source-panel .upload-zone { min-height:365px; margin:18px; border-radius:16px; }
 .upload-zone.has-file { border-style:solid; border-color:#98bca5; background:var(--accent-soft); }
 .upload-icon svg { width:21px; height:21px; }
-.import-action-bar { display:grid; grid-template-columns:minmax(215px,270px) minmax(170px,1fr) auto; align-items:end; gap:14px; border-top:1px solid var(--line); padding:16px 18px; background:var(--surface); border-radius:0 0 18px 18px; }
+.import-action-bar { display:grid; grid-template-columns:minmax(215px,270px) minmax(170px,1fr) minmax(180px,240px); align-items:end; gap:14px; border-top:1px solid var(--line); padding:16px 18px; background:var(--surface); border-radius:0 0 18px 18px; }
+.import-action-bar>* { min-width:0; }
 .import-model-choice { display:grid; gap:6px; }
 .import-model-choice>span { color:var(--subtle); font-size:9px; font-weight:850; letter-spacing:.1em; text-transform:uppercase; }
 .import-action-bar .draft-assurance>span { font-size:11px; line-height:1.45; }
-.import-submit { min-height:48px; border-radius:11px; white-space:nowrap; }
+.import-submit { width:100%; min-height:48px; border-radius:11px; white-space:nowrap; }
 .import-explainer { display:grid; align-content:start; gap:18px; border:1px solid #bfd3c5; border-radius:18px; padding:22px; background:var(--accent-soft); }
 .import-explainer-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:13px; background:var(--surface); color:var(--accent); }
 .import-explainer-icon svg { width:23px; }

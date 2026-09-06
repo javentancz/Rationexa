@@ -155,6 +155,42 @@ test("switches import modes and opens the shadcn model picker", async ({ page })
   await expect(page.getByRole("listbox", { name: "Available AI models" })).toHaveCount(0);
 });
 
+test("keeps extraction progress inside the import card", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockBootstrap(page);
+  await page.route(/\/v1\/artifacts(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: { id: "artifact-1" } }));
+  let releaseExtraction!: () => void;
+  const extractionGate = new Promise<void>((resolve) => { releaseExtraction = resolve; });
+  await page.route(/\/v1\/decisions\/extractions\/jobs(?:\?.*)?$/, async (route) => {
+    await extractionGate;
+    await route.fulfill({ status: 500, headers: corsHeaders, json: { detail: "Test completed" } });
+  });
+  await page.goto("/workspace");
+  await page.getByLabel("Decision source").fill("Decision context for an extraction progress layout test.");
+  await page.getByRole("button", { name: "Extract decision" }).click();
+
+  const progressButton = page.getByRole("button", { name: "Extracting with Deterministic rules" });
+  await expect(progressButton).toContainText("Extracting…");
+  const panelBox = await page.locator(".import-source-panel").boundingBox();
+  const buttonBox = await progressButton.boundingBox();
+  expect(panelBox).not.toBeNull();
+  expect(buttonBox).not.toBeNull();
+  expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(panelBox!.x + panelBox!.width + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobilePanelBox = await page.locator(".import-source-panel").boundingBox();
+  const mobileButtonBox = await progressButton.boundingBox();
+  expect(mobilePanelBox).not.toBeNull();
+  expect(mobileButtonBox).not.toBeNull();
+  expect(mobileButtonBox!.x).toBeGreaterThanOrEqual(mobilePanelBox!.x - 1);
+  expect(mobileButtonBox!.x + mobileButtonBox!.width).toBeLessThanOrEqual(mobilePanelBox!.x + mobilePanelBox!.width + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  releaseExtraction();
+  await expect(progressButton).toHaveCount(0);
+});
+
 test("uses clean paths for workspace sections", async ({ page }) => {
   await mockBootstrap(page);
   await page.route(/\/v1\/account(?:\?.*)?$/, (route) => route.fulfill({ status: 401, headers: corsHeaders, json: { detail: "Not authenticated" } }));
