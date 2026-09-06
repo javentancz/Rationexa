@@ -48,6 +48,36 @@ private source artifacts.
   report a bug through the structured issue form, or open a feature request for
   a larger proposal before writing a pull request.
 
+## Use the hosted staging preview
+
+The staging preview is the fastest way to understand the current product:
+
+1. Open [Rationexa staging](https://rationexa-web-staging.vercel.app/).
+2. Select **Try a sample decision**, or open **New decision review** and paste a
+   short ADR, proposal, assessment, or meeting-note excerpt.
+3. Use **Deterministic rules** for the trial. No account or model key is needed.
+4. Review each proposed premise against its source excerpt:
+   - **Confirm** preserves a source-supported premise.
+   - **Keep unknown** preserves an unresolved question explicitly as unknown.
+   - **Reject** excludes a proposal that did not materially support the decision.
+5. Continue to **Finalize**, check the title, chosen option, rationale,
+   criticality, and preserved premises, then save the reviewed record.
+6. Open **Revisit** and add the smallest useful piece of new evidence. Rationexa
+   maps it to preserved premises; you record the human judgment.
+7. Use **Decision library** to reopen or rename a record. Guests can exercise
+   sharing and export during the temporary trial; create an account if you want
+   durable history and encrypted BYOK models.
+
+Hosted guests receive separate cookie-bound workspaces that expire after 24
+hours. Different browser profiles and devices do not share a guest library.
+Account workspaces are durable and isolated in PostgreSQL. Staging does not run
+Ollama on a visitor's computer; guests use deterministic rules, while signed-in
+users may connect OpenRouter, OpenAI, or a reviewed OpenAI-compatible endpoint,
+load that provider's model catalog, and explicitly activate a model.
+
+Do not put confidential customer or production decision material into staging.
+It is a pilot environment and may be reset during development.
+
 ## Five-minute local trial
 
 The Compose file starts PostgreSQL; the API and web development servers run on
@@ -80,6 +110,18 @@ Import → Review → Finalize → Revisit. The default local profile is intende
 one developer; hosted mode creates a separate cookie-bound guest workspace for
 each browser profile.
 
+Confirm the services are ready:
+
+```bash
+curl --fail http://localhost:8000/healthz
+curl --fail http://localhost:8000/readyz
+```
+
+The command above forces the no-key deterministic runtime. To test an installed
+local model instead, run `ollama pull qwen3.5:9b`, set `AI_PROVIDER=ollama`, and
+restart the API. Local Ollama is a developer/self-hosting option; the hosted
+staging website cannot connect directly to Ollama running on a visitor's device.
+
 ## Repository map
 
 ```text
@@ -90,6 +132,41 @@ packages/api-contract  Generated OpenAPI-to-TypeScript contract
 docs/adr          Durable architecture decisions
 ops               Pilot deployment, recovery, backup, and restore guidance
 ```
+
+## Public and private source boundary
+
+The recommended open-source shape is the current monorepo. Keep the web client,
+API, migrations, deterministic engine, provider interfaces, local Ollama
+integration, API contract, tests, sanitized development cases, CI, setup
+scripts, architecture decisions, and placeholder deployment examples together.
+These are the parts users need to inspect, run, modify, and contribute to.
+The `private: true` flags in workspace `package.json` files only prevent
+accidental publication to npm; they do not make the GitHub source proprietary.
+
+The following must never be committed to this or another public repository:
+
+- populated `.env` files or deployment-platform environment exports;
+- `SECRET_ENCRYPTION_KEY`, provider keys, database passwords, SMTP credentials,
+  cron secrets, session tokens, password-reset tokens, or signing keys;
+- PostgreSQL dumps, artifact directories, uploaded source documents, raw logs,
+  error payloads, or analytics containing user data;
+- pilot identities, customer decision records, support conversations, incident
+  investigations, or internal infrastructure addresses;
+- private holdout evaluation cases and any copyrighted source material that is
+  not licensed for redistribution.
+
+Production and staging secrets belong in their respective platform secret
+managers, not in Git branches. Public files such as `.env.example`,
+`ops/staging.env.example`, and `services/api/vercel.json` should contain only
+placeholders and non-sensitive behavior. The real holdout set stays outside Git;
+only its manifest example and handling rules belong here.
+
+There is no current application module that needs to become private merely
+because Rationexa may become a hosted business. Authentication, workspace
+isolation, BYOK encryption, and share sanitization benefit from public review.
+If billing, enterprise administration, managed connectors, or proprietary
+ranking systems are built later, place them behind explicit package/service
+boundaries and decide then whether a private cloud repository is justified.
 
 ## Status
 
@@ -103,7 +180,7 @@ Stage 1 established the trusted Import → Review → Finalize → Revisit workf
 - durable, workspace-scoped jobs with progress, cancellation, restart recovery, and late-result suppression;
 - model, provider, prompt, latency, token, runtime, and known-cost provenance;
 - local Ollama models and encrypted bring-your-own-key (BYOK) providers with live connection checks;
-- Alembic database migrations and supervised-pilot repeat-use metrics.
+- Alembic database migrations and supervised-pilot repeat-use metrics;
 - a shadcn component foundation with persistent light, dark, and system themes;
 - workspace-scoped authentication, encrypted BYOK, compute throttling, share
   sanitization, database timing, backup/restore tooling, and automated browser
@@ -115,6 +192,73 @@ Pilot operations now include private account registration, one-time password
 recovery, active-session revocation, workspace profile management, database-aware
 readiness checks, persistent authentication throttling, hashed session tokens,
 HttpOnly browser cookies, and guarded PostgreSQL-plus-artifact backup/restore tooling.
+
+### Project maturity
+
+Rationexa is currently a private, supervised-pilot project. The hosted link is
+staging infrastructure for evaluation and may change without notice. It is not
+yet offered with production support, availability guarantees, or independently
+validated model-accuracy claims. Self-hosters are responsible for deployment,
+secrets, database maintenance, backups, and access controls.
+
+## Deployment model
+
+Keep one monorepo and promote reviewed commits through separate environments:
+
+- **Local development:** deterministic rules or optional Ollama, with PostgreSQL
+  from Docker Compose and the web/API processes running on the host.
+- **Staging:** the current hosted preview, isolated staging PostgreSQL, staging
+  SMTP credentials, and non-production secrets. Use it for pilot workflows and
+  deployment verification.
+- **Production:** a separate web/API deployment, database, encryption key, SMTP
+  credentials, monitoring environment, and public domain created only after the
+  operational checks below pass and before inviting production users.
+
+Never clone staging records, provider credentials, session data, or encryption
+keys into production. Deploy immutable commit SHAs and apply reviewed Alembic
+migrations before routing production traffic to schema-dependent API code.
+
+### Manual public-release gate
+
+Before changing the GitHub repository from private to public:
+
+- [ ] Scan the complete Git history for credentials and private source data;
+      rotate anything that may ever have been committed, even if later deleted.
+- [ ] Review dependency licenses, bundled fonts, images, sample documents, and
+      evaluation cases for public redistribution rights.
+- [ ] Verify account deletion, workspace isolation, share expiry/revocation,
+      export sanitization, and PostgreSQL backup/restore against staging.
+- [ ] Confirm the hosted preview is clearly labeled as staging and contains no
+      production credentials, customer records, or private evaluation material.
+- [ ] Enable GitHub secret scanning and push protection, private vulnerability
+      reporting, CodeQL, Dependabot alerts, and a reviewed `main` ruleset.
+- [ ] Add repository topics and a social-preview image, then seed three to five
+      genuinely scoped `good first issue` or `help wanted` issues.
+- [ ] Confirm that the hosted sample workflow works without an account and that
+      clone/setup instructions succeed on a clean machine.
+- [ ] Publish `v0.1.0` release notes that state pilot limitations, upgrade steps,
+      and the supported PostgreSQL and runtime versions.
+
+Do not check an item merely because a file exists—the behavior should be tested
+in the environment that will be exposed to users.
+
+Making the source public does not require launching the hosted service as a
+production product. Before inviting non-pilot production users, create the
+separate production environment described above, complete a backup/restore and
+account-deletion drill there, establish alerting and latency/error baselines,
+and confirm a rollback path for both code and migrations.
+
+## Near-term roadmap
+
+1. Run a small pilot focused on whether users understand the product and return
+   with real new evidence, not only whether the workflow technically completes.
+2. Establish staging and production latency/error baselines, including API cold
+   starts and database query timing, before adding caching infrastructure.
+3. Convert recurring pilot friction into focused issues with acceptance tests;
+   mark a few safe documentation, accessibility, and deterministic-rule tasks
+   for first-time contributors.
+4. Add a full containerized self-hosting path only after users demonstrate that
+   they need it; the current Compose scope is intentionally PostgreSQL only.
 
 ## Model runtimes
 
