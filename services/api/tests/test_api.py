@@ -858,6 +858,36 @@ def test_delete_decision_removes_all_related_records() -> None:
         assert client.get(f"/v1/shares/{share['token']}").status_code == 404
 
 
+def test_rename_decision_updates_the_workspace_library() -> None:
+    with TestClient(app) as client:
+        decision = create_finalized_decision(
+            client,
+            source="We selected Vendor B because it supports SAML. Revisit if the pilot schedule changes.",
+            title="Original decision name",
+        )
+
+        renamed = client.patch(f"/v1/decisions/{decision['id']}", json={"title": "Customer identity provider"})
+
+        assert renamed.status_code == 200
+        assert renamed.json()["title"] == "Customer identity provider"
+        library = client.get("/v1/decisions")
+        assert library.status_code == 200
+        assert library.json()["items"][0]["title"] == "Customer identity provider"
+
+
+def test_rename_decision_rejects_an_empty_title() -> None:
+    with TestClient(app) as client:
+        decision = create_finalized_decision(
+            client,
+            source="We selected Vendor B because it supports SAML.",
+            title="Named decision",
+        )
+
+        response = client.patch(f"/v1/decisions/{decision['id']}", json={"title": "   "})
+
+        assert response.status_code == 422
+
+
 def test_delete_unknown_decision_returns_not_found() -> None:
     with TestClient(app) as client:
         assert client.delete("/v1/decisions/missing").status_code == 404

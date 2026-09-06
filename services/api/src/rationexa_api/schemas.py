@@ -266,6 +266,10 @@ class DecisionFinalizeRequest(BaseModel):
     owner_name: str | None = None
 
 
+class DecisionUpdateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+
+
 class DecisionPremiseRead(BaseModel):
     id: str
     kind: PremiseKind

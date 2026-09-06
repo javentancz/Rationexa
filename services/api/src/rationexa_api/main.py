@@ -80,6 +80,7 @@ from .schemas import (
     DecisionListItem,
     DecisionListRead,
     DecisionRead,
+    DecisionUpdateRequest,
     DecisionWorkspaceRead,
     ExtractionRead,
     ExtractionRequest,
@@ -883,6 +884,28 @@ def get_decision(route: Request, decision_id: str, db: Db) -> DecisionRead:
     decision = workspace_decision(db, decision_id, active_workspace_id(db, extract_session_token(route)))
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found")
+    return decision_read(decision)
+
+
+@app.patch("/v1/decisions/{decision_id}", response_model=DecisionRead)
+def update_decision(route: Request, decision_id: str, payload: DecisionUpdateRequest, db: Db) -> DecisionRead:
+    decision = workspace_decision(db, decision_id, active_workspace_id(db, extract_session_token(route)))
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Decision title cannot be empty")
+    previous_title = decision.title
+    decision.title = title
+    record_product_event(
+        db,
+        decision.workspace_id,
+        "decision_renamed",
+        decision_id=decision.id,
+        details={"previous_title": previous_title, "title": title},
+    )
+    db.commit()
+    db.refresh(decision)
     return decision_read(decision)
 
 

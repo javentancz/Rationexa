@@ -505,7 +505,22 @@ def test_records_created_in_one_workspace_do_not_leak_to_another() -> None:
             ).status_code
             == 404
         )
+        assert (
+            client.patch(
+                decision_path,
+                headers={"Authorization": f"Bearer {token_b}"},
+                json={"title": "Attempted cross-workspace rename"},
+            ).status_code
+            == 404
+        )
         assert client.delete(decision_path, headers={"Authorization": f"Bearer {token_b}"}).status_code == 404
+        renamed = client.patch(
+            decision_path,
+            headers={"Authorization": f"Bearer {token_a}"},
+            json={"title": "Workspace A renamed decision"},
+        )
+        assert renamed.status_code == 200
+        assert renamed.json()["title"] == "Workspace A renamed decision"
         assert client.get(decision_path, headers={"Authorization": f"Bearer {token_a}"}).status_code == 200
 
 

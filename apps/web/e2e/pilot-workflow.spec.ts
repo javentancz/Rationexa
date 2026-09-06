@@ -31,10 +31,33 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
 
   await continueButton.click();
   await expect(page.getByRole("heading", { name: "Review the record before it becomes memory" })).toBeVisible();
+  let releaseLibraryRefresh!: () => void;
+  const libraryRefreshGate = new Promise<void>((resolve) => { releaseLibraryRefresh = resolve; });
+  await page.route(/\/v1\/decisions(?:\?.*)?$/, async (route) => {
+    if (route.request().method() === "GET") await libraryRefreshGate;
+    await route.continue();
+  });
   await page.getByRole("button", { name: "Finalize and save" }).click();
   await expect(page.getByText("Decision finalized")).toBeVisible();
   await expect(page.locator(".finalized-summary")).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "Continue the decision conversation" })).toHaveCount(0);
+
+  const finalizedTitle = await page.locator(".finalized-heading h2").innerText();
+  await page.getByRole("button", { name: "All decisions" }).click();
+  const savedConversation = page.locator(".decision-row").first();
+  await expect(savedConversation).toContainText(finalizedTitle);
+  releaseLibraryRefresh();
+  await page.goto("/workspace");
+  await expect(page).toHaveURL(/\/workspace$/);
+  await expect(page.locator(".finalized-summary")).toBeVisible();
+
+  await page.getByRole("button", { name: "Rename decision" }).click();
+  await page.getByLabel("Decision name").fill("Pilot identity provider");
+  await page.getByRole("button", { name: "Save name" }).click();
+  await expect(page.getByText("Decision renamed")).toBeVisible();
+  await expect(page.locator(".finalized-heading h2")).toHaveText("Pilot identity provider");
+
+  await expect(page.locator(".conversation-row.active")).toContainText("Pilot identity provider");
 
   await page.getByRole("button", { name: "Create share link" }).click();
   const shareCode = page.locator(".share-link code");

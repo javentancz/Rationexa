@@ -351,7 +351,8 @@ export type paths = {
         delete: operations["delete_decision_v1_decisions__decision_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Decision */
+        patch: operations["update_decision_v1_decisions__decision_id__patch"];
         trace?: never;
     };
     "/v1/decisions/{decision_id}/challenge": {
@@ -1144,6 +1145,11 @@ export type components = {
             rationale: string;
             /** Status */
             status: string;
+            /** Title */
+            title: string;
+        };
+        /** DecisionUpdateRequest */
+        DecisionUpdateRequest: {
             /** Title */
             title: string;
         };
@@ -2472,6 +2478,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_decision_v1_decisions__decision_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionRead"];
+                };
             };
             /** @description Validation Error */
             422: {

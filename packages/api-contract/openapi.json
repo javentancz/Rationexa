@@ -797,6 +797,21 @@
         "title": "DecisionRead",
         "type": "object"
       },
+      "DecisionUpdateRequest": {
+        "properties": {
+          "title": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "DecisionUpdateRequest",
+        "type": "object"
+      },
       "DecisionWorkspaceRead": {
         "properties": {
           "decision": {
@@ -3449,6 +3464,53 @@
           }
         },
         "summary": "Get Decision"
+      },
+      "patch": {
+        "operationId": "update_decision_v1_decisions__decision_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "decision_id",
+            "required": true,
+            "schema": {
+              "title": "Decision Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Decision"
       }
     },
     "/v1/decisions/{decision_id}/challenge": {

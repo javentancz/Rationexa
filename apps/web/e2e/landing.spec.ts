@@ -27,11 +27,15 @@ test("explains the product through one concrete decision story", async ({ page }
   await page.goto("/");
 
   const example = page.getByLabel("Example decision timeline");
-  await expect(page.getByRole("heading", { name: "See the moment a reasonable decision becomes questionable." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose a case and see when a reasonable decision becomes questionable." })).toBeVisible();
   await expect(example).toContainText("Choose Vendor B");
   await expect(example).toContainText("Delivery moves to next quarter");
   await expect(example).toContainText("Rationexa surfaces the conflict");
-  await expect(page.getByRole("link", { name: "Walk through this decision" })).toHaveAttribute("href", "/workspace?sample=vendor-review");
+  await expect(page.getByRole("link", { name: "Walk through the identity case" })).toHaveAttribute("href", "/workspace?sample=vendor-review");
+  const cases = page.getByRole("region", { name: "Guided decision cases" });
+  await expect(cases.getByRole("link")).toHaveCount(3);
+  await expect(cases).toContainText("Launch an annual starter plan");
+  await expect(cases).toContainText("Adopt a managed search service");
 });
 
 test("lets visitors inspect all four workflow stages in the product preview", async ({ page }) => {
@@ -94,6 +98,16 @@ test("loads an editable sample into an isolated guest workflow", async ({ page }
   await expect(page.getByRole("region", { name: "Guided example" })).toContainText("Start with the original reasoning");
   await expect(page.getByLabel("Decision source")).toHaveValue(/Choose an identity provider/);
   await expect(page.getByLabel("Decision source")).toHaveValue(/audit logs/);
+});
+
+test("loads the selected real-world guided case", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("region", { name: "Guided decision cases" }).getByRole("link", { name: /Launch an annual starter plan/ }).click();
+
+  await expect(page).toHaveURL(/\/workspace$/);
+  await expect(page.getByRole("region", { name: "Guided example" })).toContainText("Launch pricing guide");
+  await expect(page.getByLabel("Decision source")).toHaveValue(/\$240 per year/);
+  await expect(page.getByLabel("Decision source")).toHaveValue(/churn exceeds 12%/);
 });
 
 test("persists the selected light and dark appearance", async ({ page }) => {

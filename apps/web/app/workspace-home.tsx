@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AccountPanel } from "./account-panel";
-import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Settings, Sparkles, Trash2, UserRound, X } from "lucide-react";
+import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Save, Settings, Sparkles, Trash2, UserRound, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ConfirmDialog, Disclosure, Hint } from "./ui";
@@ -16,9 +16,10 @@ import { ImportStage } from "./import-stage";
 import { UsageView } from "./usage-view";
 import { accountSettingsKey, decisionWorkspaceKey, fetchAccountSettings, fetchDecisionWorkspace, fetchUsageDashboard, usageDashboardKey } from "./workspace-api";
 import { browserShareUrl, clearPersistedDecision, evidenceDraftsKey, formatDate, formatDateTime, guestWorkspaceId, provenanceLabel, readEvidenceDraft, workspacePaths, workspaceSessionKey, workspaceViewFromPath, writeEvidenceDraft } from "./workspace-utils";
-import type { AuditEvent, ComparisonRun, Criticality, Decision, DecisionChallenge, DecisionDraft, DecisionLibrary, Extraction, Finding, FindingJudgment, Job, ModelCatalog, ModelOption, PersonalWorkspace, PersistedWorkspaceSession, PremiseReview, RevisitResult, ReviewAction, Share, UsageSummary, PilotMetrics, WorkflowStep, WorkspaceBootstrap, WorkspaceView } from "./workspace-types";
+import type { AuditEvent, ComparisonRun, Criticality, Decision, DecisionChallenge, DecisionDraft, DecisionLibrary, DecisionListItem, Extraction, Finding, FindingJudgment, Job, ModelCatalog, ModelOption, PersonalWorkspace, PersistedWorkspaceSession, PremiseReview, RevisitResult, ReviewAction, Share, UsageSummary, PilotMetrics, WorkflowStep, WorkspaceBootstrap, WorkspaceView } from "./workspace-types";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { readRefreshSnapshot, writeRefreshSnapshot } from "./refresh-cache";
+import { guidedSamples, isGuidedSampleId, type GuidedSampleId } from "./guided-samples";
 
 declare global {
   interface Window {
@@ -40,12 +41,13 @@ async function loadWorkspaceBootstrap(): Promise<WorkspaceBootstrap> {
 const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
 const premiseKinds = ["requirement", "hard_constraint", "soft_constraint", "fact", "assumption", "unknown", "material_claim", "revisit_condition"];
 
-type ActionIconName = "markdown" | "pdf" | "delete" | "back";
+type ActionIconName = "markdown" | "pdf" | "rename" | "delete" | "back";
 
 function ActionIcon({ name }: { name: ActionIconName }) {
   if (name === "delete") return <Trash2 className="action-icon" aria-hidden="true" />;
   if (name === "back") return <ArrowLeft className="action-icon" aria-hidden="true" />;
   if (name === "pdf") return <FileDown className="action-icon" aria-hidden="true" />;
+  if (name === "rename") return <Pencil className="action-icon" aria-hidden="true" />;
   return <FileText className="action-icon" aria-hidden="true" />;
 }
 
@@ -65,7 +67,7 @@ export default function Home() {
   const [sourceMode, setSourceMode] = useState<"paste" | "file">("paste");
   const [file, setFile] = useState<File | null>(null);
   const [evidence, setEvidence] = useState("");
-  const [guidedSample, setGuidedSample] = useState(false);
+  const [guidedSample, setGuidedSample] = useState<GuidedSampleId | null>(null);
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
@@ -101,6 +103,9 @@ export default function Home() {
   const [confirmingDeleteFor, setConfirmingDeleteFor] = useState<string | null>(null);
   const [deleteTitle, setDeleteTitle] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [renamingDecision, setRenamingDecision] = useState(false);
+  const [decisionTitleDraft, setDecisionTitleDraft] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
   const [confirmingShareDelete, setConfirmingShareDelete] = useState<Share | null>(null);
   const [shareDeleteBusy, setShareDeleteBusy] = useState(false);
   const [workflowView, setWorkflowView] = useState<WorkflowStep>(1);
@@ -140,18 +145,20 @@ export default function Home() {
   }, [pathname, router]);
 
   useEffect(() => {
-    const isRequested = new URLSearchParams(window.location.search).get("sample") === "vendor-review";
-    const isActive = window.sessionStorage.getItem("rationexa-guided-sample-v1") === "active";
-    if (!isRequested && !isActive) return;
-    guidedSampleRequested.current = isRequested;
-    setGuidedSample(true);
-    window.sessionStorage.setItem("rationexa-guided-sample-v1", "active");
-    if (!isRequested) return;
-    setSource("Decision: Choose an identity provider for the customer portal.\n\nWe selected Vendor B because it supports SAML, fits the current budget, and is expected to add external-user administration before the pilot launches. The security team requires audit logs to remain available for at least 12 months.\n\nRevisit this decision if Vendor B delays external-user administration, changes its audit-log retention, or increases annual pricing above $24,000.");
+    const requestedValue = new URLSearchParams(window.location.search).get("sample");
+    const storedValue = window.sessionStorage.getItem("rationexa-guided-sample-v1");
+    const requestedSample = isGuidedSampleId(requestedValue) ? requestedValue : null;
+    const activeSample = requestedSample ?? (isGuidedSampleId(storedValue) ? storedValue : null);
+    if (!activeSample) return;
+    guidedSampleRequested.current = requestedSample !== null;
+    setGuidedSample(activeSample);
+    window.sessionStorage.setItem("rationexa-guided-sample-v1", activeSample);
+    if (!requestedSample) return;
+    setSource(guidedSamples[requestedSample].source);
     setSourceMode("paste");
     setWorkflowView(1);
     router.replace("/workspace");
-    toast.info("Sample decision loaded — review or edit it before extraction");
+    toast.info(`${guidedSamples[requestedSample].title} loaded — review or edit it before extraction`);
   }, [router]);
 
   useEffect(() => {
@@ -236,6 +243,33 @@ export default function Home() {
     enabled: false,
     staleTime: 60_000,
   });
+
+  function cacheDecisionInLibrary(saved: Decision) {
+    if (!activeWorkspaceId) return;
+    const updateLibrary = (current?: DecisionLibrary): DecisionLibrary => {
+      const items = current?.items ?? [];
+      const existing = items.find((item) => item.id === saved.id);
+      const summary: DecisionListItem = {
+        id: saved.id,
+        title: saved.title,
+        question: saved.question,
+        chosen_option: saved.chosen_option,
+        criticality: saved.criticality,
+        status: saved.status,
+        premise_count: saved.premises.length,
+        revisit_count: existing?.revisit_count ?? 0,
+        pending_revisit_count: existing?.pending_revisit_count ?? 0,
+        last_revisited_at: existing?.last_revisited_at ?? null,
+        created_at: saved.created_at,
+      };
+      return {
+        items: existing ? items.map((item) => item.id === saved.id ? summary : item) : [summary, ...items],
+        total: existing ? (current?.total ?? items.length) : (current?.total ?? items.length) + 1,
+      };
+    };
+    queryClient.setQueryData<DecisionLibrary>(["decisions", activeWorkspaceId, ""], updateLibrary);
+    queryClient.setQueryData<WorkspaceBootstrap>(["workspace-bootstrap"], (current) => current ? { ...current, library: updateLibrary(current.library) } : current);
+  }
 
   useEffect(() => {
     if (modelCatalogQuery.error) setError(modelCatalogQuery.error instanceof Error ? modelCatalogQuery.error.message : "Could not load models");
@@ -448,7 +482,7 @@ export default function Home() {
   const guidedStep = [
     { title: "Start with the original reasoning", copy: "The example source is ready. Read it, then run deterministic extraction to identify the decision and its premises." },
     { title: "Decide what belongs in the record", copy: "Check every proposed premise against its source. Confirm it, preserve it as unknown, or reject it—each judgment is valid." },
-    { title: "Confirm the human-reviewed record", copy: "Review the summary before saving. This is the point where the draft becomes durable decision memory." },
+    { title: "Save the human-reviewed record", copy: "Select “Finalize and save” to create the library record. Import and review remain drafts until this confirmation." },
     { title: "Test the decision against change", copy: "Add the delayed delivery update below. Rationexa will map it to the preserved assumption; you make the final judgment." },
   ][workflowView - 1];
   function openWorkflowStep(number: WorkflowStep) {
@@ -571,6 +605,7 @@ export default function Home() {
       const saved = await responseJson(await req(`/v1/extractions/${extraction.id}/finalize`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ criticality }) })) as Decision;
       setDecision(saved);
       queryClient.setQueryData(["decision", activeWorkspaceId, saved.id], saved);
+      cacheDecisionInLibrary(saved);
       setChallenge(saved.challenge ?? null);
       setRevisitHistory([]);
       setWorkflowView(3);
@@ -580,6 +615,37 @@ export default function Home() {
       setError(caught instanceof Error ? caught.message : "Finalization failed");
     } finally {
       setBusyPhase(null);
+    }
+  }
+
+  async function renameDecision(event: FormEvent) {
+    event.preventDefault();
+    if (!decision) return;
+    const title = decisionTitleDraft.trim();
+    if (!title || title === decision.title) {
+      setRenamingDecision(false);
+      setDecisionTitleDraft(decision.title);
+      return;
+    }
+    setRenameBusy(true);
+    setError(null);
+    try {
+      const updated = await responseJson(await req(`/v1/decisions/${decision.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      })) as Decision;
+      setDecision(updated);
+      queryClient.setQueryData(["decision", activeWorkspaceId, updated.id], updated);
+      cacheDecisionInLibrary(updated);
+      setDecisionTitleDraft(updated.title);
+      setRenamingDecision(false);
+      toast.success("Decision renamed");
+      void loadLibrary();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not rename the decision");
+    } finally {
+      setRenameBusy(false);
     }
   }
 
@@ -834,6 +900,9 @@ export default function Home() {
 
   function resetWorkspace() {
     setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setExportBusy(false); setPdfExportBusy(false); setError(null); setShares([]); setCopiedToken(null);
+    setRenamingDecision(false);
+    setDecisionTitleDraft("");
+    setRenameBusy(false);
     setConfirmingShareDelete(null);
     setChallenge(null);
     setChallengeNotes("");
@@ -1041,6 +1110,7 @@ export default function Home() {
 
   const recordActions = decision ? (
     <div className="record-actions" aria-label="Decision actions">
+      <Hint label="Rename decision" side="bottom"><button type="button" className="record-action record-rename-action icon-action" aria-label="Rename decision" onClick={() => { setDecisionTitleDraft(decision.title); setRenamingDecision(true); }}><ActionIcon name="rename" /><span>Rename</span></button></Hint>
       <Hint label={exportBusy ? "Preparing Markdown…" : "Export Markdown"} side="bottom"><button type="button" className="record-action icon-action" aria-label={exportBusy ? "Preparing Markdown export" : "Export Markdown"} disabled={exportBusy} onClick={downloadMarkdown}><ActionIcon name="markdown" /></button></Hint>
       <Hint label={pdfExportBusy ? "Preparing PDF…" : "Export PDF"} side="bottom"><button type="button" className="record-action icon-action" aria-label={pdfExportBusy ? "Preparing PDF export" : "Export PDF"} disabled={pdfExportBusy} onClick={downloadPdf}><ActionIcon name="pdf" /></button></Hint>
       <Hint label="Delete record" side="bottom"><button type="button" className="record-action icon-action danger" aria-label="Delete record" onClick={() => { setDeleteTitle(decision.title); setConfirmingDeleteFor(decision.id); }}><ActionIcon name="delete" /></button></Hint>
@@ -1101,7 +1171,7 @@ export default function Home() {
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
 
-        {view === "workspace" && guidedSample ? <section className="guided-sample-banner" aria-label="Guided example"><span className="guided-sample-step">{workflowView}</span><div><small>Guided example · Step {workflowView} of 4</small><strong>{guidedStep.title}</strong><p>{guidedStep.copy}</p>{workflowView === 4 && decision ? <button type="button" onClick={() => setEvidence("Vendor B delayed external-user administration until next quarter, after the planned pilot launch.")}>Use the sample evidence →</button> : null}</div><button type="button" className="guided-sample-exit" aria-label="Exit guided example" onClick={() => { setGuidedSample(false); window.sessionStorage.removeItem("rationexa-guided-sample-v1"); }}><X aria-hidden="true" /></button></section> : null}
+        {view === "workspace" && guidedSample ? <section className="guided-sample-banner" aria-label="Guided example"><span className="guided-sample-step">{workflowView}</span><div><small>{guidedSamples[guidedSample].label} guide · Step {workflowView} of 4</small><strong>{guidedStep.title}</strong><p>{guidedStep.copy}</p>{workflowView === 4 && decision ? <button type="button" onClick={() => setEvidence(guidedSamples[guidedSample].evidence)}>Use the sample evidence →</button> : null}</div><button type="button" className="guided-sample-exit" aria-label="Exit guided example" onClick={() => { setGuidedSample(null); window.sessionStorage.removeItem("rationexa-guided-sample-v1"); }}><X aria-hidden="true" /></button></section> : null}
 
         {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} onDiscardDraft={() => setConfirmingDraftDiscard(true)} library={library} loading={libraryLoading} refreshing={decisionLibraryQuery.isFetching && !decisionLibraryQuery.isPending} guest={guestMode} onOpenAccount={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} onPrefetchDecision={prefetchDecision} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={() => { resetWorkspace(); navigateTo("workspace"); }} formatDateTime={formatDateTime} /> : null}
 
@@ -1167,7 +1237,7 @@ export default function Home() {
         ) : null}
 
         {view === "workspace" && workflowView === 3 && decision ? <section className="card finalized-summary">
-          <div className="finalized-heading"><div className="finalized-check"><Check aria-hidden="true" /></div><div><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div>{recordActions}</div>
+          <div className="finalized-heading"><div className="finalized-check"><Check aria-hidden="true" /></div><div className="finalized-title"><span className="overline">Saved decision</span>{renamingDecision ? <form className="decision-rename-form" onSubmit={renameDecision}><label><span className="sr-only">Decision name</span><input aria-label="Decision name" autoFocus maxLength={255} value={decisionTitleDraft} onChange={(event) => setDecisionTitleDraft(event.target.value)} /></label><div><button type="button" className="text-button" disabled={renameBusy} onClick={() => { setRenamingDecision(false); setDecisionTitleDraft(decision.title); }}>Cancel</button><button type="submit" className="primary" disabled={renameBusy || !decisionTitleDraft.trim()}>{renameBusy ? "Saving…" : "Save name"}</button></div></form> : <h2>{decision.title}</h2>}<p>{decision.question}</p></div>{recordActions}</div>
           <div className="record-meta"><div><span>Chosen option</span><strong>{decision.chosen_option || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Saved</span><strong>{formatDateTime(decision.created_at)}</strong></div></div>
            <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
              {challengePanel}
@@ -1206,7 +1276,7 @@ export default function Home() {
             <div className="composer-heading"><div><span className="overline">Continue the thread</span><h3>What new evidence appeared?</h3><p>Paste the smallest useful excerpt. Rationexa compares it with the preserved record; it does not change the decision.</p></div><div className="mode-toggle" aria-label="Revisit mode"><button type="button" className={!compareMode ? "active" : ""} aria-pressed={!compareMode} onClick={() => { setCompareMode(false); setComparisonRuns([]); }}>Single model</button><button type="button" className={compareMode ? "active" : ""} aria-pressed={compareMode} disabled={models.length < 2} onClick={() => { setCompareMode(true); setFindings([]); }}>Compare models</button></div></div>
             {compareMode ? <div className="compare-models"><div><span className="compare-label">Model A</span><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} excludeId={comparisonModelId} disabled={busyPhase !== null} label="First model" /></div><div className="versus">VS</div><div><span className="compare-label">Model B</span><ModelPicker compact models={models} selectedId={comparisonModelId} recommendedId={recommendedModelId} onSelect={setComparisonModelId} excludeId={selectedModelId} disabled={busyPhase !== null} label="Second model" /></div></div> : null}
             <label className="composer-input"><span className="composer-plus"><Plus aria-hidden="true" /></span><textarea aria-label="New evidence" value={evidence} onChange={(event) => { setEvidence(event.target.value); setRevisitCompleted(false); setFindings([]); setComparisonRuns([]); setActiveRevisitId(null); }} rows={4} placeholder="Paste a fact, policy update, incident, or source excerpt…" /></label>
-            <div className="composer-footer"><span className="draft-assurance"><span>{selectedModel?.availability_reason ?? (compareMode ? "Both models receive identical premises and evidence." : "AI maps evidence to premises; you decide whether action is warranted.")}</span>{evidence.trim() && draftSavedAt ? <small><Save aria-hidden="true" />Evidence draft saved locally · {formatDateTime(draftSavedAt)}</small> : null}</span><div>{compareMode ? <span className="composer-model">{selectedModel?.label ?? "Model A"} + {comparisonModel?.label ?? "Model B"}</span> : <ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Evidence model" />}<button className="primary composer-send" onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || selectedModel?.available === false || (compareMode && (!comparisonModelId || comparisonModel?.available === false)) || !evidence.trim()} aria-label={compareMode ? "Compare model reasoning" : "Check evidence against premises"}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing…" : "Checking…"}</> : <ArrowUp aria-hidden="true" />}</button></div></div>
+            <div className="composer-footer"><span className="draft-assurance"><span>{selectedModel?.availability_reason ?? (compareMode ? "Both models receive identical premises and evidence." : "AI maps evidence to premises; you decide whether action is warranted.")}</span>{evidence.trim() && draftSavedAt ? <small><Save aria-hidden="true" />Evidence draft saved locally · {formatDateTime(draftSavedAt)}</small> : null}</span><div>{compareMode ? <span className="composer-model">{selectedModel?.label ?? "Model A"} + {comparisonModel?.label ?? "Model B"}</span> : <ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={setSelectedModelId} disabled={busyPhase !== null} label="Evidence model" />}<button className={`primary composer-send ${busyPhase === "revisit" ? "is-busy" : ""}`} onClick={revisit} disabled={busyPhase === "revisit" || !selectedModelId || selectedModel?.available === false || (compareMode && (!comparisonModelId || comparisonModel?.available === false)) || !evidence.trim()} aria-label={compareMode ? "Compare model reasoning" : "Check evidence against premises"}>{busyPhase === "revisit" ? <><span className="spinner" />{compareMode ? "Comparing…" : "Checking…"}</> : <ArrowUp aria-hidden="true" />}</button></div></div>
           </section>
           {comparisonRuns.length === 2 ? <div className="comparison-results"><section className={`disagreement-summary ${disagreements.length ? "has-disagreements" : ""}`}><div><span className="overline">Agreement check</span><h3>{disagreements.length ? `${disagreements.length} disagreement${disagreements.length === 1 ? "" : "s"} need review` : "Models agree on all material relationships"}</h3></div>{disagreements.length ? <div className="disagreement-list">{disagreements.map(({ premise, firstRelationship, secondRelationship }) => <div key={premise.id}><strong>{premise.statement}</strong><span>{comparisonRuns[0].label}: {firstRelationship} · {comparisonRuns[1].label}: {secondRelationship}</span></div>)}</div> : null}</section><div className="comparison-grid">{comparisonRuns.map((run) => <section className="comparison-column" key={run.modelId}><header><div><span className="overline">Model result</span><h3>{run.label}</h3></div><strong>{run.result.findings.length} finding{run.result.findings.length === 1 ? "" : "s"}</strong></header><div className="run-provenance">{provenanceLabel(run.result)}</div>{run.result.findings.length ? run.result.findings.map((finding) => <article key={finding.premise_id} className={`finding ${finding.relationship}`}><div className="finding-status"><span>{finding.finding_type === "new_constraint" ? "new constraint" : finding.relationship}</span><small>{finding.confidence_band} confidence</small></div>{finding.finding_type === "new_constraint" ? <div className="safety-net-badge">New constraint · human review required</div> : null}<h3>{finding.premise_statement}</h3><p>{finding.explanation}</p><blockquote>{finding.new_excerpt}</blockquote>{findingReviewControls(run.result.id, finding)}</article>) : <div className="empty-findings"><strong>No material relationship found</strong><span>This model found no effect on the preserved premises.</span></div>}</section>)}</div></div> : null}
           {!comparisonRuns.length && findings.length ? <div className="findings">
