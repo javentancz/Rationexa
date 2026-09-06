@@ -11,6 +11,7 @@
     "dev:web": "pnpm --filter @rationexa/web dev",
     "build:web": "pnpm --filter @rationexa/web build",
     "check": "pnpm --filter @rationexa/web check",
+    "test:unit": "pnpm --filter @rationexa/web test:unit",
     "validate": "bash scripts/validate.sh",
     "validate:postgres": "bash scripts/validate-postgres.sh"
   }

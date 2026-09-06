@@ -138,9 +138,16 @@ pnpm validate
 ```
 
 This is the same validation entry point used by CI. It runs type checking,
-FastAPI-to-TypeScript contract drift checks, security linting, the production
-web build, API tests, Python and JavaScript dependency audits, and browser tests.
-CI also installs the Playwright Chromium runtime through the same script.
+fast Vitest unit tests, FastAPI-to-TypeScript contract drift checks, security
+linting, the production web build, API tests, Python and JavaScript dependency
+audits, and Playwright browser tests. CI also installs the Playwright Chromium
+runtime through the same script.
+
+During frontend development, run the fast unit layer independently:
+
+```bash
+pnpm test:unit
+```
 
 FastAPI is the source of truth for frontend API response types. After changing
 a Pydantic request or response schema, regenerate the committed OpenAPI contract

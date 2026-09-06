@@ -17,6 +17,9 @@ pnpm api:contract:check
 echo "[validate] TypeScript and lint"
 pnpm check
 
+echo "[validate] Vitest unit tests"
+pnpm test:unit
+
 echo "[validate] Next.js production build"
 pnpm --filter @rationexa/web build
 
