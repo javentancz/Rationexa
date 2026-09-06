@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AccountPanel } from "./account-panel";
 import { ArrowLeft, ArrowUp, ChartNoAxesColumn, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, CircleAlert, Diamond, FileDown, FileText, Library, ListChecks, PanelLeftClose, PanelLeftOpen, Plus, Save, Settings, Sparkles, Trash2, UserRound } from "lucide-react";
@@ -1035,7 +1036,7 @@ export default function Home() {
       {libraryPaneCollapsed ? <Hint label="Open navigation" side="right"><button type="button" className="library-hover-zone" aria-label="Open navigation" aria-expanded="false" onClick={() => setLibraryPaneCollapsed(false)}><PanelLeftOpen aria-hidden="true" /></button></Hint> : null}
       {!libraryPaneCollapsed ? <button type="button" className="mobile-library-scrim" aria-label="Close navigation" onClick={() => setLibraryPaneCollapsed(true)} /> : null}
       <aside className="sidebar library-pane">
-        <header className="pane-brand"><div className="brand"><span className="brand-mark">R</span><span className="pane-label">Rationexa</span></div><Hint label="Collapse navigation" side="bottom"><button type="button" className="library-panel-toggle" aria-label="Collapse navigation" aria-expanded={!libraryPaneCollapsed} onClick={() => setLibraryPaneCollapsed(true)}><PanelLeftClose aria-hidden="true" /></button></Hint></header>
+        <header className="pane-brand"><Hint label="Back to Rationexa home" side="bottom"><Link className="brand" href="/" aria-label="Rationexa home"><span className="brand-mark">R</span><span className="pane-label">Rationexa</span></Link></Hint><Hint label="Collapse navigation" side="bottom"><button type="button" className="library-panel-toggle" aria-label="Collapse navigation" aria-expanded={!libraryPaneCollapsed} onClick={() => setLibraryPaneCollapsed(true)}><PanelLeftClose aria-hidden="true" /></button></Hint></header>
         <button className="new-decision" onClick={requestNewDecision}><Plus aria-hidden="true" /><span className="pane-label">New decision review</span></button>
         <div className="pane-section pane-label"><span className="pane-kicker">Decision libraries</span></div>
         <nav className="library-nav" aria-label="Decision libraries">
@@ -1141,7 +1142,7 @@ export default function Home() {
                 </section>
               </div>
               </section>
-              <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Review complete?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before continuing.` : `${counts.confirm} premises confirmed · ${counts.unknown} preserved as unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "review" || !draft.title.trim() || !draft.question.trim() || counts.confirm === 0 || unanchoredCritical.length > 0} onClick={saveReview}>{busyPhase === "review" ? <><span className="spinner" />Saving review…</> : "Continue to finalize →"}</button></section>
+              <section className="finalize-bar"><div><strong>{unanchoredCritical.length ? "Critical premises need evidence" : "Review complete?"}</strong><span>{unanchoredCritical.length ? `${unanchoredCritical.length} confirmed consequential premise${unanchoredCritical.length === 1 ? " has" : "s have"} no validated source anchor. Mark unknown or reject before continuing.` : `${counts.confirm} premises confirmed · ${counts.unknown} preserved as unknown · ${counts.reject} rejected`}</span></div><button className="primary" disabled={busyPhase === "review" || !draft.title.trim() || !draft.question.trim() || unanchoredCritical.length > 0} onClick={saveReview}>{busyPhase === "review" ? <><span className="spinner" />Saving review…</> : "Continue to finalize →"}</button></section>
             </> : !decision && workflowView === 3 ? <FinalizeConfirmation title={draft.title} question={draft.question} chosenOption={draft.chosenOption} rationale={draft.rationale} criticality={criticality} counts={counts} premises={premises} reviews={reviews} busy={busyPhase === "finalize"} onBack={() => setWorkflowView(2)} onFinalize={finalizeDecision} /> : null}
             </>
         ) : null}

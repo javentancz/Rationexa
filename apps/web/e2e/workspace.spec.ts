@@ -48,6 +48,16 @@ test("executes the workspace bootstrap preload without syntax or hydration error
   expect(pageErrors.filter((message) => /Invalid regular expression|hydration|Minified React error #418/i.test(message))).toEqual([]);
 });
 
+test("links the workspace brand back to the landing page", async ({ page }) => {
+  await mockBootstrap(page);
+  await page.goto("/workspace");
+
+  const homeLink = page.getByRole("link", { name: "Rationexa home" });
+  await expect(homeLink).toHaveAttribute("href", "/");
+  await homeLink.click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test("gives the decision content more room than the workflow rail on desktop", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await mockBootstrap(page);

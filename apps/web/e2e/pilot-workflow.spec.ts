@@ -16,11 +16,20 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
   expect(premiseCount).toBeGreaterThan(0);
   await expect(premiseCards.first().locator(".premise-source-preview")).toBeVisible();
   await expect(premiseCards.first().getByText("Your judgment")).toBeVisible();
+  const continueButton = page.getByRole("button", { name: "Continue to finalize →" });
+  for (let index = 0; index < premiseCount; index += 1) {
+    await premiseCards.nth(index).getByRole("button", { name: "? Keep unknown" }).click();
+  }
+  await expect(continueButton).toBeEnabled();
+  for (let index = 0; index < premiseCount; index += 1) {
+    await premiseCards.nth(index).getByRole("button", { name: "× Reject" }).click();
+  }
+  await expect(continueButton).toBeEnabled();
   for (let index = 0; index < premiseCount; index += 1) {
     await premiseCards.nth(index).getByRole("button", { name: "✓ Confirm" }).click();
   }
 
-  await page.getByRole("button", { name: "Continue to finalize →" }).click();
+  await continueButton.click();
   await expect(page.getByRole("heading", { name: "Review the record before it becomes memory" })).toBeVisible();
   await page.getByRole("button", { name: "Finalize and save" }).click();
   await expect(page.getByText("Decision finalized")).toBeVisible();
