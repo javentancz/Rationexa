@@ -88,6 +88,7 @@ test("fully removes the workflow rail when it is collapsed", async ({ page }) =>
   const firstStageBox = await page.locator(".import-card").boundingBox();
 
   await expect(workspace).toHaveCSS("padding-left", "0px");
+  await expect(page.locator(".topbar")).toHaveCSS("padding-left", "18px");
   expect(shellBox).not.toBeNull();
   expect(workspaceBox).not.toBeNull();
   expect(toggleBox).not.toBeNull();
@@ -95,6 +96,8 @@ test("fully removes the workflow rail when it is collapsed", async ({ page }) =>
   expect(firstStageBox).not.toBeNull();
   expect(Math.abs(workspaceBox!.x - shellBox!.x)).toBeLessThanOrEqual(2);
   expect(Math.abs(toggleBox!.x - shellBox!.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(topbarBox!.x - workspaceBox!.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs((topbarBox!.x + topbarBox!.width) - (workspaceBox!.x + workspaceBox!.width))).toBeLessThanOrEqual(2);
   expect(firstStageBox!.y - (topbarBox!.y + topbarBox!.height)).toBeGreaterThanOrEqual(17);
 });
 
