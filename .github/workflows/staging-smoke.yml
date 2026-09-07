@@ -1,0 +1,29 @@
+name: Staging smoke check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "11 */6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-smoke
+  cancel-in-progress: true
+
+jobs:
+  public-preview:
+    name: Verify public preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      STAGING_ORIGIN: https://rationexa-web-staging.vercel.app
+    steps:
+      - name: Check landing page
+        run: curl --fail --silent --show-error --retry 2 --max-time 20 "$STAGING_ORIGIN/" > /dev/null
+      - name: Check API liveness through the web proxy
+        run: curl --fail --silent --show-error --retry 2 --max-time 20 "$STAGING_ORIGIN/api/backend/healthz" > /dev/null
+      - name: Check API and database readiness
+        run: curl --fail --silent --show-error --retry 2 --max-time 20 "$STAGING_ORIGIN/api/backend/readyz" > /dev/null
+

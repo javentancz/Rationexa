@@ -324,9 +324,12 @@ recovery instructions are in [ops](ops/README.md).
 ## Contributing and security
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
-opening a pull request and [SECURITY.md](SECURITY.md) before reporting a
-vulnerability. Do not place provider keys, session tokens, private source
-material, production data, or holdout evaluation cases in public issues.
+opening a pull request, [SUPPORT.md](SUPPORT.md) when asking for help, and
+[SECURITY.md](SECURITY.md) before reporting a vulnerability. The hosted
+preview's retention and provider boundaries are described in the
+[privacy and data policy](https://rationexa-web-staging.vercel.app/privacy).
+Do not place provider keys, session tokens, private source material, production
+data, or holdout evaluation cases in public issues.
 
 Reproducible bug reports, accessibility fixes, deterministic-rule edge cases,
 performance measurements, and sanitized examples are welcome. Larger changes

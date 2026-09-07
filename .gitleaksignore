@@ -1,0 +1,5 @@
+# Reviewed test-only Fernet key used to verify encryption behavior.
+68f32aa0416d6ce60e743641477159c86c5e98f8:services/api/tests/test_auth.py:generic-api-key:859
+9a97a465f8f4aeb119220ae554cde7d3a1e82ae6:apps/web/playwright.config.ts:generic-api-key:23
+62ad47cc6b1ce72cf7d2dd85e8cb65d035c5482f:services/api/tests/conftest.py:generic-api-key:11
+62ad47cc6b1ce72cf7d2dd85e8cb65d035c5482f:services/api/tests/test_auth.py:generic-api-key:150

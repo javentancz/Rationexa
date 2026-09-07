@@ -23,6 +23,17 @@ test("presents the product without loading private workspace data", async ({ pag
   expect(bootstrapRequests).toBe(0);
 });
 
+test("links to a readable public-preview privacy policy", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("link", { name: "Privacy & data" }).click();
+  await expect(page).toHaveURL(/\/privacy$/);
+  await expect(page.getByRole("heading", { name: "Privacy and data use" })).toBeVisible();
+  await expect(page.getByText("Guest workspaces are isolated through a browser cookie")).toBeVisible();
+  await expect(page.getByText("Use a restricted, revocable provider key with a spending limit.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Rationexa home" })).toHaveAttribute("href", "/");
+});
+
 test("explains the product through one concrete decision story", async ({ page }) => {
   await page.goto("/");
 

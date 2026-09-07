@@ -77,6 +77,6 @@ export default function LandingPage() {
 
     <section className="landing-final-cta"><span className="landing-eyebrow">Start with one real decision</span><h2>Make the next revisit easier than the original debate.</h2><p>No setup is required for the guided trial.</p><div className="landing-actions"><Link className="landing-primary" href="/workspace?sample=vendor-review">Try the guided sample <ArrowRight aria-hidden="true" /></Link><Link className="landing-secondary" href="/workspace">Start with my decision</Link></div></section>
 
-    <footer className="landing-footer"><Link className="landing-brand" href="/"><span>R</span><strong>Rationexa</strong></Link><p>Human-reviewed decision memory.</p><div><a href="#how-it-works">How it works</a><a href="#privacy">Privacy</a><Link href="/workspace">Workspace</Link></div></footer>
+    <footer className="landing-footer"><Link className="landing-brand" href="/"><span>R</span><strong>Rationexa</strong></Link><p>Human-reviewed decision memory.</p><div><a href="#how-it-works">How it works</a><Link href="/privacy">Privacy &amp; data</Link><a href="mailto:javentanzhe@gmail.com?subject=Rationexa%20support">Support</a><Link href="/workspace">Workspace</Link></div></footer>
   </main>;
 }

@@ -438,6 +438,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
             <div>
               <strong>Connect a hosted model with your own key</strong>
               <p>{authenticated ? "Choose the platform that issued your key, load its live model catalog, then activate one model. Keys cannot be safely auto-detected because provider formats overlap." : workspace?.mode === "guest_personal" ? "Deterministic rules are available in this temporary browser workspace. Create an account to preserve its decisions and unlock encrypted BYOK." : workspace ? "Local development can use built-in models without storing a shared key." : "Sign in or create a private workspace before connecting a provider. Every account receives an isolated decision library and encrypted BYOK storage."}</p>
+              {authenticated ? <small className="byok-safety-note">Public preview: use a restricted, revocable provider key with a spending limit. Do not use a privileged production key.</small> : null}
             </div>
           </div>
           {authenticated ? <><form onSubmit={handleStoreKey} className="account-key-form">
