@@ -123,11 +123,12 @@ button { cursor:pointer; }
 .workbench-shell.library-overview { grid-template-columns:0 minmax(0,1fr); }
 .library-overview .workflow-pane { visibility:hidden; opacity:0; pointer-events:none; transform:translateX(-22px); }
 .library-overview .workflow-toggle { display:none; }
-.workflow-toggle { position:absolute; z-index:30; top:50%; left:max(15px,calc(var(--workflow-pane-width) - 1px)); display:grid; place-items:center; width:28px; height:52px; border:1px solid var(--line); border-radius:0 10px 10px 0; padding:0; background:rgba(255,255,255,.96); color:var(--muted); box-shadow:5px 0 16px rgba(19,31,23,.08); transform:translateY(-50%); transition:left .3s cubic-bezier(.22,1,.36,1),background .15s,color .15s; }
+.workflow-toggle { position:absolute; z-index:30; top:50%; left:calc(var(--workflow-pane-width) - 1px); display:grid; place-items:center; width:28px; height:52px; border:1px solid var(--line); border-radius:0 10px 10px 0; padding:0; background:rgba(255,255,255,.96); color:var(--muted); box-shadow:5px 0 16px rgba(19,31,23,.08); transform:translateY(-50%); transition:left .3s cubic-bezier(.22,1,.36,1),background .15s,color .15s; }
 .workflow-toggle:hover,.workflow-toggle:focus-visible { background:var(--accent-soft); color:var(--accent-dark); }
 .workflow-toggle:focus-visible { outline:2px solid #7da58a; outline-offset:-2px; }
 .workflow-toggle span { transition:transform .25s ease; }
 .workflow-toggle svg { width:22px; height:22px; stroke-width:2; }
+.workflow-collapsed .workflow-toggle { left:-1px; }
 .workflow-collapsed .workflow-toggle span { transform:translateX(1px); }
 .library-panel-toggle { position:relative; display:grid; place-items:center; flex:0 0 30px; width:30px; height:30px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--muted); }
 .library-panel-toggle:hover,.library-panel-toggle:focus-visible { border-color:#b9cabf; background:var(--accent-soft); color:var(--accent-dark); }

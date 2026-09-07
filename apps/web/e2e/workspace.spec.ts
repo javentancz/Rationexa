@@ -70,6 +70,27 @@ test("gives the decision content more room than the workflow rail on desktop", a
   expect(workspaceWidth).toBeGreaterThan(1000);
 });
 
+test("fully removes the workflow rail when it is collapsed", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await mockBootstrap(page);
+  await page.goto("/workspace");
+
+  await page.getByRole("button", { name: "Collapse workflow" }).click();
+  const expandWorkflow = page.getByRole("button", { name: "Expand workflow" });
+  await expect(expandWorkflow).toBeVisible();
+  await expect(expandWorkflow).toHaveCSS("left", "-1px");
+
+  const shellBox = await page.locator(".workbench-shell").boundingBox();
+  const workspaceBox = await page.locator(".workspace").boundingBox();
+  const toggleBox = await expandWorkflow.boundingBox();
+
+  expect(shellBox).not.toBeNull();
+  expect(workspaceBox).not.toBeNull();
+  expect(toggleBox).not.toBeNull();
+  expect(Math.abs(workspaceBox!.x - shellBox!.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(toggleBox!.x - shellBox!.x)).toBeLessThanOrEqual(2);
+});
+
 test("keeps the import stage legible in dark mode", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("theme", "dark"));
   await mockBootstrap(page);
