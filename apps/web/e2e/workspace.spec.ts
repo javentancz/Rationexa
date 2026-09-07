@@ -81,14 +81,21 @@ test("fully removes the workflow rail when it is collapsed", async ({ page }) =>
   await expect(expandWorkflow).toHaveCSS("left", "-1px");
 
   const shellBox = await page.locator(".workbench-shell").boundingBox();
-  const workspaceBox = await page.locator(".workspace").boundingBox();
+  const workspace = page.locator(".workspace");
+  const workspaceBox = await workspace.boundingBox();
   const toggleBox = await expandWorkflow.boundingBox();
+  const topbarBox = await page.locator(".topbar").boundingBox();
+  const firstStageBox = await page.locator(".import-card").boundingBox();
 
+  await expect(workspace).toHaveCSS("padding-left", "0px");
   expect(shellBox).not.toBeNull();
   expect(workspaceBox).not.toBeNull();
   expect(toggleBox).not.toBeNull();
+  expect(topbarBox).not.toBeNull();
+  expect(firstStageBox).not.toBeNull();
   expect(Math.abs(workspaceBox!.x - shellBox!.x)).toBeLessThanOrEqual(2);
   expect(Math.abs(toggleBox!.x - shellBox!.x)).toBeLessThanOrEqual(2);
+  expect(firstStageBox!.y - (topbarBox!.y + topbarBox!.height)).toBeGreaterThanOrEqual(17);
 });
 
 test("keeps the import stage legible in dark mode", async ({ page }) => {

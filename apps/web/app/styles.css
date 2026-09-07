@@ -236,6 +236,7 @@ button { cursor:pointer; }
 .workflow-collapsed .workflow-pane { visibility:hidden; opacity:0; pointer-events:none; transform:translateX(-22px); transition:opacity .16s ease,transform .28s cubic-bezier(.22,1,.36,1),visibility 0s .28s; }
 .workspace { min-width:0; width:100%; height:100%; margin:0; overflow-y:auto; padding:0 26px 80px; background:var(--background); }
 .topbar { position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:space-between; gap:24px; min-height:82px; border-bottom:1px solid var(--line); background:rgba(251,252,250,.94); backdrop-filter:blur(12px); }
+.workspace>.topbar+* { margin-top:18px; }
 .topbar-title { min-width:0; }
 .topbar-title-row { display:flex; min-width:0; align-items:center; gap:12px; }
 .topbar h1 { margin:4px 0 0; font-family:Georgia,serif; font-size:27px; font-weight:500; letter-spacing:-.02em; }
@@ -1283,6 +1284,7 @@ button { cursor:pointer; }
 /* Workspace v2 readability and settings hierarchy. */
 @media (min-width:761px) {
   .app-shell { --library-pane-width:280px; --workflow-pane-width:260px; }
+  .workflow-collapsed .workspace { padding-left:0; }
   .library-collapsed .library-pane { width:280px; }
   .sidebar,.workflow-pane { padding:20px 16px; }
   .brand { font-size:21px; }
