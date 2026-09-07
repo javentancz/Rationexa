@@ -47,28 +47,59 @@ material, optional AI models, and the people accountable for a decision. It is
 not a replacement for a document store, project tracker, model provider, or
 human approval process.
 
-The system is organized around these cooperating layers:
+### Core three-layer trust engine
 
-- **Import and extraction:** turns an ADR, proposal, assessment, or meeting note
-  into a candidate decision, rationale, and material premises.
-- **Grounding and review:** preserves exact source excerpts and offsets, then
-  requires a person to confirm, keep unknown, or reject every candidate premise.
-- **Decision memory:** stores the human-reviewed record, criticality, provenance,
-  and chronological audit history inside an isolated workspace.
-- **Revisit engine:** compares later evidence with every preserved premise and
-  proposes supported, weakened, contradicted, superseded, or unknown
-  relationships for human judgment.
-- **Challenge engine:** generates source-grounded pressure-test questions without
-  browsing, changing the decision, or pretending to be a multi-agent debate.
-- **Model execution and provenance:** supports deterministic rules, local Ollama
-  for self-hosting, and encrypted BYOK provider adapters while recording model,
-  provider, prompt version, latency, token usage, runtime, and known cost.
-- **Workspace and sharing boundary:** isolates guest and account data, protects
-  provider credentials, and exposes only a strict public-field allowlist through
-  revocable, expiring read-only links.
-- **Evaluation and operations:** runs frozen regression datasets, contract checks,
-  migrations, health checks, backup/restore drills, and browser tests without
-  turning development scores into production accuracy claims.
+The backend does not send model text directly into decision memory. Every run
+passes through three explicit trust layers:
+
+1. **L1 · Candidate reasoning.** The selected runtime—deterministic rules, local
+   Ollama, or a workspace-scoped BYOK adapter—turns untrusted source material
+   into schema-constrained candidate fields and premises. These are proposals,
+   not saved organizational facts. Provider adapters and output repair live in
+   [`providers.py`](services/api/src/rationexa_api/providers.py); their contracts
+   are defined in [`schemas.py`](services/api/src/rationexa_api/schemas.py).
+2. **L2 · Deterministic grounding.** The API validates every proposed source anchor
+   against the immutable input. Matching normalizes Unicode and whitespace to
+   tolerate copied documents, but the stored excerpt and character offsets
+   always point back to the exact original text. Unsupported consequential
+   claims cannot silently pass as grounded. During Revisit, the same integrity
+   layer checks new evidence against every preserved premise and retains
+   ambiguous results for human review. Exact locating and the deterministic
+   comparison safety net live in
+   [`services.py`](services/api/src/rationexa_api/services.py).
+3. **L3 · Human-gated memory.** A person must confirm, preserve as unknown, edit, or
+   reject each candidate before finalization. Revisit findings and challenge
+   prompts also remain proposals until a human records a judgment. Only this
+   reviewed state becomes durable decision memory. The API orchestration and
+   workspace authorization gates live in
+   [`main.py`](services/api/src/rationexa_api/main.py); persistence models and
+   migrations begin in [`db.py`](services/api/src/rationexa_api/db.py) and
+   [`services/api/migrations`](services/api/migrations).
+
+The execution path is therefore:
+
+`workspace/session scope -> rate limit -> runtime selection -> structured candidate output -> source-anchor validation -> human review -> finalized record -> evidence comparison across all premises -> human judgment and audit trail`
+
+Every model-assisted run retains provider, model, prompt version, latency,
+token usage, runtime location, and known cost. Provider secrets and private raw
+artifacts never enter public shares or exports.
+
+The Revisit engine applies the same boundary to later evidence; the Challenge
+engine only proposes source-grounded questions. Workspace isolation, encrypted
+BYOK, scrubbed shares, provenance, and regression tests support these three
+layers without changing who owns the final judgment.
+
+### Coding-agent initialization
+
+There is no separate `init.md`. A coding agent working in this repository must
+read the root [`AGENTS.md`](AGENTS.md) first, then the nearest scoped
+`AGENTS.md` for the files it will change (currently
+[`apps/web/AGENTS.md`](apps/web/AGENTS.md) for the web application). Those files
+define the product trust boundary, database rules, UI change discipline, and
+required checks. The README explains setup and architecture; durable design
+decisions live in [`docs/adr`](docs/adr).
+
+Before handing work back, run `pnpm validate`.
 
 ## Example use cases
 
@@ -104,97 +135,72 @@ accept the risk, investigate, or reopen the vendor decision.
 - **Model runtimes:** deterministic rules with no key, optional local Ollama,
   and workspace-scoped BYOK adapters for OpenRouter, OpenAI, and reviewed
   OpenAI-compatible endpoints.
-- **Delivery and assurance:** pnpm monorepo tooling, Docker Compose for local
-  PostgreSQL, GitHub Actions, Vercel web/API deployments, generated OpenAPI and
+- **Delivery and assurance:** pnpm monorepo tooling, Docker Compose for the full
+  local stack, GitHub Actions, Vercel web/API deployments, generated OpenAPI and
   TypeScript contracts, Ruff, Pytest, dependency audits, and Alembic migration
   checks.
 
-## Choose how to use it
-
-- **Try the hosted preview:** open the
-  [staging application](https://rationexa-web-staging.vercel.app/) and use a
-  browser-isolated guest workspace with deterministic rules. It is a pilot
-  environment, not a production SLA.
-- **Run it yourself:** clone this repository and follow the deterministic local
-  trial below. PostgreSQL is the supported shared deployment database.
-- **Improve the project:** start with a
-  [good first issue](https://github.com/javentancz/Rationexa/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22),
-  report a bug through the structured issue form, or open a feature request for
-  a larger proposal before writing a pull request.
-
 ## Use the hosted staging preview
 
-The staging preview is the fastest way to understand the current product:
+The [staging application](https://rationexa-web-staging.vercel.app/) is the
+fastest way to understand the product:
 
-1. Open [Rationexa staging](https://rationexa-web-staging.vercel.app/).
-2. Select **Try a sample decision**, or open **New decision review** and paste a
+1. Select **Try a sample decision**, or open **New decision review** and paste a
    short ADR, proposal, assessment, or meeting-note excerpt.
-3. Use **Deterministic rules** for the trial. No account or model key is needed.
-4. Review each proposed premise against its source excerpt:
-   - **Confirm** preserves a source-supported premise.
-   - **Keep unknown** preserves an unresolved question explicitly as unknown.
-   - **Reject** excludes a proposal that did not materially support the decision.
-5. Continue to **Finalize**, check the title, chosen option, rationale,
-   criticality, and preserved premises, then save the reviewed record.
-6. Open **Revisit** and add the smallest useful piece of new evidence. Rationexa
+2. Review each proposed premise: **Confirm**, **Keep unknown**, or **Reject**.
+3. **Finalize** the reviewed record.
+4. Open **Revisit** and add the smallest useful piece of new evidence. Rationexa
    maps it to preserved premises; you record the human judgment.
-7. Use **Decision library** to reopen or rename a record. Guests can exercise
-   sharing and export during the temporary trial; create an account if you want
-   durable history and encrypted BYOK models.
 
 Hosted guests receive separate cookie-bound workspaces that expire after 24
-hours. Different browser profiles and devices do not share a guest library.
-Account workspaces are durable and isolated in PostgreSQL. Staging does not run
-Ollama on a visitor's computer; guests use deterministic rules, while signed-in
-users may connect OpenRouter, OpenAI, or a reviewed OpenAI-compatible endpoint,
-load that provider's model catalog, and explicitly activate a model.
+hours. Account workspaces are durable and may connect encrypted BYOK models.
+Guests use deterministic rules; hosted staging cannot run Ollama on a visitor's
+computer.
 
 Do not put confidential customer or production decision material into staging.
 It is a pilot environment and may be reset during development.
 
-## Five-minute local trial
+## One-command Docker trial
 
-The Compose file starts PostgreSQL; the API and web development servers run on
-the host for fast iteration. Deterministic extraction avoids downloading a
-model or configuring a provider key.
+Docker Compose runs the complete application: PostgreSQL, the FastAPI service,
+and the production Next.js server. It uses the no-key deterministic runtime,
+creates an isolated guest workspace per browser, persists database and artifact
+data in named volumes, and routes browser API calls through the web container.
 
-Requirements: Node.js 24.19, pnpm 11.23, Python 3.14, and Docker.
+Requirement: Docker Desktop or another Docker Compose implementation.
 
 ```bash
 git clone https://github.com/javentancz/Rationexa.git
 cd Rationexa
-nvm use
-corepack enable
-pnpm install
-cp .env.example .env
-docker compose up -d db
-python3.14 -m venv .venv
-.venv/bin/pip install -e 'services/api[dev]'
-AI_PROVIDER=deterministic .venv/bin/uvicorn rationexa_api.main:app --reload --port 8000
-```
-
-In another terminal:
-
-```bash
-pnpm dev:web
+docker compose up --build
 ```
 
 Open `http://localhost:3000`, choose **Try a sample decision**, and complete
-Import → Review → Finalize → Revisit. The default local profile is intended for
-one developer; hosted mode creates a separate cookie-bound guest workspace for
-each browser profile.
+Import → Review → Finalize → Revisit. The API health endpoints remain
+available on `http://localhost:8000/healthz` and `/readyz`.
 
-Confirm the services are ready:
+Stop the stack without deleting its data:
 
 ```bash
-curl --fail http://localhost:8000/healthz
-curl --fail http://localhost:8000/readyz
+docker compose down
 ```
 
-The command above forces the no-key deterministic runtime. To test an installed
-local model instead, run `ollama pull qwen3.5:9b`, set `AI_PROVIDER=ollama`, and
-restart the API. Local Ollama is a developer/self-hosting option; the hosted
-staging website cannot connect directly to Ollama running on a visitor's device.
+`docker compose down -v` also removes the PostgreSQL, artifact, and generated
+encryption-key volumes and permanently deletes the local Docker data. For a
+network-accessible deployment, replace the default PostgreSQL password and set
+secure cookie, SMTP, public URL, and provider-host settings through environment
+variables or a deployment secret manager.
+
+Confirm all containers are healthy:
+
+```bash
+docker compose ps
+```
+
+Local Ollama remains a host-development option because desktop Docker cannot
+portably expose the same acceleration across macOS, Linux, and Windows. Use the
+manual development setup below when testing Ollama. Hosted and default Compose
+guests use deterministic rules; registered users can connect a BYOK provider.
 
 ## Repository map
 
@@ -207,155 +213,35 @@ docs/adr          Durable architecture decisions
 ops               Pilot deployment, recovery, backup, and restore guidance
 ```
 
-## Public and private source boundary
+## Safe to publish
 
-The recommended open-source shape is the current monorepo. Keep the web client,
-API, migrations, deterministic engine, provider interfaces, local Ollama
-integration, API contract, tests, sanitized development cases, CI, setup
-scripts, architecture decisions, and placeholder deployment examples together.
-These are the parts users need to inspect, run, modify, and contribute to.
-The `private: true` flags in workspace `package.json` files only prevent
-accidental publication to npm; they do not make the GitHub source proprietary.
+The current monorepo—web, API, migrations, engines, provider interfaces,
+contracts, sanitized development cases, tests, CI, and documentation—is the
+intended open-source unit. The `private: true` package flags only prevent
+accidental npm publication.
 
 The following must never be committed to this or another public repository:
 
 - populated `.env` files or deployment-platform environment exports;
 - `SECRET_ENCRYPTION_KEY`, provider keys, database passwords, SMTP credentials,
   cron secrets, session tokens, password-reset tokens, or signing keys;
-- PostgreSQL dumps, artifact directories, uploaded source documents, raw logs,
-  error payloads, or analytics containing user data;
-- pilot identities, customer decision records, support conversations, incident
-  investigations, or internal infrastructure addresses;
+- database dumps, uploaded source documents, raw logs, analytics, or customer
+  records;
 - private holdout evaluation cases and any copyrighted source material that is
   not licensed for redistribution.
 
-Production and staging secrets belong in their respective platform secret
-managers, not in Git branches. Public files such as `.env.example`,
-`ops/staging.env.example`, and `services/api/vercel.json` should contain only
-placeholders and non-sensitive behavior. The real holdout set stays outside Git;
-only its manifest example and handling rules belong here.
-
-There is no current application module that needs to become private merely
-because Rationexa may become a hosted business. Authentication, workspace
-isolation, BYOK encryption, and share sanitization benefit from public review.
-If billing, enterprise administration, managed connectors, or proprietary
-ranking systems are built later, place them behind explicit package/service
-boundaries and decide then whether a private cloud repository is justified.
-
-## Status
-
-Stage 1 established the trusted Import → Review → Finalize → Revisit workflow. The Stage 2 product foundation is implemented:
-
-- persistent personal workspaces and searchable decision history;
-- chronological evidence-revisit conversations with human judgments;
-- Markdown and PDF export;
-- revocable, expiring, scrubbed read-only share links;
-- source-grounded challenge briefs;
-- durable, workspace-scoped jobs with progress, cancellation, restart recovery, and late-result suppression;
-- model, provider, prompt, latency, token, runtime, and known-cost provenance;
-- local Ollama models and encrypted bring-your-own-key (BYOK) providers with live connection checks;
-- Alembic database migrations and supervised-pilot repeat-use metrics;
-- a shadcn component foundation with persistent light, dark, and system themes;
-- workspace-scoped authentication, encrypted BYOK, compute throttling, share
-  sanitization, database timing, backup/restore tooling, and automated browser
-  regression coverage.
-
-The next milestone is a supervised user pilot. The checked-in 30-case suite is a development regression set, not independent proof of production accuracy.
-
-Pilot operations now include private account registration, one-time password
-recovery, active-session revocation, workspace profile management, database-aware
-readiness checks, persistent authentication throttling, hashed session tokens,
-HttpOnly browser cookies, and guarded PostgreSQL-plus-artifact backup/restore tooling.
-
-### Project maturity
-
-Rationexa is currently a private, supervised-pilot project. The hosted link is
-staging infrastructure for evaluation and may change without notice. It is not
-yet offered with production support, availability guarantees, or independently
-validated model-accuracy claims. Self-hosters are responsible for deployment,
-secrets, database maintenance, backups, and access controls.
-
-## Deployment model
-
-Keep one monorepo and promote reviewed commits through separate environments:
-
-- **Local development:** deterministic rules or optional Ollama, with PostgreSQL
-  from Docker Compose and the web/API processes running on the host.
-- **Staging:** the current hosted preview, isolated staging PostgreSQL, staging
-  SMTP credentials, and non-production secrets. Use it for pilot workflows and
-  deployment verification.
-- **Production:** a separate web/API deployment, database, encryption key, SMTP
-  credentials, monitoring environment, and public domain created only after the
-  operational checks below pass and before inviting production users.
-
-Never clone staging records, provider credentials, session data, or encryption
-keys into production. Deploy immutable commit SHAs and apply reviewed Alembic
-migrations before routing production traffic to schema-dependent API code.
-
-### Manual public-release gate
-
-Before changing the GitHub repository from private to public:
-
-- [ ] Scan the complete Git history for credentials and private source data;
-      rotate anything that may ever have been committed, even if later deleted.
-- [ ] Review dependency licenses, bundled fonts, images, sample documents, and
-      evaluation cases for public redistribution rights.
-- [ ] Verify account deletion, workspace isolation, share expiry/revocation,
-      export sanitization, and PostgreSQL backup/restore against staging.
-- [ ] Confirm the hosted preview is clearly labeled as staging and contains no
-      production credentials, customer records, or private evaluation material.
-- [ ] Enable GitHub secret scanning and push protection, private vulnerability
-      reporting, CodeQL, Dependabot alerts, and a reviewed `main` ruleset.
-- [ ] Add repository topics and a social-preview image, then seed three to five
-      genuinely scoped `good first issue` or `help wanted` issues.
-- [ ] Confirm that the hosted sample workflow works without an account and that
-      clone/setup instructions succeed on a clean machine.
-- [ ] Publish `v0.2.0` release notes that state pilot limitations, upgrade steps,
-      and the supported PostgreSQL and runtime versions.
-
-Do not check an item merely because a file exists—the behavior should be tested
-in the environment that will be exposed to users.
-
-Making the source public does not require launching the hosted service as a
-production product. Before inviting non-pilot production users, create the
-separate production environment described above, complete a backup/restore and
-account-deletion drill there, establish alerting and latency/error baselines,
-and confirm a rollback path for both code and migrations.
-
-## Near-term roadmap
-
-1. Run a small pilot focused on whether users understand the product and return
-   with real new evidence, not only whether the workflow technically completes.
-2. Establish staging and production latency/error baselines, including API cold
-   starts and database query timing, before adding caching infrastructure.
-3. Convert recurring pilot friction into focused issues with acceptance tests;
-   mark a few safe documentation, accessibility, and deterministic-rule tasks
-   for first-time contributors.
-4. Add a full containerized self-hosting path only after users demonstrate that
-   they need it; the current Compose scope is intentionally PostgreSQL only.
+Production and staging secrets belong in platform secret managers, never Git.
+See [SECURITY.md](SECURITY.md) for reporting and handling rules.
 
 ## Model runtimes
 
-Local Ollama is free and requires no account. The configured local models are:
-
-- Qwen 3.5 9B
-- Gemma 4 E4B
-- Ornith 1.5 9B
-
-The Account & keys screen also supports OpenRouter, OpenAI direct, and custom OpenAI-compatible endpoints. After connecting a key, load that provider's model catalog and activate the model you want to expose in Rationexa. Keys are encrypted per workspace before database storage and are never returned by the API or included in shared records. Hosted visitors receive an isolated, cookie-bound 24-hour guest workspace for deterministic-rule trials. Different browser profiles and devices receive different libraries. Creating an account upgrades the same guest workspace and preserves its decisions; BYOK remains unavailable until that upgrade is complete.
+The default deterministic runtime needs no key. Self-hosters can use Ollama with
+Qwen 3.5 9B, Gemma 4 E4B, or Ornith 1.5 9B. Registered workspaces can connect
+OpenRouter, OpenAI, or a reviewed OpenAI-compatible endpoint, load its model
+catalog, and explicitly activate a model. Keys are encrypted per workspace and
+never returned by the API or included in shares.
 
 There is intentionally no misleading universal API-key field. Providers with incompatible native protocols require dedicated adapters; OpenRouter or a custom OpenAI-compatible endpoint provides the broadest current hosted-model coverage.
-
-### Hosted workspace isolation
-
-`HOSTED_MODE` defaults to `true`, so a missing environment variable cannot
-expose the shared local development library. Hosted visitors receive separate
-temporary guest workspaces; registered accounts receive permanent workspaces.
-Every artifact,
-extraction, decision, job, provider key, and usage query is filtered by that
-workspace. Separate physical databases per user are not required for pilot
-isolation; PostgreSQL stores all tenants while the API returns `404` for a
-record owned by another workspace.
 
 ## Full local development setup
 
@@ -387,47 +273,13 @@ pnpm dev:web
 
 Open `http://localhost:3000`.
 
-The Compose database is exposed on `localhost:5433`. The API applies pending Alembic migrations at startup. SQLite remains supported for an offline demo by setting `DATABASE_URL=sqlite:///./rationexa.db`, but PostgreSQL is the supported pilot database.
-
-Vercel disables request-time database maintenance with
-`STARTUP_DATABASE_MAINTENANCE=false` so a cold request does not inspect or
-migrate the schema before serving traffic. Apply migrations as a release step
-before deploying API code that depends on a new schema:
-
-```bash
-cd services/api
-../../.venv/bin/alembic upgrade head
-```
-
-Keep startup maintenance enabled for local development and long-running
-deployments unless their release pipeline applies migrations explicitly.
-
-### Move existing SQLite data to PostgreSQL
-
-Stop the API, start the empty PostgreSQL service, and run the guarded one-time copy command from the repository root:
-
-```bash
-docker compose up -d db
-.venv/bin/python -m rationexa_api.migrate_database \
-  --source sqlite:///./rationexa.db \
-  --target postgresql+psycopg://rationexa:rationexa@localhost:5433/rationexa
-```
-
-The command refuses to write into a target that already contains application data. It preserves IDs, decisions, premises, revisits, shares, provenance, and encrypted BYOK records. Keep the same `SECRET_ENCRYPTION_KEY` or `.rationexa-secret.key` to decrypt migrated provider records. Artifact files remain in `ARTIFACT_DIR`; back up and move that directory separately when changing machines.
-
-For fast development without a model process, set `AI_PROVIDER=deterministic`. To expose additional installed Ollama models, update the comma-separated `OLLAMA_MODELS` value and restart the API.
-
-Use `JOB_EXECUTION_MODE=thread` for a long-running local API process. Hosted
-serverless deployments must use `JOB_EXECUTION_MODE=inline`; the job record is
-still durable, and interrupted records fail explicitly after restart instead of
-remaining stuck. A queue worker can replace inline execution later if pilot
-traffic proves it necessary; Redis is not required for the current pilot load.
-
-Local models only reason over evidence supplied to Rationexa. They do not fetch current web evidence by themselves.
+The Compose database is exposed on `localhost:5433`. Set
+`AI_PROVIDER=deterministic` when no Ollama process is running. Deployment,
+migration, backup, and recovery details are in [Pilot operations](ops/README.md).
 
 ## Evaluation
 
-Run the frozen development suite against the local models:
+Run the frozen development suite against local models:
 
 ```bash
 ollama pull qwen3.5:9b
@@ -437,7 +289,8 @@ ollama pull ornith-1.5:9b
   --models qwen3.5:9b gemma4:e4b ornith-1.5:9b
 ```
 
-Reports are written to `packages/evals/reports/`. Production claims require a separately maintained, independently reviewed holdout set with no case-ID or content-hash overlap with development data.
+Reports are written to `packages/evals/reports/`. These development regressions
+are not production-accuracy claims.
 
 ## Quality checks
 
@@ -445,45 +298,15 @@ Reports are written to `packages/evals/reports/`. Production claims require a se
 pnpm validate
 ```
 
-This is the same validation entry point used by CI. It runs type checking,
-fast Vitest unit tests, FastAPI-to-TypeScript contract drift checks, security
-linting, the production web build, API tests, Python and JavaScript dependency
-audits, and Playwright browser tests. CI also installs the Playwright Chromium
-runtime through the same script.
-
-During frontend development, run the fast unit layer independently:
-
-```bash
-pnpm test:unit
-```
-
-FastAPI is the source of truth for frontend API response types. After changing
-a Pydantic request or response schema, regenerate the committed OpenAPI contract
-and TypeScript declarations:
+This is the same validation entry point used by CI. After changing a Pydantic
+schema, regenerate the API contract before validating:
 
 ```bash
 pnpm api:contract:generate
 ```
 
-`pnpm validate` fails when either generated artifact is stale.
-
-Run the same API suite in an isolated temporary PostgreSQL schema:
-
-```bash
-docker compose up -d db
-TEST_DATABASE_URL=postgresql+psycopg://rationexa:rationexa@localhost:5433/rationexa \
-  pnpm validate:postgres
-```
-
-GitHub CI runs this PostgreSQL validation as a separate required job alongside
-the SQLite, web-build, dependency-audit, and browser-test job. This keeps local
-offline coverage fast while proving the complete API and Alembic migration path
-against the same database engine used by staging and pilot workspaces.
-
-Staging environment, password recovery, health-check, backup, and restore
-instructions are in [Pilot operations](ops/README.md).
-
-The durable Stage 1 safety boundary is recorded in [ADR-0001](docs/adr/0001-stage-1-trust-boundary.md).
+Architecture decisions are recorded in [docs/adr](docs/adr); deployment and
+recovery instructions are in [ops](ops/README.md).
 
 ## Contributing and security
 
@@ -492,11 +315,9 @@ opening a pull request and [SECURITY.md](SECURITY.md) before reporting a
 vulnerability. Do not place provider keys, session tokens, private source
 material, production data, or holdout evaluation cases in public issues.
 
-Useful contributions are not limited to feature code. Reproducible bug reports,
-accessibility fixes, documentation, deterministic-rule edge cases, PostgreSQL
-performance measurements, and sanitized real-world decision examples are all
-valuable. Larger product or schema changes should begin with an issue so work
-is not duplicated and the human-review boundary is agreed before implementation.
+Reproducible bug reports, accessibility fixes, deterministic-rule edge cases,
+performance measurements, and sanitized examples are welcome. Larger changes
+should begin with an issue.
 
 ## License
 

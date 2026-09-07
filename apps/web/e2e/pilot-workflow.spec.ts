@@ -75,6 +75,8 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
 
   await page.getByRole("button", { name: "Continue to revisit →" }).click();
   await expect(page.getByRole("heading", { name: "Continue the decision conversation" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Rename decision" })).toBeVisible();
+  await expect(page.locator(".revisit-composer")).toHaveCSS("position", "relative");
   await expect(page.getByLabel("Evidence review process")).toContainText("You decide what matters");
   await page.getByLabel("New evidence").fill("Vendor B now supports external users for all enterprise plans.");
   await page.getByRole("button", { name: "Check evidence against premises" }).click();

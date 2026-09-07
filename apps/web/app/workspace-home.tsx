@@ -41,13 +41,12 @@ async function loadWorkspaceBootstrap(): Promise<WorkspaceBootstrap> {
 const attentionKinds = new Set(["assumption", "unknown", "hard_constraint", "material_claim", "revisit_condition"]);
 const premiseKinds = ["requirement", "hard_constraint", "soft_constraint", "fact", "assumption", "unknown", "material_claim", "revisit_condition"];
 
-type ActionIconName = "markdown" | "pdf" | "rename" | "delete" | "back";
+type ActionIconName = "markdown" | "pdf" | "delete" | "back";
 
 function ActionIcon({ name }: { name: ActionIconName }) {
   if (name === "delete") return <Trash2 className="action-icon" aria-hidden="true" />;
   if (name === "back") return <ArrowLeft className="action-icon" aria-hidden="true" />;
   if (name === "pdf") return <FileDown className="action-icon" aria-hidden="true" />;
-  if (name === "rename") return <Pencil className="action-icon" aria-hidden="true" />;
   return <FileText className="action-icon" aria-hidden="true" />;
 }
 
@@ -1110,7 +1109,6 @@ export default function Home() {
 
   const recordActions = decision ? (
     <div className="record-actions" aria-label="Decision actions">
-      <Hint label="Rename decision" side="bottom"><button type="button" className="record-action record-rename-action icon-action" aria-label="Rename decision" onClick={() => { setDecisionTitleDraft(decision.title); setRenamingDecision(true); }}><ActionIcon name="rename" /><span>Rename</span></button></Hint>
       <Hint label={exportBusy ? "Preparing Markdown…" : "Export Markdown"} side="bottom"><button type="button" className="record-action icon-action" aria-label={exportBusy ? "Preparing Markdown export" : "Export Markdown"} disabled={exportBusy} onClick={downloadMarkdown}><ActionIcon name="markdown" /></button></Hint>
       <Hint label={pdfExportBusy ? "Preparing PDF…" : "Export PDF"} side="bottom"><button type="button" className="record-action icon-action" aria-label={pdfExportBusy ? "Preparing PDF export" : "Export PDF"} disabled={pdfExportBusy} onClick={downloadPdf}><ActionIcon name="pdf" /></button></Hint>
       <Hint label="Delete record" side="bottom"><button type="button" className="record-action icon-action danger" aria-label="Delete record" onClick={() => { setDeleteTitle(decision.title); setConfirmingDeleteFor(decision.id); }}><ActionIcon name="delete" /></button></Hint>
@@ -1166,7 +1164,7 @@ export default function Home() {
 
       <main id="workspace" className="workspace">
         <header className="topbar">
-          <div><span className="workspace-context">{view === "library" ? "Your saved decisions" : view === "usage" ? "Workspace insights" : view === "settings" ? "Workspace settings" : `Step ${workflowView} of 4 · ${workflowView === 1 ? "Import" : workflowView === 2 ? "Review" : workflowView === 3 ? "Finalize" : "Revisit"}`}</span><h1>{view === "library" ? "Decision library" : view === "usage" ? "Usage & cost" : view === "settings" ? "Account & keys" : draft?.title || decision?.title || "New decision review"}</h1></div>
+          <div className="topbar-title"><span className="workspace-context">{view === "library" ? "Your saved decisions" : view === "usage" ? "Workspace insights" : view === "settings" ? "Workspace settings" : `Step ${workflowView} of 4 · ${workflowView === 1 ? "Import" : workflowView === 2 ? "Review" : workflowView === 3 ? "Finalize" : "Revisit"}`}</span>{view === "workspace" && decision && renamingDecision ? <form className="decision-rename-form topbar-rename-form" onSubmit={renameDecision}><label><span className="sr-only">Decision name</span><input aria-label="Decision name" autoFocus maxLength={255} value={decisionTitleDraft} onChange={(event) => setDecisionTitleDraft(event.target.value)} /></label><div><button type="button" className="text-button" disabled={renameBusy} onClick={() => { setRenamingDecision(false); setDecisionTitleDraft(decision.title); }}>Cancel</button><button type="submit" className="primary" disabled={renameBusy || !decisionTitleDraft.trim()}>{renameBusy ? "Saving…" : "Save name"}</button></div></form> : <div className="topbar-title-row"><h1>{view === "library" ? "Decision library" : view === "usage" ? "Usage & cost" : view === "settings" ? "Account & keys" : draft?.title || decision?.title || "New decision review"}</h1>{view === "workspace" && decision ? <button type="button" className="topbar-rename-button" aria-label="Rename decision" onClick={() => { setDecisionTitleDraft(decision.title); setRenamingDecision(true); }}><Pencil aria-hidden="true" /><span>Rename</span></button> : null}</div>}</div>
         </header>
 
         {error ? <div className="error" role="alert"><strong>Something needs attention</strong><span>{error}</span></div> : null}
@@ -1237,7 +1235,7 @@ export default function Home() {
         ) : null}
 
         {view === "workspace" && workflowView === 3 && decision ? <section className="card finalized-summary">
-          <div className="finalized-heading"><div className="finalized-check"><Check aria-hidden="true" /></div><div className="finalized-title"><span className="overline">Saved decision</span>{renamingDecision ? <form className="decision-rename-form" onSubmit={renameDecision}><label><span className="sr-only">Decision name</span><input aria-label="Decision name" autoFocus maxLength={255} value={decisionTitleDraft} onChange={(event) => setDecisionTitleDraft(event.target.value)} /></label><div><button type="button" className="text-button" disabled={renameBusy} onClick={() => { setRenamingDecision(false); setDecisionTitleDraft(decision.title); }}>Cancel</button><button type="submit" className="primary" disabled={renameBusy || !decisionTitleDraft.trim()}>{renameBusy ? "Saving…" : "Save name"}</button></div></form> : <h2>{decision.title}</h2>}<p>{decision.question}</p></div>{recordActions}</div>
+          <div className="finalized-heading"><div className="finalized-check"><Check aria-hidden="true" /></div><div className="finalized-title"><span className="overline">Saved decision</span><h2>{decision.title}</h2><p>{decision.question}</p></div>{recordActions}</div>
           <div className="record-meta"><div><span>Chosen option</span><strong>{decision.chosen_option || "Not established"}</strong></div><div><span>Criticality</span><strong>{decision.criticality}</strong></div><div><span>Preserved premises</span><strong>{decision.premises.length}</strong></div><div><span>Saved</span><strong>{formatDateTime(decision.created_at)}</strong></div></div>
            <div className="preserved-premises">{decision.premises.map((premise, index) => <div key={premise.id}><span>P{index + 1} · {premise.kind.replaceAll("_", " ")}</span><p>{premise.statement}</p></div>)}</div>
              {challengePanel}

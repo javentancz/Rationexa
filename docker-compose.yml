@@ -1,19 +1,82 @@
 services:
   db:
     image: postgres:18-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: rationexa
-      POSTGRES_USER: rationexa
-      POSTGRES_PASSWORD: rationexa
+      POSTGRES_DB: ${POSTGRES_DB:-rationexa}
+      POSTGRES_USER: ${POSTGRES_USER:-rationexa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rationexa}
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rationexa"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
     volumes:
       - rationexa_postgres18:/var/lib/postgresql
 
+  api:
+    build:
+      context: .
+      target: api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rationexa}:${POSTGRES_PASSWORD:-rationexa}@db:5432/${POSTGRES_DB:-rationexa}
+      ARTIFACT_DIR: /data/artifacts
+      ARTIFACT_STORAGE: filesystem
+      SECRET_ENCRYPTION_KEY_FILE: /data/.rationexa-secret.key
+      AI_PROVIDER: deterministic
+      JOB_EXECUTION_MODE: thread
+      HOSTED_MODE: "true"
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SESSION_COOKIE_SAMESITE: lax
+      PASSWORD_RESET_DEV_MODE: ${PASSWORD_RESET_DEV_MODE:-true}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      CUSTOM_PROVIDER_ALLOWED_HOSTS: ${CUSTOM_PROVIDER_ALLOWED_HOSTS:-}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - rationexa_api_data:/data
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        NEXT_PUBLIC_API_URL: /api/backend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      RATIONEXA_API_URL: http://api:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
 volumes:
   rationexa_postgres18:
+  rationexa_api_data:
