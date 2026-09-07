@@ -91,8 +91,8 @@ layers without changing who owns the final judgment.
 
 ### Coding-agent initialization
 
-There is no separate `init.md`. A coding agent working in this repository must
-read the root [`AGENTS.md`](AGENTS.md) first, then the nearest scoped
+A coding agent working in this repository must read the root
+[`AGENTS.md`](AGENTS.md) first, then the nearest scoped
 `AGENTS.md` for the files it will change (currently
 [`apps/web/AGENTS.md`](apps/web/AGENTS.md) for the web application). Those files
 define the product trust boundary, database rules, UI change discipline, and
