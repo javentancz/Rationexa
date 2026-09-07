@@ -205,33 +205,46 @@ guests use deterministic rules; registered users can connect a BYOK provider.
 ## Repository map
 
 ```text
-apps/web          Next.js 16 and React 19 client
-services/api      FastAPI, SQLAlchemy, Alembic, PostgreSQL/SQLite API
-packages/evals    Development regression cases and holdout controls
-packages/api-contract  Generated OpenAPI-to-TypeScript contract
-docs/adr          Durable architecture decisions
-ops               Pilot deployment, recovery, backup, and restore guidance
+apps/web/
+  app/                    Next.js App Router pages and workflow features
+    (workspace)/          Decision workspace, library, usage, and settings routes
+    account/              Sign-in, registration, and password recovery
+    api/backend/          Same-origin proxy to the FastAPI service
+    share/[token]/        Public, read-only shared decision records
+  components/ui/          Reusable interface primitives
+  e2e/                    Playwright browser journeys and regressions
+  lib/                    Client data, caching, routing, and utility modules
+
+services/api/
+  src/rationexa_api/
+    main.py               HTTP routes, authorization, and workflow orchestration
+    providers.py          Deterministic, Ollama, and BYOK provider adapters
+    services.py           Grounding, source offsets, and revisit conflict logic
+    db.py                 SQLAlchemy models, sessions, and persistence helpers
+    auth.py               Accounts, workspaces, and session security
+    share_service.py      Expiring and revocable read-only shares
+    usage_service.py      Model-run, latency, token, and cost summaries
+    schemas.py            Pydantic API and engine contracts
+  migrations/             Reviewed Alembic database revisions
+  tests/                  Pytest API, security, migration, and engine coverage
+  api/                    Vercel serverless entry point
+
+packages/evals/
+  golden_cases/           Reviewed, fixed development regression fixtures
+  real_cases/             Collected, sanitized real-world public scenarios
+  holdout_cases/          Holdout policy; private cases stay outside Git
+  datasets/               Evaluation manifests and trust-gate datasets
+  reports/                Generated development evaluation reports
+packages/api-contract/    Generated OpenAPI-to-TypeScript contract
+
+scripts/                  Validation, API-contract, and test-service automation
+docs/adr/                 Durable architecture decisions
+ops/                      Deployment, migration, backup, and recovery runbooks
+.github/                  CI, dependency updates, ownership, and issue/PR templates
+Dockerfile                Production-style web and API image targets
+docker-compose.yml        Full local PostgreSQL, API, and web stack
+AGENTS.md                 Repository-wide coding-agent guardrails
 ```
-
-## Safe to publish
-
-The current monorepo—web, API, migrations, engines, provider interfaces,
-contracts, sanitized development cases, tests, CI, and documentation—is the
-intended open-source unit. The `private: true` package flags only prevent
-accidental npm publication.
-
-The following must never be committed to this or another public repository:
-
-- populated `.env` files or deployment-platform environment exports;
-- `SECRET_ENCRYPTION_KEY`, provider keys, database passwords, SMTP credentials,
-  cron secrets, session tokens, password-reset tokens, or signing keys;
-- database dumps, uploaded source documents, raw logs, analytics, or customer
-  records;
-- private holdout evaluation cases and any copyrighted source material that is
-  not licensed for redistribution.
-
-Production and staging secrets belong in platform secret managers, never Git.
-See [SECURITY.md](SECURITY.md) for reporting and handling rules.
 
 ## Model runtimes
 
