@@ -20,7 +20,7 @@ USER rationexa
 EXPOSE 8000
 CMD ["uvicorn", "rationexa_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
 
-FROM node:24.19-alpine AS web-builder
+FROM node:26.8-alpine AS web-builder
 
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
@@ -35,7 +35,7 @@ ARG NEXT_PUBLIC_API_URL=/api/backend
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN pnpm --filter @rationexa/web build
 
-FROM node:24.19-alpine AS web
+FROM node:26.8-alpine AS web
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
