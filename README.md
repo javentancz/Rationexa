@@ -1,6 +1,7 @@
 # Rationexa
 
 [![CI](https://github.com/javentancz/Rationexa/actions/workflows/ci.yml/badge.svg)](https://github.com/javentancz/Rationexa/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-0.2.0-1f6b4f.svg)](https://github.com/javentancz/Rationexa/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > Teams remember what they decided. They forget why it was reasonable, which
@@ -22,6 +23,10 @@ the decision.
 Rationexa does not autonomously reverse decisions, declare organizational
 truth, or assign business materiality.
 
+Current version: **0.2.0**, a supervised-pilot release. The hosted application
+is a staging preview, while the repository can also be run locally or
+self-hosted.
+
 ## What the workflow preserves
 
 1. **Import** the original decision source.
@@ -34,6 +39,75 @@ The built-in deterministic runtime needs no model key. Registered workspaces
 may connect an encrypted BYOK provider and explicitly activate a model. Public
 share links are read-only, expiring, revocable, and exclude provider keys and
 private source artifacts.
+
+## Where Rationexa fits
+
+Rationexa is a decision-memory and evidence-review layer between source
+material, optional AI models, and the people accountable for a decision. It is
+not a replacement for a document store, project tracker, model provider, or
+human approval process.
+
+The system is organized around these cooperating layers:
+
+- **Import and extraction:** turns an ADR, proposal, assessment, or meeting note
+  into a candidate decision, rationale, and material premises.
+- **Grounding and review:** preserves exact source excerpts and offsets, then
+  requires a person to confirm, keep unknown, or reject every candidate premise.
+- **Decision memory:** stores the human-reviewed record, criticality, provenance,
+  and chronological audit history inside an isolated workspace.
+- **Revisit engine:** compares later evidence with every preserved premise and
+  proposes supported, weakened, contradicted, superseded, or unknown
+  relationships for human judgment.
+- **Challenge engine:** generates source-grounded pressure-test questions without
+  browsing, changing the decision, or pretending to be a multi-agent debate.
+- **Model execution and provenance:** supports deterministic rules, local Ollama
+  for self-hosting, and encrypted BYOK provider adapters while recording model,
+  provider, prompt version, latency, token usage, runtime, and known cost.
+- **Workspace and sharing boundary:** isolates guest and account data, protects
+  provider credentials, and exposes only a strict public-field allowlist through
+  revocable, expiring read-only links.
+- **Evaluation and operations:** runs frozen regression datasets, contract checks,
+  migrations, health checks, backup/restore drills, and browser tests without
+  turning development scores into production accuracy claims.
+
+## Example use cases
+
+- **Vendor selection:** preserve the security, price, capability, and roadmap
+  assumptions behind choosing an identity, observability, or infrastructure
+  provider; revisit the choice when a capability is delayed or retired.
+- **Architecture decisions:** retain why a team selected a database, deployment
+  model, framework, or cloud service and identify which premise an incident or
+  lifecycle notice affects.
+- **Build versus buy:** separate hard constraints from forecasts and unknowns,
+  then track whether later delivery, staffing, or cost evidence changes the
+  original reasoning.
+- **Compliance and risk reviews:** anchor requirements to their original source
+  and record the human response when a policy, advisory, or audit finding
+  introduces conflicting evidence.
+
+One concrete flow: a team chooses Vendor B because it supports SAML, fits the
+budget, and promises external-user administration before launch. Rationexa
+preserves those three premises and their source excerpts. When Vendor B moves
+external-user administration to the next quarter, the revisit engine maps that
+evidence to the affected premise; the owner—not the model—decides whether to
+accept the risk, investigate, or reopen the vendor decision.
+
+## Technology stack
+
+- **Web:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix UI/shadcn-style
+  primitives, TanStack Query, Vitest, Storybook, Playwright, and Vercel Web
+  Analytics.
+- **API:** Python 3.14, FastAPI, Pydantic Settings, SQLAlchemy 2, Alembic,
+  Psycopg, Uvicorn, HTTPX, and encrypted provider credentials via Cryptography.
+- **Data:** PostgreSQL 18 for shared and hosted workspaces; SQLite remains an
+  optional offline development and test runtime.
+- **Model runtimes:** deterministic rules with no key, optional local Ollama,
+  and workspace-scoped BYOK adapters for OpenRouter, OpenAI, and reviewed
+  OpenAI-compatible endpoints.
+- **Delivery and assurance:** pnpm monorepo tooling, Docker Compose for local
+  PostgreSQL, GitHub Actions, Vercel web/API deployments, generated OpenAPI and
+  TypeScript contracts, Ruff, Pytest, dependency audits, and Alembic migration
+  checks.
 
 ## Choose how to use it
 
@@ -236,7 +310,7 @@ Before changing the GitHub repository from private to public:
       genuinely scoped `good first issue` or `help wanted` issues.
 - [ ] Confirm that the hosted sample workflow works without an account and that
       clone/setup instructions succeed on a clean machine.
-- [ ] Publish `v0.1.0` release notes that state pilot limitations, upgrade steps,
+- [ ] Publish `v0.2.0` release notes that state pilot limitations, upgrade steps,
       and the supported PostgreSQL and runtime versions.
 
 Do not check an item merely because a file exists—the behavior should be tested

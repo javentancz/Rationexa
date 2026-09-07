@@ -1,7 +1,10 @@
 import { apiResponse, responseJson } from "./api";
 import type { AccountSettings, DecisionWorkspace, UsageDashboard } from "./workspace-types";
 
-export const accountSettingsKey = (workspaceId?: string) => ["account-settings", workspaceId ?? "anonymous"] as const;
+// Only one workspace can be active in a browser session, and workspace changes
+// clear the QueryClient. Keeping this key stable prevents an early hover from
+// fetching once as "anonymous" and again after bootstrap resolves the ID.
+export const accountSettingsKey = (_workspaceId?: string) => ["account-settings"] as const;
 export const usageDashboardKey = (workspaceId?: string) => ["usage-dashboard", workspaceId ?? "anonymous"] as const;
 export const decisionWorkspaceKey = (workspaceId: string | undefined, decisionId: string) => ["decision-workspace", workspaceId ?? "anonymous", decisionId] as const;
 
