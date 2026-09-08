@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Privacy and data use — Rationexa",
+  title: "Privacy and data use | Rationexa",
   description: "How the Rationexa public preview handles decision material, accounts, provider keys, analytics, and deletion.",
 };
 

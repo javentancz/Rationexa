@@ -164,7 +164,7 @@ export function ShareView({ token }: { token: string }) {
                             <blockquote>{finding.new_excerpt}</blockquote>
                             {finding.old_excerpt ? <div className="share-old"><strong>Original excerpt</strong><blockquote>{finding.old_excerpt}</blockquote></div> : null}
                             {finding.missing_context_question ? <p className="missing-context">Question: {finding.missing_context_question}</p> : null}
-                            {finding.human_judgment ? <p className="share-judgment">Reviewer judgment: {finding.human_judgment.replaceAll("_", " ")}{finding.human_notes ? ` — ${finding.human_notes}` : ""}</p> : null}
+                            {finding.human_judgment ? <p className="share-judgment">Reviewer judgment: {finding.human_judgment.replaceAll("_", " ")}{finding.human_notes ? `. ${finding.human_notes}` : ""}</p> : null}
                           </div>
                        )) : <p>No material relationship was found.</p>}
                     </article>

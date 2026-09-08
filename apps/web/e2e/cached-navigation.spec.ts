@@ -30,14 +30,14 @@ test("reuses workspace and account data when moving between application tabs", a
   await expect(page.getByRole("heading", { name: "Bring in a decision" })).toBeVisible();
   await page.getByRole("button", { name: "Account and provider keys" }).click();
   await expect(page).toHaveURL(/\/settings$/);
-  await expect(page.getByRole("heading", { name: "Account & AI connections" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Workspace settings" })).toBeVisible();
   await expect(page.getByText("Workspace & provider keys", { exact: true })).toHaveCount(0);
   const accountRequestsAfterInitialLoad = accountSettingsRequests;
   expect(accountRequestsAfterInitialLoad).toBe(1);
   await page.getByRole("button", { name: "All decisions" }).click();
   await expect(page).toHaveURL(/\/library$/);
   await page.getByRole("button", { name: "Account and provider keys" }).click();
-  await expect(page.getByRole("heading", { name: "Account & AI connections" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Workspace settings" })).toBeVisible();
   await page.getByRole("button", { name: "New decision review" }).click();
   await expect(page).toHaveURL(/\/workspace$/);
 
@@ -79,7 +79,7 @@ test("renders a fresh saved workspace without refetching it on hard refresh", as
 
   await page.goto("/library");
   await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible();
-  await expect(page.getByText("Your records", { exact: true })).toHaveCSS("text-decoration-line", "none");
+  await expect(page.getByRole("heading", { name: "Your decisions" })).toHaveCSS("text-decoration-line", "none");
   await expect.poll(() => page.evaluate(() => (
     Array.from({ length: sessionStorage.length }, (_, index) => sessionStorage.key(index))
       .some((key) => key?.startsWith("rationexa-refresh-v1:workspace-bootstrap"))
@@ -120,6 +120,6 @@ test("renders a stale saved workspace while hard-refresh revalidation is pending
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Decision library" })).toBeVisible({ timeout: 1_000 });
-  await expect(page.getByText("Your records", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your decisions" })).toBeVisible();
   releaseRevalidation();
 });

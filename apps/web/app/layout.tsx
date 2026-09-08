@@ -5,7 +5,7 @@ import { Providers } from "./providers";
 import { WebAnalytics } from "./web-analytics";
 
 export const metadata: Metadata = {
-  title: "Rationexa — Human-reviewed decision memory",
+  title: "Rationexa | Human-reviewed decision memory",
   description: "Preserve why decisions were made, map new evidence to their assumptions, and keep human judgment in control.",
 };
 

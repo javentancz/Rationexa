@@ -114,8 +114,8 @@ test("keeps the import stage legible in dark mode", async ({ page }) => {
 
   await page.goto("/workspace");
 
-  await expect(page.getByText("Step 1 of 4 · Import")).toBeVisible();
-  await expect(page.getByText("Start with the source")).toBeVisible();
+  await expect(page.getByText("1 of 4: Import")).toBeVisible();
+  await expect(page.getByText("Import", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Decision memory / Import")).toHaveCount(0);
   const stageNumber = page.locator(".stage-number");
   await expect(stageNumber).toHaveCSS("color", "rgb(14, 20, 16)");

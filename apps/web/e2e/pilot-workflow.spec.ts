@@ -30,7 +30,7 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
   }
 
   await continueButton.click();
-  await expect(page.getByRole("heading", { name: "Review the record before it becomes memory" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Save the reviewed record" })).toBeVisible();
   let releaseLibraryRefresh!: () => void;
   const libraryRefreshGate = new Promise<void>((resolve) => { releaseLibraryRefresh = resolve; });
   await page.route(/\/v1\/decisions(?:\?.*)?$/, async (route) => {
@@ -40,7 +40,7 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
   await page.getByRole("button", { name: "Finalize and save" }).click();
   await expect(page.getByText("Decision finalized")).toBeVisible();
   await expect(page.locator(".finalized-summary")).toHaveCount(1);
-  await expect(page.getByRole("heading", { name: "Continue the decision conversation" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Check new evidence" })).toHaveCount(0);
 
   const finalizedTitle = await page.locator(".finalized-heading h2").innerText();
   await page.getByRole("button", { name: "All decisions" }).click();
@@ -74,7 +74,7 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
   await sharedPage.close();
 
   await page.getByRole("button", { name: "Continue to revisit →" }).click();
-  await expect(page.getByRole("heading", { name: "Continue the decision conversation" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Check new evidence" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Rename decision" })).toBeVisible();
   await expect(page.locator(".revisit-composer")).toHaveCSS("position", "relative");
   await expect(page.getByLabel("Evidence review process")).toContainText("You decide what matters");

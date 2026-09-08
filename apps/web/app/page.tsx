@@ -1,82 +1,122 @@
 import Link from "next/link";
-import { ArrowRight, Check, CircleCheck, FileSearch, Fingerprint, History, KeyRound, LockKeyhole, ScanSearch, ShieldCheck, Sparkles, UserCheck, Waypoints } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  FileSearch,
+  Fingerprint,
+  History,
+  LockKeyhole,
+  ShieldCheck,
+  UserCheck,
+} from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LandingWorkflowPreview } from "./landing-workflow-preview";
 import { guidedSamples } from "./guided-samples";
+import { LandingWorkflowPreview } from "./landing-workflow-preview";
 
 const workflow = [
-  { number: "01", title: "Import", copy: "Start with a decision note, ADR, assessment, or proposal excerpt.", icon: FileSearch },
-  { number: "02", title: "Review", copy: "Confirm the premises that actually mattered and preserve their source excerpts.", icon: UserCheck },
-  { number: "03", title: "Finalize", copy: "Save a human-reviewed record with rationale, provenance, and revisit conditions.", icon: CircleCheck },
-  { number: "04", title: "Revisit", copy: "Bring new evidence back to the original premises and decide what deserves action.", icon: History },
+  { title: "Import", copy: "Add the note or proposal.", icon: FileSearch },
+  { title: "Review", copy: "Verify each premise.", icon: UserCheck },
+  { title: "Finalize", copy: "Save the reviewed record.", icon: Check },
+  { title: "Revisit", copy: "Test new evidence.", icon: History },
 ];
 
-const assurances = ["No sign-up required", "Free deterministic trial", "Optional encrypted BYOK"];
-
 export default function LandingPage() {
-  return <main className="landing-page">
-    <nav className="landing-nav" aria-label="Main navigation">
-      <Link className="landing-brand" href="/" aria-label="Rationexa home"><span>R</span><strong>Rationexa</strong></Link>
-      <div className="landing-nav-links"><a href="#product">Product</a><a href="#example">Example</a><a href="#how-it-works">How it works</a><a href="#privacy">Privacy</a></div>
-      <div className="landing-nav-actions"><ThemeToggle /><Link className="landing-nav-cta" href="/workspace">Open workspace <ArrowRight aria-hidden="true" /></Link></div>
-    </nav>
+  return (
+    <main className="landing-page">
+      <nav className="landing-nav" aria-label="Main navigation">
+        <Link className="landing-brand" href="/" aria-label="Rationexa home">
+          <span>R</span><strong>Rationexa</strong>
+        </Link>
+        <div className="landing-nav-links">
+          <a href="#example">Examples</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="#privacy">Privacy</a>
+        </div>
+        <div className="landing-nav-actions">
+          <ThemeToggle />
+          <Link className="landing-nav-cta" href="/workspace">Open workspace <ArrowRight aria-hidden="true" /></Link>
+        </div>
+      </nav>
 
-    <section className="landing-hero" id="product">
-      <div className="landing-hero-copy">
-        <span className="landing-eyebrow"><Sparkles aria-hidden="true" /> Human judgment stays in control</span>
-        <h1>Remember <em>why</em> a decision was made. See when it stops being true.</h1>
-        <p>Rationexa turns a static decision into reviewable memory—preserving its assumptions, constraints, unknowns, and evidence so later changes can be evaluated in context.</p>
-        <div className="landing-actions"><Link className="landing-primary" href="/workspace?sample=vendor-review">Try a sample decision <ArrowRight aria-hidden="true" /></Link><Link className="landing-secondary" href="/workspace">Review your own decision</Link></div>
-        <div className="landing-assurances">{assurances.map((item) => <span key={item}><Check aria-hidden="true" />{item}</span>)}</div>
-      </div>
+      <section className="landing-hero" id="product">
+        <div className="landing-hero-copy">
+          <span className="landing-eyebrow">Decision memory for teams</span>
+          <h1>Know why you chose it. Know when to revisit it.</h1>
+          <p>Preserve the reasoning behind a decision, then test new evidence against it.</p>
+          <div className="landing-actions">
+            <Link className="landing-primary" href="/workspace?sample=vendor-review">Try a sample decision <ArrowRight aria-hidden="true" /></Link>
+            <Link className="landing-secondary" href="/workspace">Use my own decision</Link>
+          </div>
+        </div>
+        <LandingWorkflowPreview />
+      </section>
 
-      <LandingWorkflowPreview />
-    </section>
+      <section className="landing-tr-strip" aria-label="Product principles">
+        <span><Fingerprint aria-hidden="true" /><strong>Source grounded</strong><small>Exact excerpts stay attached</small></span>
+        <span><UserCheck aria-hidden="true" /><strong>Human reviewed</strong><small>You control the record</small></span>
+        <span><LockKeyhole aria-hidden="true" /><strong>Private by default</strong><small>No key needed to try it</small></span>
+      </section>
 
-    <section className="landing-trust-strip" aria-label="Product principles"><span><ScanSearch aria-hidden="true" /><strong>Source-grounded</strong><small>Exact excerpts stay attached</small></span><span><UserCheck aria-hidden="true" /><strong>Human-reviewed</strong><small>No silent decision changes</small></span><span><Fingerprint aria-hidden="true" /><strong>Traceable</strong><small>Model and prompt provenance</small></span><span><LockKeyhole aria-hidden="true" /><strong>Private by default</strong><small>Isolated guest and user workspaces</small></span></section>
+      <section id="example" className="landing-example">
+        <div className="landing-section-heading">
+          <span className="landing-eyebrow">Guided examples</span>
+          <h2>Start with a decision you recognize.</h2>
+          <p>Choose a case. The source and later evidence are ready to review.</p>
+        </div>
+        <div className="landing-case-showcase" role="region" aria-label="Guided decision cases">
+          {Object.entries(guidedSamples).map(([id, sample], index) => (
+            <Link key={id} href={`/workspace?sample=${id}`} className={index === 0 ? "landing-case-card featured" : "landing-case-card"}>
+              <span>{sample.audience}</span>
+              <strong>{sample.title}</strong>
+              <p>{sample.summary}</p>
+              <em>Open case <ArrowRight aria-hidden="true" /></em>
+            </Link>
+          ))}
+        </div>
+      </section>
 
-    <section id="example" className="landing-example">
-      <div className="landing-section-heading"><span className="landing-eyebrow">Real decisions, over time</span><h2>Choose a case and see when a reasonable decision becomes questionable.</h2><p>Each guided case starts with realistic reasoning, preserves what mattered, and introduces later evidence that may change the situation—not the record.</p></div>
-      <div className="landing-case-grid" role="region" aria-label="Guided decision cases">
-        {Object.entries(guidedSamples).map(([id, sample]) => <Link key={id} href={`/workspace?sample=${id}`} className="landing-case-card"><span>{sample.audience}</span><strong>{sample.title}</strong><p>{sample.summary}</p><em>Open guided case <ArrowRight aria-hidden="true" /></em></Link>)}
-      </div>
-      <div className="landing-example-timeline" aria-label="Example decision timeline">
-        <article><span>01 · Decide</span><strong>Choose Vendor B</strong><p>It supports SAML, fits the budget, and appears ready for the pilot.</p></article>
-        <article><span>02 · Preserve why</span><strong>External-user administration must ship before launch</strong><p>A reviewer confirms this assumption and keeps its exact source excerpt.</p></article>
-        <article className="changed"><span>03 · Something changes</span><strong>Delivery moves to next quarter</strong><p>New evidence now conflicts with the assumption behind the choice.</p></article>
-        <article className="human"><span>04 · Human judgment</span><strong>Revisit the decision—or explain why not</strong><p>Rationexa surfaces the conflict. A person decides what the organization should do.</p></article>
-      </div>
-      <div className="landing-example-action"><div><strong>Every case opens as an editable guide inside the product.</strong><span>No account or model key is required.</span></div><Link className="landing-primary" href="/workspace?sample=vendor-review">Walk through the identity case <ArrowRight aria-hidden="true" /></Link></div>
-    </section>
+      <section id="how-it-works" className="landing-how">
+        <div className="landing-section-heading">
+          <span className="landing-eyebrow">How it works</span>
+          <h2>One record. Four clear actions.</h2>
+        </div>
+        <ol className="landing-steps">
+          {workflow.map(({ title, copy, icon: Icon }, index) => (
+            <li key={title}>
+              <span>{index + 1}</span>
+              <Icon aria-hidden="true" />
+              <div><h3>{title}</h3><p>{copy}</p></div>
+            </li>
+          ))}
+        </ol>
+        <div className="landing-authority">
+          <div className="landing-authority-copy">
+            <h2>AI proposes. A person decides.</h2>
+            <p>Rationexa can extract premises and flag conflicts. It cannot silently change the accepted record.</p>
+          </div>
+          <div className="landing-authority-list">
+            <span><Check aria-hidden="true" />Review every premise</span>
+            <span><Check aria-hidden="true" />Keep model provenance</span>
+            <span><Check aria-hidden="true" />Record human judgment</span>
+          </div>
+        </div>
+      </section>
 
-    <section className="landing-contrast">
-      <div className="landing-section-heading"><span className="landing-eyebrow">The missing layer</span><h2>Most tools preserve the answer. Rationexa preserves the reasoning that made it defensible.</h2></div>
-      <div className="landing-contrast-grid">
-        <article className="landing-static-card"><span>Without decision memory</span><div className="landing-document-lines"><i /><i /><i /><i /></div><h3>“We chose Vendor B.”</h3><ul><li>Rationale disappears into old documents</li><li>Assumptions become invisible facts</li><li>New evidence has no original context</li></ul></article>
-        <div className="landing-contrast-arrow"><ArrowRight aria-hidden="true" /></div>
-        <article className="landing-memory-card"><span>With Rationexa</span><Waypoints aria-hidden="true" /><h3>Every decision has a living trail.</h3><ul><li><Check aria-hidden="true" />Premises remain tied to evidence</li><li><Check aria-hidden="true" />Changes map to what they affect</li><li><Check aria-hidden="true" />Humans record the final judgment</li></ul></article>
-      </div>
-    </section>
+      <section id="privacy" className="landing-privacy">
+        <span className="landing-privacy-icon"><ShieldCheck aria-hidden="true" /></span>
+        <div>
+          <h2>Try it without an account or model key.</h2>
+          <p>Your guest workspace is isolated and expires automatically. Create an account only when you want durable history or encrypted BYOK.</p>
+        </div>
+        <Link className="landing-primary" href="/workspace">Start a private trial <ArrowRight aria-hidden="true" /></Link>
+      </section>
 
-    <section id="how-it-works" className="landing-how">
-      <div className="landing-section-heading"><span className="landing-eyebrow">One continuous workflow</span><h2>From source material to a decision you can revisit.</h2><p>Each stage has one job. AI assists with structure and comparison; the reviewer controls what becomes part of the record.</p></div>
-      <div className="landing-steps">{workflow.map(({ number, title, copy, icon: Icon }) => <article key={number}><div><span>{number}</span><Icon aria-hidden="true" /></div><h3>{title}</h3><p>{copy}</p></article>)}</div>
-    </section>
-
-    <section className="landing-authority">
-      <div className="landing-authority-copy"><span className="landing-eyebrow">Built around the trust boundary</span><h2>AI can surface a concern. It cannot rewrite organizational truth.</h2><p>Every proposed premise and finding remains visibly provisional until a person confirms, rejects, or preserves it as unknown.</p><Link href="/workspace?sample=vendor-review">See the review workflow <ArrowRight aria-hidden="true" /></Link></div>
-      <div className="landing-authority-list"><article><span>AI</span><strong>Extracts candidate premises</strong><small>From the decision source</small></article><article><span>AI</span><strong>Maps later evidence</strong><small>Against preserved premises</small></article><article className="human"><span>Human</span><strong>Confirms what is material</strong><small>With an explicit judgment and notes</small></article></div>
-    </section>
-
-    <section id="privacy" className="landing-privacy">
-      <div className="landing-privacy-icon"><KeyRound aria-hidden="true" /></div>
-      <div><span className="landing-eyebrow">Private from the first click</span><h2>Try the workflow before creating an account.</h2><p>A temporary guest workspace is isolated to your browser and expires automatically. Deterministic rules require no model key. Create a permanent workspace only when you want durable history or hosted models through encrypted BYOK.</p><div className="landing-privacy-points"><span><ShieldCheck aria-hidden="true" />Separate decision libraries</span><span><Fingerprint aria-hidden="true" />Provider provenance retained</span><span><LockKeyhole aria-hidden="true" />Keys never appear in shares</span></div></div>
-      <Link className="landing-secondary" href="/workspace">Open private trial <ArrowRight aria-hidden="true" /></Link>
-    </section>
-
-    <section className="landing-final-cta"><span className="landing-eyebrow">Start with one real decision</span><h2>Make the next revisit easier than the original debate.</h2><p>No setup is required for the guided trial.</p><div className="landing-actions"><Link className="landing-primary" href="/workspace?sample=vendor-review">Try the guided sample <ArrowRight aria-hidden="true" /></Link><Link className="landing-secondary" href="/workspace">Start with my decision</Link></div></section>
-
-    <footer className="landing-footer"><Link className="landing-brand" href="/"><span>R</span><strong>Rationexa</strong></Link><p>Human-reviewed decision memory.</p><div><a href="#how-it-works">How it works</a><Link href="/privacy">Privacy &amp; data</Link><a href="mailto:javentanzhe@gmail.com?subject=Rationexa%20support">Support</a><Link href="/workspace">Workspace</Link></div></footer>
-  </main>;
+      <footer className="landing-footer">
+        <Link className="landing-brand" href="/"><span>R</span><strong>Rationexa</strong></Link>
+        <p>Human-reviewed decision memory.</p>
+        <div><Link href="/privacy">Privacy &amp; data</Link><a href="mailto:javentanzhe@gmail.com?subject=Rationexa%20support">Support</a><Link href="/workspace">Workspace</Link></div>
+      </footer>
+    </main>
+  );
 }

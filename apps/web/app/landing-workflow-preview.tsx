@@ -69,7 +69,7 @@ function ImportPreview() {
 function ReviewPreview() {
   return <>
     <PreviewHeading label="Human review" title="Confirm what mattered" copy="Edit, confirm, reject, or preserve each proposed premise as unknown." />
-    <div className="landing-premise-grid"><article><span>P1 · Assumption</span><strong>External-user administration will ship before pilot launch.</strong><small>Confirm · Keep unknown · Reject</small></article><article><span>P2 · Hard constraint</span><strong>Audit logs must remain available for 12 months.</strong><small>Human confirmed</small></article></div>
+    <div className="landing-premise-grid"><article><span>P1: Assumption</span><strong>External-user administration will ship before pilot launch.</strong><small>Confirm, keep unknown, or reject</small></article><article><span>P2: Hard constraint</span><strong>Audit logs must remain available for 12 months.</strong><small>Human confirmed</small></article></div>
     <div className="landing-preview-status"><span>2 source-grounded premises</span><strong>Reviewer controls the record</strong></div>
   </>;
 }
@@ -85,7 +85,7 @@ function FinalizePreview() {
 function RevisitPreview() {
   return <>
     <PreviewHeading label="Saved decision" title="Choose an identity provider" copy="Which provider should power the customer portal?" />
-    <div className="landing-premise-grid"><article><span>P1 · Assumption</span><strong>External-user administration will ship before pilot launch.</strong><small>Source excerpt preserved</small></article><article><span>P2 · Hard constraint</span><strong>Audit logs must remain available for 12 months.</strong><small>Human confirmed</small></article></div>
-    <div className="landing-evidence-message"><div className="landing-message-icon"><MessageSquareText aria-hidden="true" /></div><div><span>New evidence · Today, 10:42 AM</span><strong>External-user administration moved to next quarter.</strong><p>Conflicts with P1 · exact evidence retained</p></div><em>Needs review</em></div>
+    <div className="landing-premise-grid"><article><span>P1: Assumption</span><strong>External-user administration will ship before pilot launch.</strong><small>Source excerpt preserved</small></article><article><span>P2: Hard constraint</span><strong>Audit logs must remain available for 12 months.</strong><small>Human confirmed</small></article></div>
+    <div className="landing-evidence-message"><div className="landing-message-icon"><MessageSquareText aria-hidden="true" /></div><div><span>New evidence, today</span><strong>External-user administration moved to next quarter.</strong><p>Conflicts with P1. Exact evidence retained.</p></div><em>Needs review</em></div>
   </>;
 }

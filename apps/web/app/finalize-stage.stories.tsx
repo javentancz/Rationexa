@@ -36,7 +36,7 @@ type Story = StoryObj<typeof meta>;
 export const ConfirmationSummary: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("heading", { name: "Review the record before it becomes memory" })).toBeVisible();
+    await expect(canvas.getByRole("heading", { name: "Save the reviewed record" })).toBeVisible();
     await expect(canvas.getByText("Human judgments preserved")).toBeVisible();
     await expect(canvas.getByText("The provider will continue supporting the required integration.")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Finalize and save" }));

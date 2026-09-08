@@ -37,12 +37,12 @@ test("lets a hosted guest explore tabs and preserves the draft until a private a
 
   await page.getByRole("button", { name: "All decisions" }).click();
   await expect(page).toHaveURL(/\/library$/);
-  await expect(page.getByText("Your temporary library is private to this browser")).toBeVisible();
+  await expect(page.getByText("Private browser trial")).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue current draft" })).toBeVisible();
 
   await page.getByRole("button", { name: "Usage and cost" }).click();
   await expect(page).toHaveURL(/\/usage$/);
-  await expect(page.getByText("Temporary guest usage")).toBeVisible();
+  await expect(page.getByText("Temporary usage")).toBeVisible();
 
   await page.getByRole("button", { name: /A guest draft that should survive navigation/ }).click();
   await expect(page).toHaveURL(/\/workspace$/);

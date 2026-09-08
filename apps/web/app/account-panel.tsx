@@ -379,7 +379,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
   return (
     <section className="usage-section account-section">
       <div className="account-page-heading">
-        <div><span className="workspace-context">Private workspace settings</span><h2>Account &amp; AI connections</h2><p>Manage your profile, active sessions, and hosted model providers in one place.</p></div>
+        <div><h2>Workspace settings</h2><p>Profile, security, and model access.</p></div>
         <span className="account-status"><ShieldCheck aria-hidden="true" />{authenticated ? "Encrypted BYOK" : workspace?.mode === "guest_personal" ? "Private guest trial" : workspace ? "Local development" : "Sign in required"}</span>
       </div>
       {error ? <p className="account-error">{error}</p> : null}
@@ -410,7 +410,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
         {authenticated ? (
           <div className="pilot-account-grid">
             <section className="account-management-card">
-              <div className="byok-heading"><UserRound aria-hidden="true" /><div><strong>Workspace profile</strong><p>Names shown only inside this private pilot workspace.</p></div></div>
+              <div className="byok-heading"><UserRound aria-hidden="true" /><div><strong>Profile</strong><p>Your workspace display names.</p></div></div>
               <form className="account-login" onSubmit={handleProfileSave}>
                 <label><span>Display name</span><input required value={profileName} onChange={(event) => setProfileName(event.target.value)} /></label>
                 <label><span>Workspace name</span><input required value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} /></label>
@@ -418,7 +418,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
               </form>
             </section>
             <section className="account-management-card">
-              <div className="byok-heading"><ShieldCheck aria-hidden="true" /><div><strong>Password security</strong><p>Changing your password signs out every other active session.</p></div></div>
+              <div className="byok-heading"><ShieldCheck aria-hidden="true" /><div><strong>Password</strong><p>A change signs out other sessions.</p></div></div>
               <form className="account-login" onSubmit={handlePasswordChange}>
                 <label><span>Current password</span><input type="password" autoComplete="current-password" required value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
                 <label><span>New password</span><input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
@@ -426,7 +426,7 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
               </form>
             </section>
             <section className="account-management-card account-sessions">
-              <div className="byok-heading"><Monitor aria-hidden="true" /><div><strong>Active sessions</strong><p>Review access to this workspace and sign out other browsers.</p></div></div>
+              <div className="byok-heading"><Monitor aria-hidden="true" /><div><strong>Sessions</strong><p>Review signed-in browsers.</p></div></div>
               <ul>{sessions.map((session) => <li key={session.id}><span><strong>{session.current ? "This browser" : "Signed-in browser"}</strong><small>Started {new Date(session.created_at).toLocaleString()} · expires {new Date(session.expires_at).toLocaleString()}</small></span>{session.current ? <em>Current</em> : null}</li>)}</ul>
               <button type="button" className="text-button danger" disabled={authBusy || sessions.every((session) => session.current)} onClick={handleLogoutOthers}>Sign out other sessions</button>
             </section>
@@ -436,8 +436,8 @@ export function AccountPanel({ workspaceId, onConfigurationChanged, onModelConfi
           <div className="byok-heading">
             <Sparkles aria-hidden="true" />
             <div>
-              <strong>Connect a hosted model with your own key</strong>
-              <p>{authenticated ? "Choose the platform that issued your key, load its live model catalog, then activate one model. Keys cannot be safely auto-detected because provider formats overlap." : workspace?.mode === "guest_personal" ? "Deterministic rules are available in this temporary browser workspace. Create an account to preserve its decisions and unlock encrypted BYOK." : workspace ? "Local development can use built-in models without storing a shared key." : "Sign in or create a private workspace before connecting a provider. Every account receives an isolated decision library and encrypted BYOK storage."}</p>
+              <strong>Connect a model</strong>
+              <p>{authenticated ? "Add a provider key, then choose a model." : workspace?.mode === "guest_personal" ? "Create an account to keep decisions and use encrypted BYOK." : workspace ? "Built-in models work without a shared key." : "Sign in to connect a provider."}</p>
               {authenticated ? <small className="byok-safety-note">Public preview: use a restricted, revocable provider key with a spending limit. Do not use a privileged production key.</small> : null}
             </div>
           </div>

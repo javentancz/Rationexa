@@ -18,8 +18,8 @@ test("presents the product without loading private workspace data", async ({ pag
 
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: /Remember why a decision was made/ })).toBeVisible();
-  await expect(page.getByText("No sign-up required")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Know why you chose it/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Try it without an account or model key." })).toBeVisible();
   expect(bootstrapRequests).toBe(0);
 });
 
@@ -34,17 +34,13 @@ test("links to a readable public-preview privacy policy", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Rationexa home" })).toHaveAttribute("href", "/");
 });
 
-test("explains the product through one concrete decision story", async ({ page }) => {
+test("offers concrete guided decision cases", async ({ page }) => {
   await page.goto("/");
 
-  const example = page.getByLabel("Example decision timeline");
-  await expect(page.getByRole("heading", { name: "Choose a case and see when a reasonable decision becomes questionable." })).toBeVisible();
-  await expect(example).toContainText("Choose Vendor B");
-  await expect(example).toContainText("Delivery moves to next quarter");
-  await expect(example).toContainText("Rationexa surfaces the conflict");
-  await expect(page.getByRole("link", { name: "Walk through the identity case" })).toHaveAttribute("href", "/workspace?sample=vendor-review");
+  await expect(page.getByRole("heading", { name: "Start with a decision you recognize." })).toBeVisible();
   const cases = page.getByRole("region", { name: "Guided decision cases" });
   await expect(cases.getByRole("link")).toHaveCount(3);
+  await expect(cases.getByRole("link", { name: /Choose an identity provider/ })).toHaveAttribute("href", "/workspace?sample=vendor-review");
   await expect(cases).toContainText("Launch an annual starter plan");
   await expect(cases).toContainText("Adopt a managed search service");
 });
@@ -144,7 +140,7 @@ test("keeps the landing story readable without horizontal scrolling on mobile", 
 
   await expect(page.getByRole("link", { name: "Rationexa home" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Try a sample decision" }).first()).toBeVisible();
-  await expect(page.getByText("Every decision has a living trail.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI proposes. A person decides." })).toBeVisible();
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight / 2 }));
   await expect.poll(async () => navigation.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBe(0);
