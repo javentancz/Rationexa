@@ -1,1 +1,2 @@
-24.19.0
+24.20.0
+# Keep local development aligned with the Node.js 24 LTS CI runtime.
