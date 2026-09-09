@@ -13,7 +13,7 @@ For example: you choose a vendor expecting a feature before launch. Its roadmap
 slips. Rationexa connects that update to the original assumption so you can
 record what to do next.
 
-[Try the staging preview](https://rationexa-web-staging.vercel.app/) ·
+[Public preview](https://rationexa.site/) ·
 [Report an issue](https://github.com/javentancz/Rationexa/issues)
 
 ## Try it locally
@@ -49,9 +49,9 @@ default; see the [operations guide](ops/README.md) before deploying publicly.
 - **Private workspaces:** guest trials expire after 24 hours; accounts keep
   durable history. Read-only share links expire and can be revoked.
 
-Version 0.2.0 is a supervised pilot. The hosted preview may be reset; use sample
+Version 0.2.0 is a supervised pilot. The public preview may be reset; use sample
 or non-confidential material. Deterministic examples demonstrate the workflow,
-not general AI accuracy. See the [privacy policy](https://rationexa-web-staging.vercel.app/privacy).
+not general AI accuracy. See the [privacy policy](https://rationexa.site/privacy).
 
 ## Development
 
