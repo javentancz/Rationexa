@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-rationexa}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rationexa}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -36,7 +36,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       SESSION_COOKIE_SAMESITE: lax
-      PASSWORD_RESET_DEV_MODE: ${PASSWORD_RESET_DEV_MODE:-true}
+      PASSWORD_RESET_DEV_MODE: ${PASSWORD_RESET_DEV_MODE:-false}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
@@ -45,7 +45,7 @@ services:
       SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
       CUSTOM_PROVIDER_ALLOWED_HOSTS: ${CUSTOM_PROVIDER_ALLOWED_HOSTS:-}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
       interval: 5s
@@ -69,7 +69,7 @@ services:
       RATIONEXA_API_URL: http://api:8000
       NEXT_TELEMETRY_DISABLED: "1"
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
       interval: 10s

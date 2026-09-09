@@ -14,7 +14,7 @@ const models = {
 };
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "http://localhost:3000",
+  "Access-Control-Allow-Origin": `http://localhost:${process.env.E2E_WEB_PORT ?? "3000"}`,
   "Access-Control-Allow-Credentials": "true",
 };
 const workspace = {

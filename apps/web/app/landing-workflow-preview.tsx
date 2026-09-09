@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, MessageSquareText, ShieldCheck } from "lucide-react";
+import { FileText, MessageSquareText } from "lucide-react";
 import { type KeyboardEvent, useRef, useState } from "react";
 
 const steps = ["Import", "Review", "Finalize", "Revisit"] as const;
@@ -22,9 +22,9 @@ export function LandingWorkflowPreview() {
   }
 
   return <div className="landing-product-stage" aria-label="Interactive decision review example">
-    <div className="landing-stage-glow" />
+
     <div className="landing-app-window">
-      <div className="landing-window-bar"><div><i /><i /><i /></div><span>Decision workflow / {steps[activeStep - 1]}</span><em>Human reviewed</em></div>
+      <div className="landing-window-bar"><span>Sample decision / {steps[activeStep - 1]}</span><em>Human reviewed</em></div>
       <div className="landing-workflow-rail" role="tablist" aria-label="Decision workflow preview">
         {steps.map((step, index) => {
           const number = index + 1;
@@ -43,14 +43,13 @@ export function LandingWorkflowPreview() {
           ><span>{number}</span><strong>{step}</strong></button>;
         })}
       </div>
-      <div id="landing-workflow-panel" role="tabpanel" aria-labelledby={`landing-step-tab-${activeStep}`} className="landing-decision-panel">
+      <div key={activeStep} id="landing-workflow-panel" role="tabpanel" aria-labelledby={`landing-step-tab-${activeStep}`} className="landing-decision-panel">
         {activeStep === 1 ? <ImportPreview /> : null}
         {activeStep === 2 ? <ReviewPreview /> : null}
         {activeStep === 3 ? <FinalizePreview /> : null}
         {activeStep === 4 ? <RevisitPreview /> : null}
       </div>
     </div>
-    <div className="landing-float-note"><ShieldCheck aria-hidden="true" /><span><strong>AI proposes</strong><small>A human confirms</small></span></div>
   </div>;
 }
 

@@ -26,8 +26,8 @@ human judgments.
 
 ## Development setup
 
-Follow the [Docker trial](README.md#one-command-docker-trial) or the
-[manual local setup](README.md#full-local-development-setup). PostgreSQL is the
+Follow the [Docker trial](README.md#try-it-locally) or the
+[manual local setup](docs/development.md#full-local-development-setup). PostgreSQL is the
 supported shared and pilot database; SQLite remains available for isolated
 offline tests and demos.
 

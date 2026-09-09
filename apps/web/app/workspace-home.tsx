@@ -92,9 +92,9 @@ export default function Home() {
   const [libraryQuery, setLibraryQuery] = useState("");
   const [debouncedLibraryQuery, setDebouncedLibraryQuery] = useState("");
   const [libraryCriticality, setLibraryCriticality] = useState<"all" | Criticality>("all");
-   const [revisitHistory, setRevisitHistory] = useState<RevisitResult[]>([]);
-   const [exportBusy, setExportBusy] = useState(false);
-   const [pdfExportBusy, setPdfExportBusy] = useState(false);
+  const [revisitHistory, setRevisitHistory] = useState<RevisitResult[]>([]);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [pdfExportBusy, setPdfExportBusy] = useState(false);
   const [shares, setShares] = useState<Share[]>([]);
   const [shareBusy, setShareBusy] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
@@ -1171,7 +1171,7 @@ export default function Home() {
 
         {view === "workspace" && guidedSample ? <section className="guided-sample-banner" aria-label="Guided example"><span className="guided-sample-step">{workflowView}</span><div><small>{guidedSamples[guidedSample].label} guide · Step {workflowView} of 4</small><strong>{guidedStep.title}</strong><p>{guidedStep.copy}</p>{workflowView === 4 && decision ? <button type="button" onClick={() => setEvidence(guidedSamples[guidedSample].evidence)}>Use the sample evidence →</button> : null}</div><button type="button" className="guided-sample-exit" aria-label="Exit guided example" onClick={() => { setGuidedSample(null); window.sessionStorage.removeItem("rationexa-guided-sample-v1"); }}><X aria-hidden="true" /></button></section> : null}
 
-        {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} onDiscardDraft={() => setConfirmingDraftDiscard(true)} library={library} loading={libraryLoading} refreshing={decisionLibraryQuery.isFetching && !decisionLibraryQuery.isPending} guest={guestMode} onOpenAccount={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} onPrefetchDecision={prefetchDecision} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={() => { resetWorkspace(); navigateTo("workspace"); }} formatDateTime={formatDateTime} /> : null}
+        {view === "library" ? <DecisionLibraryView query={libraryQuery} onQueryChange={setLibraryQuery} criticality={libraryCriticality} onCriticalityChange={setLibraryCriticality} hasCurrentDraft={hasCurrentDraft} currentDraftTitle={currentDraftTitle} currentDraftStep={currentDraftStep} onResumeDraft={() => navigateTo("workspace")} onDiscardDraft={() => setConfirmingDraftDiscard(true)} library={library} loading={libraryLoading} refreshing={decisionLibraryQuery.isFetching && !decisionLibraryQuery.isPending} guest={guestMode} onOpenAccount={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} onPrefetchDecision={prefetchDecision} onDeleteDecision={(id, title) => { setDeleteTitle(title); setConfirmingDeleteFor(id); }} onCreateDecision={requestNewDecision} formatDateTime={formatDateTime} /> : null}
 
         {view === "usage" ? <UsageView guest={guestMode} usage={usage} pilotMetrics={pilotMetrics} loading={usageLoading} onRefresh={() => { void loadUsage(true); }} onOpenSettings={() => navigateTo("settings")} onOpenDecision={(id) => { void openDecision(id); }} /> : null}
 
@@ -1179,7 +1179,7 @@ export default function Home() {
 
         {view === "workspace" && runningJobs.length ? <section className="job-progress" aria-live="polite"><div><strong>{runningJobs.length > 1 ? `Comparing ${runningJobs.length} models` : runningJobs[0].phase}</strong><span>{activeProgress}% average progress · You can leave this running or cancel it.</span></div><div className="job-track"><span style={{ width: `${activeProgress}%` }} /></div><button type="button" onClick={cancelActiveJobs}>Cancel {runningJobs.length > 1 ? "both" : ""}</button></section> : null}
 
-        {view === "workspace" && workflowView === 1 && !extraction && !decision ? <ImportStage sourceMode={sourceMode} onSourceModeChange={setSourceMode} source={source} onSourceChange={setSource} file={file} onFileChange={setFile} models={models} selectedModelId={selectedModelId} recommendedModelId={recommendedModelId} onModelSelect={setSelectedModelId} selectedModel={selectedModel} extracting={busyPhase === "extract"} draftSavedAt={draftSavedAt} guest={guestMode} formatDateTime={formatDateTime} onExtract={extract} /> : null}
+        {view === "workspace" && workflowView === 1 && !extraction && !decision ? <ImportStage onChooseSample={(id) => { setGuidedSample(id); setSource(guidedSamples[id].source); setSourceMode("paste"); window.sessionStorage.setItem("rationexa-guided-sample-v1", id); }} sourceMode={sourceMode} onSourceModeChange={setSourceMode} source={source} onSourceChange={setSource} file={file} onFileChange={setFile} models={models} selectedModelId={selectedModelId} recommendedModelId={recommendedModelId} onModelSelect={setSelectedModelId} selectedModel={selectedModel} extracting={busyPhase === "extract"} draftSavedAt={draftSavedAt} guest={guestMode} formatDateTime={formatDateTime} onExtract={extract} /> : null}
 
         {view === "workspace" && workflowView === 1 && decision ? <section className="card stage-snapshot">
           <div className="snapshot-heading"><div><span className="snapshot-step">01</span><span className="overline">Import snapshot</span><h2>Original decision context</h2><p>This is the source-backed context preserved with the saved record.</p></div><button className="primary subtle-primary" type="button" onClick={() => setWorkflowView(2)}>View review →</button></div>

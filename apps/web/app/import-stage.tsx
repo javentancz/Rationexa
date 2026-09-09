@@ -1,7 +1,8 @@
 "use client";
 
 import type { FormEventHandler } from "react";
-import { FileUp, ListChecks, Save, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, FileUp, Save, ShieldCheck } from "lucide-react";
+import { guidedSamples, type GuidedSampleId } from "./guided-samples";
 import { ModelPicker } from "./model-picker";
 import type { ModelOption } from "./workspace-types";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
 type Props = {
+  onChooseSample: (id: GuidedSampleId) => void;
   sourceMode: "paste" | "file";
   onSourceModeChange: (mode: "paste" | "file") => void;
   source: string;
@@ -27,16 +29,22 @@ type Props = {
   onExtract: FormEventHandler<HTMLFormElement>;
 };
 
-export function ImportStage({ sourceMode, onSourceModeChange, source, onSourceChange, file, onFileChange, models, selectedModelId, recommendedModelId, onModelSelect, selectedModel, extracting, draftSavedAt, guest, formatDateTime, onExtract }: Props) {
+export function ImportStage({ onChooseSample, sourceMode, onSourceModeChange, source, onSourceChange, file, onFileChange, models, selectedModelId, recommendedModelId, onModelSelect, selectedModel, extracting, draftSavedAt, guest, formatDateTime, onExtract }: Props) {
   return <section className="card import-card">
-    <div className="import-heading"><span className="stage-number">1</span><div><span className="stage-label">Import</span><h2>Bring in a decision</h2><p>Paste the source that explains what was chosen and why.</p></div><Badge variant="secondary" className="privacy-badge"><ShieldCheck aria-hidden="true" />{guest ? "Private trial" : "Private workspace"}</Badge></div>
+    <div className="import-heading"><span className="stage-number">1</span><div><span className="stage-label">Import</span><h2>Bring in a decision</h2><p>What did you choose, and why? Start with the original note.</p></div><Badge variant="secondary" className="privacy-badge"><ShieldCheck aria-hidden="true" />{guest ? "Private trial" : "Private workspace"}</Badge></div>
     <div className="import-workspace">
       <form onSubmit={onExtract} className="import-source-panel">
-        <div className="import-source-toolbar"><div><strong>Decision source</strong><small>Paste text or upload one supported document</small></div><Tabs value={sourceMode} onValueChange={(value) => onSourceModeChange(value as "paste" | "file")}><TabsList className="source-tabs"><TabsTrigger value="paste">Paste text</TabsTrigger><TabsTrigger value="file">Upload file</TabsTrigger></TabsList></Tabs></div>
-        {sourceMode === "paste" ? <label className="field import-source-field"><span className="sr-only">Decision source</span><Textarea aria-label="Decision source" value={source} onChange={(event) => onSourceChange(event.target.value)} rows={13} placeholder="Paste the original decision context here. Include the decision, rationale, constraints, assumptions, unknowns, and revisit conditions when available…" /><small>{source.trim() ? `${source.trim().length.toLocaleString()} characters` : "Your draft stays on this device until you submit it."}</small></label> : <label className={`upload-zone ${file ? "has-file" : ""}`}><input aria-label="Decision file" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" onChange={(event) => onFileChange(event.target.files?.[0] ?? null)} /><span className="upload-icon"><FileUp aria-hidden="true" /></span><strong>{file ? file.name : "Choose a PDF, Markdown, or text file"}</strong><small>{file ? "Ready to extract" : "Maximum file size: 10 MB"}</small></label>}
-        <div className="import-action-bar"><div className="import-model-choice"><span>AI step</span><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={onModelSelect} disabled={extracting} label="Extraction model" /></div><span className="draft-assurance"><span>{guest ? "Free deterministic extraction. No model key is required." : selectedModel?.availability_reason ?? `${selectedModel?.label ?? "The selected model"} proposes structure; you review every premise.`}</span>{source.trim() && draftSavedAt ? <small><Save aria-hidden="true" />Draft saved · {formatDateTime(draftSavedAt)}</small> : null}</span><button className="primary import-submit" aria-label={extracting ? `Extracting with ${selectedModel?.label ?? "model"}` : undefined} aria-live="polite" disabled={extracting || !selectedModelId || selectedModel?.available === false || (sourceMode === "paste" ? !source.trim() : !file)}>{extracting ? <><span className="spinner" />Extracting…</> : guest ? "Try deterministic extraction →" : "Extract decision →"}</button></div>
+        <div className="import-source-toolbar"><div><strong>Decision source</strong></div><Tabs value={sourceMode} onValueChange={(value) => onSourceModeChange(value as "paste" | "file")}><TabsList className="source-tabs"><TabsTrigger value="paste">Paste text</TabsTrigger><TabsTrigger value="file">Upload file</TabsTrigger></TabsList></Tabs></div>
+        {sourceMode === "paste" ? <label className="field import-source-field"><span className="sr-only">Decision source</span><Textarea aria-label="Decision source" value={source} onChange={(event) => onSourceChange(event.target.value)} rows={10} placeholder="We chose… because…
+
+This depends on…
+
+Revisit if…" /><small>{source.trim() ? `${source.trim().length.toLocaleString()} characters` : "Your draft stays on this device until you submit it."}</small></label> : <label className={`upload-zone ${file ? "has-file" : ""}`}><input aria-label="Decision file" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf" onChange={(event) => onFileChange(event.target.files?.[0] ?? null)} /><span className="upload-icon"><FileUp aria-hidden="true" /></span><strong>{file ? file.name : "Choose a PDF, Markdown, or text file"}</strong><small>{file ? "Ready to extract" : "Maximum file size: 10 MB"}</small></label>}
+        {!source.trim() && !file ? <div className="import-samples" aria-label="Sample decisions"><span>Or start with an example</span>{Object.entries(guidedSamples).map(([id, sample]) => <button type="button" key={id} onClick={() => onChooseSample(id as GuidedSampleId)}>{sample.label}<ArrowRight aria-hidden="true" /></button>)}</div> : null}
+        <div className="import-action-bar"><div className="import-model-choice"><span>Run with</span><ModelPicker compact models={models} selectedId={selectedModelId} recommendedId={recommendedModelId} onSelect={onModelSelect} disabled={extracting} label="Extraction model" /></div><span className="draft-assurance"><span>{guest ? "No key needed. You review every premise." : selectedModel?.availability_reason ?? `${selectedModel?.label ?? "The selected model"} proposes structure; you review every premise.`}</span>{source.trim() && draftSavedAt ? <small><Save aria-hidden="true" />Draft saved · {formatDateTime(draftSavedAt)}</small> : null}</span><button className="primary import-submit" aria-label={extracting ? `Extracting with ${selectedModel?.label ?? "model"}` : undefined} aria-live="polite" disabled={extracting || !selectedModelId || selectedModel?.available === false || (sourceMode === "paste" ? !source.trim() : !file)}>{extracting ? <><span className="spinner" />Extracting…</> : guest ? "Try deterministic extraction →" : "Extract decision →"}</button></div>
       </form>
-      <aside className="import-explainer" aria-label="Extraction summary"><span className="import-explainer-icon"><Sparkles aria-hidden="true" /></span><div><h3>You review the result</h3><p>Extraction creates a draft. Nothing is saved as truth yet.</p></div><ul><li><ListChecks aria-hidden="true" /><span><strong>Decision</strong><small>Choice and rationale</small></span></li><li><ListChecks aria-hidden="true" /><span><strong>Premises</strong><small>What the choice depends on</small></span></li><li><ListChecks aria-hidden="true" /><span><strong>Sources</strong><small>Exact supporting excerpts</small></span></li></ul></aside>
+
     </div>
+    <p className="import-review-note"><ShieldCheck aria-hidden="true" />Extraction creates a draft. Only your review makes it a decision record.</p>
   </section>;
 }

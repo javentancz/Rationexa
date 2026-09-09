@@ -137,3 +137,12 @@ command as well.
 After every backup, run `verify`. Before inviting pilot users, perform one
 restoration drill into an isolated database and confirm `/readyz`, login, a
 saved decision, its evidence history, and one export.
+
+## Docker network exposure
+
+The trial Compose file binds web, API, and PostgreSQL ports to `127.0.0.1`.
+For remote access, put an HTTPS reverse proxy in front of the web service and
+keep the database private. Set a unique database password, the public URL,
+allowed origins, secure session cookies, and SMTP before accepting users.
+Development password-reset links are disabled by default; configure SMTP for
+account recovery. Never enable `PASSWORD_RESET_DEV_MODE` on a public instance.

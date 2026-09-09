@@ -195,7 +195,7 @@ async def add_operational_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
-    if request.url.path.startswith("/v1/shares/"):
+    if request.url.path.startswith("/v1/"):
         response.headers["Cache-Control"] = "private, no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
     if settings.session_cookie_secure:
@@ -710,7 +710,8 @@ def create_artifact(route: Request, payload: ArtifactCreate, db: Db) -> Artifact
 
 @app.post("/v1/artifacts/upload", response_model=ArtifactRead, status_code=status.HTTP_201_CREATED)
 async def upload_artifact(route: Request, file: UploadFile, db: Db) -> ArtifactRow:
-    content = await file.read()
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    content = await file.read(10_000_001)
     if len(content) > 10_000_000:
         raise HTTPException(status_code=413, detail="Artifact exceeds the 10 MB Stage 1 limit")
     return save_artifact(
@@ -719,7 +720,7 @@ async def upload_artifact(route: Request, file: UploadFile, db: Db) -> ArtifactR
         file.content_type or "application/octet-stream",
         content,
         "user_supplied",
-        active_workspace_id(db, extract_session_token(route)),
+        workspace_id,
     )
 
 

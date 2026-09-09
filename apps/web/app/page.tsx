@@ -3,9 +3,7 @@ import {
   ArrowRight,
   Check,
   FileSearch,
-  Fingerprint,
   History,
-  LockKeyhole,
   ShieldCheck,
   UserCheck,
 } from "lucide-react";
@@ -26,7 +24,7 @@ export default function LandingPage() {
     <main className="landing-page">
       <nav className="landing-nav" aria-label="Main navigation">
         <Link className="landing-brand" href="/" aria-label="Rationexa home">
-          <span>R</span><strong>Rationexa</strong>
+          <span aria-hidden="true">R</span><strong>Rationexa</strong>
         </Link>
         <div className="landing-nav-links">
           <a href="#example">Examples</a>
@@ -42,8 +40,9 @@ export default function LandingPage() {
       <section className="landing-hero" id="product">
         <div className="landing-hero-copy">
           <span className="landing-eyebrow">Decision memory for teams</span>
-          <h1>Know why you chose it. Know when to revisit it.</h1>
-          <p>Preserve the reasoning behind a decision, then test new evidence against it.</p>
+          <h1>Remember the why.
+            Revisit with evidence.</h1>
+          <p>Turn decision notes into reviewed reasoning. See what needs another look when the facts change.</p>
           <div className="landing-actions">
             <Link className="landing-primary" href="/workspace?sample=vendor-review">Try a sample decision <ArrowRight aria-hidden="true" /></Link>
             <Link className="landing-secondary" href="/workspace">Use my own decision</Link>
@@ -52,17 +51,10 @@ export default function LandingPage() {
         <LandingWorkflowPreview />
       </section>
 
-      <section className="landing-tr-strip" aria-label="Product principles">
-        <span><Fingerprint aria-hidden="true" /><strong>Source grounded</strong><small>Exact excerpts stay attached</small></span>
-        <span><UserCheck aria-hidden="true" /><strong>Human reviewed</strong><small>You control the record</small></span>
-        <span><LockKeyhole aria-hidden="true" /><strong>Private by default</strong><small>No key needed to try it</small></span>
-      </section>
-
       <section id="example" className="landing-example">
         <div className="landing-section-heading">
-          <span className="landing-eyebrow">Guided examples</span>
           <h2>Start with a decision you recognize.</h2>
-          <p>Choose a case. The source and later evidence are ready to review.</p>
+          <p>Three sample cases. Original reasoning, new evidence, your judgment.</p>
         </div>
         <div className="landing-case-showcase" role="region" aria-label="Guided decision cases">
           {Object.entries(guidedSamples).map(([id, sample], index) => (
@@ -78,7 +70,6 @@ export default function LandingPage() {
 
       <section id="how-it-works" className="landing-how">
         <div className="landing-section-heading">
-          <span className="landing-eyebrow">How it works</span>
           <h2>One record. Four clear actions.</h2>
         </div>
         <ol className="landing-steps">
@@ -107,13 +98,13 @@ export default function LandingPage() {
         <span className="landing-privacy-icon"><ShieldCheck aria-hidden="true" /></span>
         <div>
           <h2>Try it without an account or model key.</h2>
-          <p>Your guest workspace is isolated and expires automatically. Create an account only when you want durable history or encrypted BYOK.</p>
+          <p>Guest trials last 24 hours. Create an account to keep your decisions.</p>
         </div>
-        <Link className="landing-primary" href="/workspace">Start a private trial <ArrowRight aria-hidden="true" /></Link>
+        <Link className="landing-primary" href="/workspace">Open workspace <ArrowRight aria-hidden="true" /></Link>
       </section>
 
       <footer className="landing-footer">
-        <Link className="landing-brand" href="/"><span>R</span><strong>Rationexa</strong></Link>
+        <Link className="landing-brand" href="/"><span aria-hidden="true">R</span><strong>Rationexa</strong></Link>
         <p>Human-reviewed decision memory.</p>
         <div><Link href="/privacy">Privacy &amp; data</Link><a href="mailto:javentanzhe@gmail.com?subject=Rationexa%20support">Support</a><Link href="/workspace">Workspace</Link></div>
       </footer>

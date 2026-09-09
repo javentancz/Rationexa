@@ -18,7 +18,7 @@ test("presents the product without loading private workspace data", async ({ pag
 
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: /Know why you chose it/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Remember the why/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Try it without an account or model key." })).toBeVisible();
   expect(bootstrapRequests).toBe(0);
 });
@@ -145,4 +145,14 @@ test("keeps the landing story readable without horizontal scrolling on mobile", 
   await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight / 2 }));
   await expect.poll(async () => navigation.evaluate((element) => Math.round(element.getBoundingClientRect().top))).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+
+test("offers samples inside an empty workspace without replacing typed work", async ({ page }) => {
+  await page.goto("/workspace");
+  await page.getByRole("button", { name: "Build or buy", exact: true }).click();
+  await expect(page.getByLabel("Decision source")).toHaveValue(/managed search service/);
+  await expect(page.getByRole("region", { name: "Guided example" })).toBeVisible();
+  await page.getByLabel("Decision source").fill("My own decision reasoning.");
+  await expect(page.getByRole("button", { name: "Launch pricing", exact: true })).toHaveCount(0);
 });

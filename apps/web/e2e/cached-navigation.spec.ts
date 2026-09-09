@@ -123,3 +123,17 @@ test("renders a stale saved workspace while hard-refresh revalidation is pending
   await expect(page.getByRole("heading", { name: "Your decisions" })).toBeVisible();
   releaseRevalidation();
 });
+
+
+test("asks before replacing an unfinished draft from the empty library", async ({ page }) => {
+  await page.goto("/workspace");
+  await page.getByLabel("Decision source").fill("Keep this unfinished reasoning.");
+  await page.getByRole("button", { name: "All decisions", exact: true }).click();
+  await page.getByLabel("Search decisions").fill("no-match-0908");
+  await page.getByRole("button", { name: "New decision", exact: true }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("Start a new decision?");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Continue current draft" }).click();
+  await expect(page.getByLabel("Decision source")).toHaveValue("Keep this unfinished reasoning.");
+});

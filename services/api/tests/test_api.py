@@ -915,3 +915,24 @@ def test_rename_decision_rejects_an_empty_title() -> None:
 def test_delete_unknown_decision_returns_not_found() -> None:
     with TestClient(app) as client:
         assert client.delete("/v1/decisions/missing").status_code == 404
+
+
+def test_private_api_responses_are_not_cacheable() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/bootstrap")
+        assert response.status_code == 200
+        assert "no-store" in response.headers["cache-control"]
+        assert response.headers["pragma"] == "no-cache"
+
+
+def test_oversized_upload_is_rejected_without_persisting() -> None:
+    with TestClient(app) as client:
+        with SessionLocal() as db:
+            before = db.scalar(select(func.count()).select_from(ArtifactRow))
+        response = client.post(
+            "/v1/artifacts/upload",
+            files={"file": ("oversized.txt", b"x" * 10_000_001, "text/plain")},
+        )
+        assert response.status_code == 413
+        with SessionLocal() as db:
+            assert db.scalar(select(func.count()).select_from(ArtifactRow)) == before
