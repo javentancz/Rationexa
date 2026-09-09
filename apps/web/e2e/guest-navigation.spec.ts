@@ -48,5 +48,5 @@ test("lets a hosted guest explore tabs and preserves the draft until a private a
   await expect(page).toHaveURL(/\/workspace$/);
   await expect(page.getByLabel("Decision source")).toHaveValue("A guest draft that should survive navigation.");
 
-  await expect(page.getByRole("button", { name: "Try deterministic extraction →" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Try rules demo →" })).toBeEnabled();
 });

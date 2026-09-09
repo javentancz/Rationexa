@@ -2155,3 +2155,11 @@ body,.sidebar,.workflow-pane,.workspace,.workbench-shell,.card,.topbar,.landing-
   .landing-workflow-rail > button { gap:4px; }
   .landing-hero h1 { font-size:42px; }
 }
+
+/* Explain the selected runtime without changing the review authority. */
+.rules-demo-notice { display:flex; align-items:center; gap:20px; margin:0 0 20px; padding:16px 18px; border:1px solid var(--line); border-radius:12px; background:var(--accent-soft); }
+.rules-demo-notice > div { flex:1; min-width:0; }
+.rules-demo-notice strong { color:var(--ink); font-size:14px; }
+.rules-demo-notice p { margin:6px 0 0; color:var(--muted); font-size:13px; line-height:1.5; }
+.rules-demo-notice a { flex-shrink:0; color:var(--accent-dark); font-size:13px; font-weight:650; text-underline-offset:3px; }
+@media (max-width: 760px) { .rules-demo-notice { align-items:flex-start; flex-direction:column; gap:12px; } }

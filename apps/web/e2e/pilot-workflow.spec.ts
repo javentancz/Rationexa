@@ -8,8 +8,10 @@ test("completes the supervised pilot workflow in the browser", async ({ page }) 
     "We decided to use Vendor B because it was assumed that Vendor B does not support external users. "
     + "The service must support SAML. Revisit if Vendor B introduces external-user support.",
   );
-  await page.getByRole("button", { name: "Extract decision →" }).click();
+  await page.getByRole("button", { name: "Try rules demo →" }).click();
   await expect(page.getByRole("heading", { name: "Review the extracted decision" })).toBeVisible();
+
+  await expect(page.getByRole("complementary", { name: "Generated with rules" })).toContainText("Exact source excerpts stay unchanged");
 
   const premiseCards = page.locator(".premise-card");
   const premiseCount = await premiseCards.count();

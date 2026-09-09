@@ -198,7 +198,7 @@ test("keeps extraction progress inside the import card", async ({ page }) => {
   });
   await page.goto("/workspace");
   await page.getByLabel("Decision source").fill("Decision context for an extraction progress layout test.");
-  await page.getByRole("button", { name: "Extract decision" }).click();
+  await page.getByRole("button", { name: "Try rules demo" }).click();
 
   const progressButton = page.getByRole("button", { name: "Extracting with Deterministic rules" });
   await expect(progressButton).toContainText("Extracting…");
@@ -379,4 +379,27 @@ test("unavailable models explain the problem and block extraction", async ({ pag
 
   await expect(page.getByText("Not installed. Run `ollama pull missing:latest`.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Extract decision →" })).toBeDisabled();
+});
+
+
+test("explains the rules demo and keeps the draft when connecting a model", async ({ page }) => {
+  await mockBootstrap(page);
+  await page.goto("/workspace");
+  const notice = page.getByRole("complementary", { name: "About the rules demo" });
+  await expect(notice).toContainText("not AI analysis");
+  await expect(page.getByRole("button", { name: "Extraction model: Rules demo · No AI" })).toBeVisible();
+  await page.getByLabel("Decision source").fill("Keep my reasoning while I connect a model.");
+  await notice.getByRole("link", { name: "Connect an AI model" }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await page.goto("/workspace");
+  await expect(page.getByLabel("Decision source")).toHaveValue("Keep my reasoning while I connect a model.");
+});
+
+test("hides the rules notice when an AI runtime is selected", async ({ page }) => {
+  await mockBootstrap(page);
+  const catalog = { ...models, default_model_id: "ollama/local", models: [{ ...models.models[0], id: "ollama/local", provider: "ollama", model: "local", label: "Local AI model" }] };
+  await page.route(/\/v1\/bootstrap(?:\?.*)?$/, (route) => route.fulfill({ headers: corsHeaders, json: { models: catalog, workspace, library: { items: [], total: 0 } } }));
+  await page.goto("/workspace");
+  await expect(page.getByRole("button", { name: "Extraction model: Local AI model" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "About the rules demo" })).toHaveCount(0);
 });

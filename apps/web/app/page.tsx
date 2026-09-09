@@ -98,7 +98,7 @@ export default function LandingPage() {
         <span className="landing-privacy-icon"><ShieldCheck aria-hidden="true" /></span>
         <div>
           <h2>Try it without an account or model key.</h2>
-          <p>Guest trials last 24 hours. Create an account to keep your decisions.</p>
+          <p>Guest trials use fixed rules, not AI analysis, and last 24 hours. Create an account to keep decisions and connect your own AI model key.</p>
         </div>
         <Link className="landing-primary" href="/workspace">Open workspace <ArrowRight aria-hidden="true" /></Link>
       </section>

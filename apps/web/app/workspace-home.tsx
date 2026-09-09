@@ -12,6 +12,7 @@ import { ApiError, apiResponse as req, handleAuthenticationResponse, responseJso
 import { ModelPicker } from "./model-picker";
 import { FinalizeConfirmation } from "./finalize-stage";
 import { DecisionLibraryView } from "./decision-library-view";
+import { RulesDemoNotice } from "./rules-demo-notice";
 import { ImportStage } from "./import-stage";
 import { UsageView } from "./usage-view";
 import { accountSettingsKey, decisionWorkspaceKey, fetchAccountSettings, fetchDecisionWorkspace, fetchUsageDashboard, usageDashboardKey } from "./workspace-api";
@@ -1202,7 +1203,8 @@ export default function Home() {
               <section className="review-layout review-layout-aligned">
               <div className="review-main">
                 <section className="card decision-summary">
-                  <div className="review-stage-heading"><span className="stage-number">2</span><div><span className="overline">Review with {extraction.model}</span><h2>Review the extracted decision</h2><p>Correct the summary, then verify each premise.</p></div><button className="text-button" onClick={requestNewDecision}>Start over</button></div>
+                  <div className="review-stage-heading"><span className="stage-number">2</span><div><span className="overline">{extraction.provider === "deterministic" ? "Rules demo · No AI" : `Review with ${extraction.model}`}</span><h2>Review the extracted decision</h2><p>Correct the summary, then verify each premise.</p></div><button className="text-button" onClick={requestNewDecision}>Start over</button></div>
+                  {extraction.provider === "deterministic" ? <RulesDemoNotice review /> : null}
                   <div className="field-grid">
                     <label className="field full"><span>Decision title</span><input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
                     <label className="field full"><span>Decision question</span><input value={draft.question} onChange={(event) => updateDraft("question", event.target.value)} /></label>
