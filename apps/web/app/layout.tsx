@@ -3,6 +3,7 @@ import Script from "next/script";
 import "./styles.css";
 import { Providers } from "./providers";
 import { WebAnalytics } from "./web-analytics";
+import { WebSpeedInsights } from "./web-speed-insights";
 
 export const metadata: Metadata = {
   title: "Rationexa | Human-reviewed decision memory",
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </Script>
         <Providers>{children}</Providers>
         <WebAnalytics />
+        <WebSpeedInsights />
       </body>
     </html>
   );
