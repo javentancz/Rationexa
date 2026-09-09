@@ -54,11 +54,11 @@ export default function LandingPage() {
       <section id="example" className="landing-example">
         <div className="landing-section-heading">
           <h2>Start with a decision you recognize.</h2>
-          <p>Three sample cases. Original reasoning, new evidence, your judgment.</p>
+          <p>Six sample cases. Original reasoning, new evidence, your judgment.</p>
         </div>
         <div className="landing-case-showcase" role="region" aria-label="Guided decision cases">
-          {Object.entries(guidedSamples).map(([id, sample], index) => (
-            <Link key={id} href={`/workspace?sample=${id}`} className={index === 0 ? "landing-case-card featured" : "landing-case-card"}>
+          {Object.entries(guidedSamples).map(([id, sample]) => (
+            <Link key={id} href={`/workspace?sample=${id}`} className="landing-case-card">
               <span>{sample.audience}</span>
               <strong>{sample.title}</strong>
               <p>{sample.summary}</p>

@@ -39,7 +39,7 @@ test("offers concrete guided decision cases", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Start with a decision you recognize." })).toBeVisible();
   const cases = page.getByRole("region", { name: "Guided decision cases" });
-  await expect(cases.getByRole("link")).toHaveCount(3);
+  await expect(cases.getByRole("link")).toHaveCount(6);
   await expect(cases.getByRole("link", { name: /Choose an identity provider/ })).toHaveAttribute("href", "/workspace?sample=vendor-review");
   await expect(cases).toContainText("Launch an annual starter plan");
   await expect(cases).toContainText("Adopt a managed search service");
@@ -156,3 +156,17 @@ test("offers samples inside an empty workspace without replacing typed work", as
   await page.getByLabel("Decision source").fill("My own decision reasoning.");
   await expect(page.getByRole("button", { name: "Launch pricing", exact: true })).toHaveCount(0);
 });
+
+
+for (const sample of [
+  { title: "Roll out a new checkout", source: /payment failures/, guide: "Release rollout" },
+  { title: "Keep support on business hours", source: /overnight shift/, guide: "Support coverage" },
+  { title: "Keep audit logs for one year", source: /12 months/, guide: "Data retention" },
+]) {
+  test(`loads the ${sample.guide} example from the landing page`, async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("region", { name: "Guided decision cases" }).getByRole("link", { name: new RegExp(sample.title) }).click();
+    await expect(page.getByLabel("Decision source")).toHaveValue(sample.source);
+    await expect(page.getByRole("region", { name: "Guided example" })).toContainText(sample.guide);
+  });
+}
