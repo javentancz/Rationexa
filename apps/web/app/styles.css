@@ -1725,7 +1725,7 @@ button { cursor:pointer; }
   .landing-nav { position:fixed; inset:0 0 auto; z-index:1000; min-height:66px; padding:calc(10px + env(safe-area-inset-top)) 16px 10px; }
   .landing-nav-links { display:none; }
   .landing-nav-actions { margin-left:auto; }
-  .landing-nav .landing-nav-cta { width:42px; padding:0; font-size:0; }
+  .landing-nav .landing-nav-cta { justify-content:center; width:42px; padding:0; font-size:0; }
   .landing-nav-cta svg { width:18px; }
   .landing-hero { width:calc(100% - 32px); gap:38px; padding:64px 0 72px; }
   .landing-hero h1 { font-size:clamp(44px,13vw,62px); }
@@ -2082,8 +2082,9 @@ body,.sidebar,.workflow-pane,.workspace,.workbench-shell,.card,.topbar,.landing-
 @media (max-width: 680px) {
   .landing-nav { min-height: 62px; }
   .landing-brand { font-size: 19px; }
-  .landing-nav .landing-nav-cta { font-size: 0; }
-  .landing-nav .landing-nav-cta::before { content: "Open"; font-size: 13px; }
+  .landing-nav .landing-nav-cta { width: 52px; gap: 0; font-size: 0; }
+  .landing-nav .landing-nav-cta::before { content: "Open"; font-size: 13px; line-height: 1; }
+  .landing-nav .landing-nav-cta svg { display: none; }
   .landing-hero { padding: 42px 0 58px; }
   .landing-hero h1 { font-size: clamp(40px, 12vw, 52px); }
   .landing-product-stage { padding-inline: 0; }
