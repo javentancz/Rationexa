@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   Check,
+  ExternalLink,
   FileSearch,
   History,
   ShieldCheck,
@@ -106,7 +107,14 @@ export default function LandingPage() {
       <footer className="landing-footer">
         <Link className="landing-brand" href="/"><span aria-hidden="true">R</span><strong>Rationexa</strong></Link>
         <p>Human-reviewed decision memory.</p>
-        <div><Link href="/privacy">Privacy &amp; data</Link><a href="mailto:javentanzhe@gmail.com?subject=Rationexa%20support">Support</a><Link href="/workspace">Workspace</Link></div>
+        <div>
+          <Link href="/privacy">Privacy &amp; data</Link>
+          <a href="mailto:javentanzhe@gmail.com?subject=Rationexa%20support">Support</a>
+          <a className="landing-github-link" href="https://github.com/javentancz" target="_blank" rel="noreferrer" aria-label="Javentan on GitHub">
+            GitHub<ExternalLink aria-hidden="true" />
+          </a>
+          <Link href="/workspace">Workspace</Link>
+        </div>
       </footer>
     </main>
   );
