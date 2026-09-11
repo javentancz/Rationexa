@@ -110,7 +110,7 @@ export default function LandingPage() {
         <div>
           <Link href="/privacy">Privacy &amp; data</Link>
           <a href="mailto:javentanzhe@gmail.com?subject=Rationexa%20support">Support</a>
-          <a className="landing-github-link" href="https://github.com/javentancz" target="_blank" rel="noreferrer" aria-label="Javentan on GitHub">
+          <a className="landing-github-link" href="https://github.com/javentancz/Rationexa" target="_blank" rel="noreferrer" aria-label="Rationexa repository on GitHub">
             GitHub<ExternalLink aria-hidden="true" />
           </a>
           <Link href="/workspace">Workspace</Link>
