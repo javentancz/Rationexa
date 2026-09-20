@@ -817,6 +817,13 @@
           "decision": {
             "$ref": "#/components/schemas/DecisionRead"
           },
+          "monitors": {
+            "items": {
+              "$ref": "#/components/schemas/MonitorRead"
+            },
+            "title": "Monitors",
+            "type": "array"
+          },
           "revisits": {
             "items": {
               "$ref": "#/components/schemas/RevisitRead"
@@ -1312,6 +1319,366 @@
           "best_for"
         ],
         "title": "ModelOption",
+        "type": "object"
+      },
+      "MonitorCreateRequest": {
+        "properties": {
+          "instructions": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Instructions",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "premise_id": {
+            "title": "Premise Id",
+            "type": "string"
+          },
+          "source_urls": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Source Urls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "premise_id",
+          "name",
+          "source_urls"
+        ],
+        "title": "MonitorCreateRequest",
+        "type": "object"
+      },
+      "MonitorEvidenceActionRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "keep_decision",
+              "request_clarification",
+              "amend_decision",
+              "replace_option",
+              "create_draft_ticket",
+              "dismiss"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "MonitorEvidenceActionRequest",
+        "type": "object"
+      },
+      "MonitorEvidenceRead": {
+        "properties": {
+          "confidence_band": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Confidence Band",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "draft_action": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Action"
+          },
+          "end_offset": {
+            "title": "End Offset",
+            "type": "integer"
+          },
+          "exact_excerpt": {
+            "title": "Exact Excerpt",
+            "type": "string"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "human_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Human Action"
+          },
+          "human_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Human Notes"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "monitor_id": {
+            "title": "Monitor Id",
+            "type": "string"
+          },
+          "recommendation": {
+            "title": "Recommendation",
+            "type": "string"
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/Relationship"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "source_title": {
+            "title": "Source Title",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          },
+          "start_offset": {
+            "title": "Start Offset",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "needs_review",
+              "reviewed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "submitted_by": {
+            "title": "Submitted By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "monitor_id",
+          "source_url",
+          "source_title",
+          "exact_excerpt",
+          "start_offset",
+          "end_offset",
+          "relationship",
+          "confidence_band",
+          "explanation",
+          "recommendation",
+          "submitted_by",
+          "status",
+          "created_at"
+        ],
+        "title": "MonitorEvidenceRead",
+        "type": "object"
+      },
+      "MonitorEvidenceSubmitRequest": {
+        "properties": {
+          "confidence_band": {
+            "default": "medium",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Confidence Band",
+            "type": "string"
+          },
+          "exact_excerpt": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Exact Excerpt",
+            "type": "string"
+          },
+          "explanation": {
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Explanation",
+            "type": "string"
+          },
+          "recommendation": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Recommendation",
+            "type": "string"
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/Relationship"
+          },
+          "source_content": {
+            "maxLength": 2000000,
+            "minLength": 1,
+            "title": "Source Content",
+            "type": "string"
+          },
+          "source_title": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Source Title",
+            "type": "string"
+          },
+          "source_url": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          },
+          "submitted_by": {
+            "default": "agent_skill",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Submitted By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_url",
+          "source_title",
+          "source_content",
+          "exact_excerpt",
+          "relationship",
+          "explanation",
+          "recommendation"
+        ],
+        "title": "MonitorEvidenceSubmitRequest",
+        "type": "object"
+      },
+      "MonitorRead": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision_id": {
+            "title": "Decision Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "instructions": {
+            "title": "Instructions",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "premise_id": {
+            "title": "Premise Id",
+            "type": "string"
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/MonitorEvidenceRead"
+            },
+            "title": "Proposals",
+            "type": "array"
+          },
+          "source_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Urls",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "paused"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "decision_id",
+          "premise_id",
+          "name",
+          "instructions",
+          "source_urls",
+          "status",
+          "proposals",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MonitorRead",
+        "type": "object"
+      },
+      "MonitorUpdateRequest": {
+        "properties": {
+          "status": {
+            "enum": [
+              "active",
+              "paused"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "MonitorUpdateRequest",
         "type": "object"
       },
       "PasswordChangeRequest": {
@@ -3734,6 +4101,55 @@
         "summary": "Export Decision Pdf"
       }
     },
+    "/v1/decisions/{decision_id}/monitors": {
+      "post": {
+        "operationId": "create_monitor_v1_decisions__decision_id__monitors_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "decision_id",
+            "required": true,
+            "schema": {
+              "title": "Decision Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonitorCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitorRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Monitor"
+      }
+    },
     "/v1/decisions/{decision_id}/revisit-checks": {
       "get": {
         "operationId": "list_revisit_checks_v1_decisions__decision_id__revisit_checks_get",
@@ -4054,7 +4470,7 @@
     },
     "/v1/decisions/{decision_id}/workspace": {
       "get": {
-        "description": "Load a decision conversation, its revisits, and shares together.",
+        "description": "Load a decision conversation, its revisits, monitors, and shares together.",
         "operationId": "decision_workspace_v1_decisions__decision_id__workspace_get",
         "parameters": [
           {
@@ -4340,6 +4756,153 @@
           }
         },
         "summary": "List Models"
+      }
+    },
+    "/v1/monitor-evidence-proposals/{proposal_id}/human-action": {
+      "post": {
+        "operationId": "record_monitor_human_action_v1_monitor_evidence_proposals__proposal_id__human_action_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonitorEvidenceActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitorEvidenceRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Monitor Human Action"
+      }
+    },
+    "/v1/monitors/{monitor_id}": {
+      "patch": {
+        "operationId": "update_monitor_v1_monitors__monitor_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "monitor_id",
+            "required": true,
+            "schema": {
+              "title": "Monitor Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonitorUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitorRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Monitor"
+      }
+    },
+    "/v1/monitors/{monitor_id}/evidence-proposals": {
+      "post": {
+        "operationId": "submit_monitor_evidence_v1_monitors__monitor_id__evidence_proposals_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "monitor_id",
+            "required": true,
+            "schema": {
+              "title": "Monitor Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonitorEvidenceSubmitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitorEvidenceRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Monitor Evidence"
       }
     },
     "/v1/pilot/metrics": {

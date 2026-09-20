@@ -33,6 +33,11 @@ Open [localhost:3000](http://localhost:3000) and choose **Try a sample decision*
 3. **Finalize** the record you have reviewed.
 4. **Revisit** with new evidence and record your judgment.
 
+After finalization, a premise can also have a read-only **assumption monitor**.
+An agent may submit an exact quote from an approved source and propose how it
+affects that premise. Rationexa still requires a person to choose the outcome;
+the agent cannot rewrite the decision or execute an external action.
+
 Examples cover vendor selection, launch pricing, and build versus buy.
 
 `docker compose down` stops the app and keeps its data. Adding `-v` permanently
@@ -61,7 +66,7 @@ not general AI accuracy. See the [privacy policy](https://rationexa.site/privacy
 - PostgreSQL is the deployment database; SQLite supports offline development.
 
 [Local setup and checks](docs/development.md) · [Architecture decisions](docs/adr) ·
-[Deployment and backups](ops/README.md)
+[Agent skill boundary](docs/agent-skills.md) · [Deployment and backups](ops/README.md)
 
 ```bash
 pnpm validate

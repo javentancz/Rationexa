@@ -489,6 +489,75 @@ class RevisitRead(BaseModel):
     created_at: datetime
 
 
+class MonitorCreateRequest(BaseModel):
+    premise_id: str
+    name: str = Field(min_length=1, max_length=160)
+    instructions: str = Field(default="", max_length=4000)
+    source_urls: list[str] = Field(min_length=1, max_length=20)
+
+
+class MonitorUpdateRequest(BaseModel):
+    status: Literal["active", "paused"]
+
+
+class MonitorEvidenceSubmitRequest(BaseModel):
+    source_url: str = Field(min_length=1, max_length=1000)
+    source_title: str = Field(min_length=1, max_length=255)
+    source_content: str = Field(min_length=1, max_length=2_000_000)
+    exact_excerpt: str = Field(min_length=1, max_length=20_000)
+    relationship: Relationship
+    confidence_band: Literal["low", "medium", "high"] = "medium"
+    explanation: str = Field(min_length=1, max_length=8000)
+    recommendation: str = Field(min_length=1, max_length=4000)
+    submitted_by: str = Field(default="agent_skill", min_length=1, max_length=80)
+
+
+class MonitorEvidenceActionRequest(BaseModel):
+    action: Literal[
+        "keep_decision",
+        "request_clarification",
+        "amend_decision",
+        "replace_option",
+        "create_draft_ticket",
+        "dismiss",
+    ]
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class MonitorEvidenceRead(BaseModel):
+    id: str
+    monitor_id: str
+    source_url: str
+    source_title: str
+    exact_excerpt: str
+    start_offset: int
+    end_offset: int
+    relationship: Relationship
+    confidence_band: Literal["low", "medium", "high"]
+    explanation: str
+    recommendation: str
+    submitted_by: str
+    status: Literal["needs_review", "reviewed"]
+    human_action: str | None = None
+    human_notes: str | None = None
+    draft_action: dict | None = None
+    created_at: datetime
+    reviewed_at: datetime | None = None
+
+
+class MonitorRead(BaseModel):
+    id: str
+    decision_id: str
+    premise_id: str
+    name: str
+    instructions: str
+    source_urls: list[str]
+    status: Literal["active", "paused"]
+    proposals: list[MonitorEvidenceRead]
+    created_at: datetime
+    updated_at: datetime
+
+
 class HealthRead(BaseModel):
     status: str
     service: str
@@ -535,6 +604,7 @@ class DecisionWorkspaceRead(BaseModel):
     decision: DecisionRead
     revisits: list[RevisitRead]
     shares: list[ShareRead]
+    monitors: list[MonitorRead] = Field(default_factory=list)
 
 
 class ShareDecisionRead(BaseModel):

@@ -25,7 +25,7 @@ def test_database_is_at_the_alembic_head() -> None:
     with TestClient(app):
         with engine.connect() as connection:
             revision = MigrationContext.configure(connection).get_current_revision()
-    assert revision == "20260830_06"
+    assert revision == "20260919_07"
 
 
 def test_readiness_checks_database_and_artifact_storage() -> None:
@@ -175,6 +175,81 @@ def test_authenticated_pilot_workflow_imports_reviews_finalizes_revisits_shares_
         assert client.delete(f"/v1/decisions/{decision['id']}", headers=headers).status_code == 204
         assert client.get(f"/v1/decisions/{decision['id']}", headers=headers).status_code == 404
         assert client.get(f"/v1/shares/{share.json()['token']}").status_code == 404
+
+
+def test_assumption_monitor_accepts_only_grounded_evidence_and_requires_human_action() -> None:
+    with TestClient(app) as client:
+        decision = create_finalized_decision(
+            client,
+            source=(
+                "Decision: choose Vendor B for identity. "
+                "Vendor B will support SAML before the pilot launches. "
+                "Revisit if the delivery date changes."
+            ),
+            title="Choose identity provider",
+        )
+        original = client.get(f"/v1/decisions/{decision['id']}").json()
+        premise_id = decision["premises"][0]["id"]
+        source_url = "https://vendor.example/roadmap"
+
+        created = client.post(
+            f"/v1/decisions/{decision['id']}/monitors",
+            json={
+                "premise_id": premise_id,
+                "name": "Monitor vendor commitments",
+                "instructions": "Watch for SAML schedule changes.",
+                "source_urls": [source_url],
+            },
+        )
+        assert created.status_code == 201
+        monitor = created.json()
+        assert monitor["status"] == "active"
+        assert monitor["source_urls"] == [source_url]
+
+        rejected_source = client.post(
+            f"/v1/monitors/{monitor['id']}/evidence-proposals",
+            json={
+                "source_url": "https://unapproved.example/news",
+                "source_title": "Roadmap update",
+                "source_content": "SAML support moved to next quarter.",
+                "exact_excerpt": "SAML support moved to next quarter.",
+                "relationship": "contradicts",
+                "explanation": "The promised delivery is now after the pilot.",
+                "recommendation": "Revisit before signing the contract.",
+            },
+        )
+        assert rejected_source.status_code == 422
+
+        submitted = client.post(
+            f"/v1/monitors/{monitor['id']}/evidence-proposals",
+            json={
+                "source_url": source_url,
+                "source_title": "Vendor B roadmap update",
+                "source_content": "Roadmap update\n\nSAML support moved to next quarter. Contact support for details.",
+                "exact_excerpt": "SAML support moved to next quarter.",
+                "relationship": "contradicts",
+                "confidence_band": "high",
+                "explanation": "The committed feature is now scheduled after the pilot.",
+                "recommendation": "Revisit before signing the contract.",
+            },
+        )
+        assert submitted.status_code == 201
+        proposal = submitted.json()
+        assert proposal["status"] == "needs_review"
+        assert proposal["exact_excerpt"] == "SAML support moved to next quarter."
+
+        reviewed = client.post(
+            f"/v1/monitor-evidence-proposals/{proposal['id']}/human-action",
+            json={"action": "create_draft_ticket", "notes": "Ask procurement to hold signature."},
+        )
+        assert reviewed.status_code == 200
+        assert reviewed.json()["status"] == "reviewed"
+        assert reviewed.json()["draft_action"]["status"] == "draft_only"
+
+        reopened = client.get(f"/v1/decisions/{decision['id']}").json()
+        assert reopened == original
+        workspace = client.get(f"/v1/decisions/{decision['id']}/workspace").json()
+        assert workspace["monitors"][0]["proposals"][0]["human_action"] == "create_draft_ticket"
 
 
 def test_stage_one_vertical_slice() -> None:

@@ -1,12 +1,14 @@
 from datetime import UTC, datetime
 
-from .db import DecisionRow, ExtractionRow, RevisitRow
+from .db import AssumptionMonitorRow, DecisionRow, ExtractionRow, MonitorEvidenceProposalRow, RevisitRow
 from .schemas import (
     DecisionChallengeRead,
     DecisionPremiseRead,
     DecisionRead,
     ExtractionRead,
     ExtractionResult,
+    MonitorEvidenceRead,
+    MonitorRead,
     RevisitRead,
     SourceAnchor,
 )
@@ -91,4 +93,42 @@ def revisit_read(row: RevisitRow) -> RevisitRead:
         estimated_cost_usd=row.estimated_cost_usd,
         evidence_filename=row.evidence_filename,
         created_at=_as_utc(row.created_at),
+    )
+
+
+def monitor_evidence_read(row: MonitorEvidenceProposalRow) -> MonitorEvidenceRead:
+    return MonitorEvidenceRead(
+        id=row.id,
+        monitor_id=row.monitor_id,
+        source_url=row.source_url,
+        source_title=row.source_title,
+        exact_excerpt=row.exact_excerpt,
+        start_offset=row.start_offset,
+        end_offset=row.end_offset,
+        relationship=row.relationship,
+        confidence_band=row.confidence_band,
+        explanation=row.explanation,
+        recommendation=row.recommendation,
+        submitted_by=row.submitted_by,
+        status=row.status,
+        human_action=row.human_action,
+        human_notes=row.human_notes,
+        draft_action=row.draft_action,
+        created_at=_as_utc(row.created_at),
+        reviewed_at=_as_utc(row.reviewed_at),
+    )
+
+
+def monitor_read(row: AssumptionMonitorRow, proposals: list[MonitorEvidenceProposalRow]) -> MonitorRead:
+    return MonitorRead(
+        id=row.id,
+        decision_id=row.decision_id,
+        premise_id=row.premise_id,
+        name=row.name,
+        instructions=row.instructions,
+        source_urls=row.source_urls,
+        status=row.status,
+        proposals=[monitor_evidence_read(proposal) for proposal in proposals],
+        created_at=_as_utc(row.created_at),
+        updated_at=_as_utc(row.updated_at),
     )

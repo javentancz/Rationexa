@@ -440,6 +440,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/v1/decisions/{decision_id}/monitors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Monitor */
+        post: operations["create_monitor_v1_decisions__decision_id__monitors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/decisions/{decision_id}/revisit-checks": {
         parameters: {
             query?: never;
@@ -536,7 +553,7 @@ export type paths = {
         };
         /**
          * Decision Workspace
-         * @description Load a decision conversation, its revisits, and shares together.
+         * @description Load a decision conversation, its revisits, monitors, and shares together.
          */
         get: operations["decision_workspace_v1_decisions__decision_id__workspace_get"];
         put?: never;
@@ -647,6 +664,57 @@ export type paths = {
         get: operations["list_models_v1_models_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/monitor-evidence-proposals/{proposal_id}/human-action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Monitor Human Action */
+        post: operations["record_monitor_human_action_v1_monitor_evidence_proposals__proposal_id__human_action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/monitors/{monitor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Monitor */
+        patch: operations["update_monitor_v1_monitors__monitor_id__patch"];
+        trace?: never;
+    };
+    "/v1/monitors/{monitor_id}/evidence-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Monitor Evidence */
+        post: operations["submit_monitor_evidence_v1_monitors__monitor_id__evidence_proposals_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1156,6 +1224,8 @@ export type components = {
         /** DecisionWorkspaceRead */
         DecisionWorkspaceRead: {
             decision: components["schemas"]["DecisionRead"];
+            /** Monitors */
+            monitors?: components["schemas"]["MonitorRead"][];
             /** Revisits */
             revisits: components["schemas"]["RevisitRead"][];
             /** Shares */
@@ -1334,6 +1404,146 @@ export type components = {
             model: string;
             /** Provider */
             provider: string;
+        };
+        /** MonitorCreateRequest */
+        MonitorCreateRequest: {
+            /**
+             * Instructions
+             * @default
+             */
+            instructions: string;
+            /** Name */
+            name: string;
+            /** Premise Id */
+            premise_id: string;
+            /** Source Urls */
+            source_urls: string[];
+        };
+        /** MonitorEvidenceActionRequest */
+        MonitorEvidenceActionRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "keep_decision" | "request_clarification" | "amend_decision" | "replace_option" | "create_draft_ticket" | "dismiss";
+            /** Notes */
+            notes?: string | null;
+        };
+        /** MonitorEvidenceRead */
+        MonitorEvidenceRead: {
+            /**
+             * Confidence Band
+             * @enum {string}
+             */
+            confidence_band: "low" | "medium" | "high";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Draft Action */
+            draft_action?: {
+                [key: string]: unknown;
+            } | null;
+            /** End Offset */
+            end_offset: number;
+            /** Exact Excerpt */
+            exact_excerpt: string;
+            /** Explanation */
+            explanation: string;
+            /** Human Action */
+            human_action?: string | null;
+            /** Human Notes */
+            human_notes?: string | null;
+            /** Id */
+            id: string;
+            /** Monitor Id */
+            monitor_id: string;
+            /** Recommendation */
+            recommendation: string;
+            relationship: components["schemas"]["Relationship"];
+            /** Reviewed At */
+            reviewed_at?: string | null;
+            /** Source Title */
+            source_title: string;
+            /** Source Url */
+            source_url: string;
+            /** Start Offset */
+            start_offset: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "needs_review" | "reviewed";
+            /** Submitted By */
+            submitted_by: string;
+        };
+        /** MonitorEvidenceSubmitRequest */
+        MonitorEvidenceSubmitRequest: {
+            /**
+             * Confidence Band
+             * @default medium
+             * @enum {string}
+             */
+            confidence_band: "low" | "medium" | "high";
+            /** Exact Excerpt */
+            exact_excerpt: string;
+            /** Explanation */
+            explanation: string;
+            /** Recommendation */
+            recommendation: string;
+            relationship: components["schemas"]["Relationship"];
+            /** Source Content */
+            source_content: string;
+            /** Source Title */
+            source_title: string;
+            /** Source Url */
+            source_url: string;
+            /**
+             * Submitted By
+             * @default agent_skill
+             */
+            submitted_by: string;
+        };
+        /** MonitorRead */
+        MonitorRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decision Id */
+            decision_id: string;
+            /** Id */
+            id: string;
+            /** Instructions */
+            instructions: string;
+            /** Name */
+            name: string;
+            /** Premise Id */
+            premise_id: string;
+            /** Proposals */
+            proposals: components["schemas"]["MonitorEvidenceRead"][];
+            /** Source Urls */
+            source_urls: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** MonitorUpdateRequest */
+        MonitorUpdateRequest: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused";
         };
         /** PasswordChangeRequest */
         PasswordChangeRequest: {
@@ -2692,6 +2902,41 @@ export interface operations {
             };
         };
     };
+    create_monitor_v1_decisions__decision_id__monitors_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonitorCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_revisit_checks_v1_decisions__decision_id__revisit_checks_get: {
         parameters: {
             query?: never;
@@ -3151,6 +3396,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelCatalogRead"];
+                };
+            };
+        };
+    };
+    record_monitor_human_action_v1_monitor_evidence_proposals__proposal_id__human_action_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonitorEvidenceActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitorEvidenceRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_monitor_v1_monitors__monitor_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                monitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonitorUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_monitor_evidence_v1_monitors__monitor_id__evidence_proposals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                monitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonitorEvidenceSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitorEvidenceRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

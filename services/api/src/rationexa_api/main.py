@@ -8,6 +8,7 @@ from secrets import token_urlsafe
 from threading import Lock
 from time import monotonic, perf_counter
 from typing import Annotated
+from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 import httpx
@@ -30,11 +31,13 @@ from .config import get_settings
 from .db import (
     AccountRow,
     ArtifactRow,
+    AssumptionMonitorRow,
     AuthAttemptRow,
     DecisionRow,
     DecisionShareRow,
     ExtractionRow,
     JobRow,
+    MonitorEvidenceProposalRow,
     PasswordResetRow,
     PremiseRow,
     ProductEventRow,
@@ -61,7 +64,7 @@ from .providers import (
     default_model_id,
     get_provider,
 )
-from .read_models import decision_read, extraction_read, revisit_read
+from .read_models import decision_read, extraction_read, monitor_evidence_read, monitor_read, revisit_read
 from .schemas import (
     AccountDeleteRequest,
     AccountRead,
@@ -91,6 +94,12 @@ from .schemas import (
     JobRead,
     ModelCatalogRead,
     ModelOption,
+    MonitorCreateRequest,
+    MonitorEvidenceActionRequest,
+    MonitorEvidenceRead,
+    MonitorEvidenceSubmitRequest,
+    MonitorRead,
+    MonitorUpdateRequest,
     PasswordChangeRequest,
     PasswordResetConfirmRequest,
     PasswordResetRequest,
@@ -126,7 +135,7 @@ from .secrets import (
     store_provider_key,
     validate_provider_base_url,
 )
-from .services import extract_artifact_text, persist_artifact, validate_anchor
+from .services import extract_artifact_text, locate_source_excerpt, persist_artifact, validate_anchor
 from .share_service import is_expired, load_shared_decision, share_read
 from .usage_service import build_pilot_metrics, build_usage_summary
 
@@ -619,6 +628,42 @@ def workspace_decision(db: Session, decision_id: str, workspace_id: str | None =
     )
 
 
+def workspace_monitor(
+    db: Session,
+    monitor_id: str,
+    workspace_id: str | None = None,
+) -> AssumptionMonitorRow | None:
+    return db.scalar(
+        select(AssumptionMonitorRow)
+        .join(DecisionRow, DecisionRow.id == AssumptionMonitorRow.decision_id)
+        .where(
+            AssumptionMonitorRow.id == monitor_id,
+            _workspace_filter(DecisionRow.workspace_id, workspace_id),
+        )
+    )
+
+
+def normalized_approved_source_url(value: str) -> str:
+    parsed = urlsplit(value.strip())
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Approved sources must be public HTTPS URLs without embedded credentials",
+        )
+    return urlunsplit(("https", parsed.netloc.lower(), parsed.path or "/", parsed.query, ""))
+
+
+def monitor_with_proposals(db: Session, monitor: AssumptionMonitorRow) -> MonitorRead:
+    proposals = list(
+        db.scalars(
+            select(MonitorEvidenceProposalRow)
+            .where(MonitorEvidenceProposalRow.monitor_id == monitor.id)
+            .order_by(MonitorEvidenceProposalRow.created_at.desc())
+        ).all()
+    )
+    return monitor_read(monitor, proposals)
+
+
 @app.get("/v1/usage", response_model=UsageSummaryRead)
 def usage_summary(route: Request, db: Db) -> UsageSummaryRead:
     workspace_id = active_workspace_id(db, extract_session_token(route))
@@ -1081,6 +1126,12 @@ def delete_decision(route: Request, decision_id: str, db: Db) -> Response:
     if workspace_decision(db, decision_id, workspace_id) is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     premise_ids = [pid for pid in db.scalars(select(PremiseRow.id).where(PremiseRow.decision_id == decision_id)).all()]
+    monitor_ids = list(
+        db.scalars(select(AssumptionMonitorRow.id).where(AssumptionMonitorRow.decision_id == decision_id)).all()
+    )
+    if monitor_ids:
+        db.execute(delete(MonitorEvidenceProposalRow).where(MonitorEvidenceProposalRow.monitor_id.in_(monitor_ids)))
+        db.execute(delete(AssumptionMonitorRow).where(AssumptionMonitorRow.id.in_(monitor_ids)))
     if premise_ids:
         db.execute(delete(SourceAnchorRow).where(SourceAnchorRow.premise_id.in_(premise_ids)))
     db.execute(delete(PremiseRow).where(PremiseRow.decision_id == decision_id))
@@ -1427,7 +1478,7 @@ def list_shares(route: Request, decision_id: str, db: Db) -> list[ShareRead]:
 
 @app.get("/v1/decisions/{decision_id}/workspace", response_model=DecisionWorkspaceRead)
 def decision_workspace(route: Request, decision_id: str, db: Db) -> DecisionWorkspaceRead:
-    """Load a decision conversation, its revisits, and shares together."""
+    """Load a decision conversation, its revisits, monitors, and shares together."""
     workspace_id = active_workspace_id(db, extract_session_token(route))
     decision = workspace_decision(db, decision_id, workspace_id)
     if decision is None:
@@ -1442,11 +1493,183 @@ def decision_workspace(route: Request, decision_id: str, db: Db) -> DecisionWork
         .where(DecisionShareRow.decision_id == decision_id)
         .order_by(DecisionShareRow.created_at.desc())
     ).all()
+    monitors = db.scalars(
+        select(AssumptionMonitorRow)
+        .where(AssumptionMonitorRow.decision_id == decision_id)
+        .order_by(AssumptionMonitorRow.created_at.desc())
+    ).all()
     return DecisionWorkspaceRead(
         decision=decision_read(decision),
         revisits=[revisit_read(row) for row in revisits],
         shares=[share_read(row, settings.public_base_url) for row in shares],
+        monitors=[monitor_with_proposals(db, row) for row in monitors],
     )
+
+
+@app.post(
+    "/v1/decisions/{decision_id}/monitors",
+    response_model=MonitorRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_monitor(route: Request, decision_id: str, payload: MonitorCreateRequest, db: Db) -> MonitorRead:
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    decision = workspace_decision(db, decision_id, workspace_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    premise = db.scalar(
+        select(PremiseRow).where(PremiseRow.id == payload.premise_id, PremiseRow.decision_id == decision_id)
+    )
+    if premise is None:
+        raise HTTPException(status_code=404, detail="Premise not found in this decision")
+    source_urls = list(dict.fromkeys(normalized_approved_source_url(url) for url in payload.source_urls))
+    existing = db.scalar(
+        select(AssumptionMonitorRow).where(
+            AssumptionMonitorRow.decision_id == decision_id,
+            AssumptionMonitorRow.premise_id == premise.id,
+            AssumptionMonitorRow.status == "active",
+        )
+    )
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="This premise already has an active monitor")
+    monitor = AssumptionMonitorRow(
+        decision_id=decision_id,
+        premise_id=premise.id,
+        name=payload.name.strip(),
+        instructions=payload.instructions.strip(),
+        source_urls=source_urls,
+    )
+    db.add(monitor)
+    record_product_event(
+        db,
+        workspace_id,
+        "assumption_monitor_created",
+        decision_id=decision_id,
+        details={"premise_id": premise.id, "source_count": len(source_urls)},
+    )
+    db.commit()
+    db.refresh(monitor)
+    return monitor_read(monitor, [])
+
+
+@app.patch("/v1/monitors/{monitor_id}", response_model=MonitorRead)
+def update_monitor(route: Request, monitor_id: str, payload: MonitorUpdateRequest, db: Db) -> MonitorRead:
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    monitor = workspace_monitor(db, monitor_id, workspace_id)
+    if monitor is None:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    monitor.status = payload.status
+    monitor.updated_at = now_utc()
+    db.commit()
+    db.refresh(monitor)
+    return monitor_with_proposals(db, monitor)
+
+
+@app.post(
+    "/v1/monitors/{monitor_id}/evidence-proposals",
+    response_model=MonitorEvidenceRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def submit_monitor_evidence(
+    route: Request,
+    monitor_id: str,
+    payload: MonitorEvidenceSubmitRequest,
+    db: Db,
+) -> MonitorEvidenceRead:
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    monitor = workspace_monitor(db, monitor_id, workspace_id)
+    if monitor is None:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    if monitor.status != "active":
+        raise HTTPException(status_code=409, detail="This monitor is paused")
+    source_url = normalized_approved_source_url(payload.source_url)
+    if source_url not in monitor.source_urls:
+        raise HTTPException(status_code=422, detail="Evidence must come from an approved source URL")
+    located = locate_source_excerpt(payload.exact_excerpt, payload.source_content)
+    if located is None:
+        raise HTTPException(status_code=422, detail="The exact excerpt was not found in the supplied source content")
+    exact_excerpt, start_offset, end_offset = located
+    evidence = save_artifact(
+        db,
+        f"{payload.source_title.strip()}.txt",
+        "text/plain",
+        payload.source_content.encode(),
+        "monitor_evidence",
+        workspace_id,
+    )
+    proposal = MonitorEvidenceProposalRow(
+        monitor_id=monitor.id,
+        evidence_artifact_id=evidence.id,
+        source_url=source_url,
+        source_title=payload.source_title.strip(),
+        exact_excerpt=exact_excerpt,
+        start_offset=start_offset,
+        end_offset=end_offset,
+        relationship=payload.relationship.value,
+        confidence_band=payload.confidence_band,
+        explanation=payload.explanation.strip(),
+        recommendation=payload.recommendation.strip(),
+        submitted_by=payload.submitted_by.strip(),
+    )
+    db.add(proposal)
+    record_product_event(
+        db,
+        workspace_id,
+        "monitor_evidence_proposed",
+        decision_id=monitor.decision_id,
+        details={"monitor_id": monitor.id, "premise_id": monitor.premise_id},
+    )
+    db.commit()
+    db.refresh(proposal)
+    return monitor_evidence_read(proposal)
+
+
+@app.post(
+    "/v1/monitor-evidence-proposals/{proposal_id}/human-action",
+    response_model=MonitorEvidenceRead,
+)
+def record_monitor_human_action(
+    route: Request,
+    proposal_id: str,
+    payload: MonitorEvidenceActionRequest,
+    db: Db,
+) -> MonitorEvidenceRead:
+    workspace_id = active_workspace_id(db, extract_session_token(route))
+    proposal = db.get(MonitorEvidenceProposalRow, proposal_id)
+    monitor = workspace_monitor(db, proposal.monitor_id, workspace_id) if proposal is not None else None
+    if proposal is None or monitor is None:
+        raise HTTPException(status_code=404, detail="Evidence proposal not found")
+    premise = db.get(PremiseRow, monitor.premise_id)
+    decision = workspace_decision(db, monitor.decision_id, workspace_id)
+    if premise is None or decision is None:
+        raise HTTPException(status_code=404, detail="Monitored decision context not found")
+    notes = payload.notes.strip() if payload.notes and payload.notes.strip() else None
+    proposal.human_action = payload.action
+    proposal.human_notes = notes
+    proposal.status = "reviewed"
+    proposal.reviewed_at = now_utc()
+    if payload.action == "create_draft_ticket":
+        proposal.draft_action = {
+            "type": "ticket",
+            "status": "draft_only",
+            "title": f"Revisit decision: {decision.title}",
+            "body": (
+                f"Affected premise: {premise.statement}\n\n"
+                f"New evidence: {proposal.exact_excerpt}\n\n"
+                f"Proposed next step: {proposal.recommendation}"
+            ),
+        }
+    else:
+        proposal.draft_action = None
+    record_product_event(
+        db,
+        workspace_id,
+        "monitor_evidence_reviewed",
+        decision_id=decision.id,
+        details={"monitor_id": monitor.id, "action": payload.action},
+    )
+    db.commit()
+    db.refresh(proposal)
+    return monitor_evidence_read(proposal)
 
 
 @app.delete("/v1/decisions/{decision_id}/shares/{share_id}", response_model=ShareRead)
@@ -1881,6 +2104,14 @@ def delete_private_account_data(db: Session, account: AccountRow, workspace: Wor
     if premise_ids:
         db.execute(delete(SourceAnchorRow).where(SourceAnchorRow.premise_id.in_(premise_ids)))
     if decision_ids:
+        monitor_ids = list(
+            db.scalars(
+                select(AssumptionMonitorRow.id).where(AssumptionMonitorRow.decision_id.in_(decision_ids))
+            ).all()
+        )
+        if monitor_ids:
+            db.execute(delete(MonitorEvidenceProposalRow).where(MonitorEvidenceProposalRow.monitor_id.in_(monitor_ids)))
+            db.execute(delete(AssumptionMonitorRow).where(AssumptionMonitorRow.id.in_(monitor_ids)))
         db.execute(delete(PremiseRow).where(PremiseRow.decision_id.in_(decision_ids)))
         db.execute(delete(RevisitRow).where(RevisitRow.decision_id.in_(decision_ids)))
         db.execute(delete(DecisionShareRow).where(DecisionShareRow.decision_id.in_(decision_ids)))

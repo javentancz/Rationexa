@@ -11,6 +11,7 @@ import {
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { guidedSamples } from "./guided-samples";
+import { LandingMonitorPreview } from "./landing-monitor-preview";
 import { LandingWorkflowPreview } from "./landing-workflow-preview";
 
 const workflow = [
@@ -30,6 +31,7 @@ export default function LandingPage() {
         <div className="landing-nav-links">
           <a href="#example">Examples</a>
           <a href="#how-it-works">How it works</a>
+          <a href="#monitoring">Monitoring</a>
           <a href="#privacy">Privacy</a>
         </div>
         <div className="landing-nav-actions">
@@ -93,6 +95,15 @@ export default function LandingPage() {
             <span><Check aria-hidden="true" />Record human judgment</span>
           </div>
         </div>
+      </section>
+
+      <section id="monitoring" className="landing-monitoring">
+        <div className="landing-section-heading">
+          <h2>Let agents watch what could change.</h2>
+          <p>Choose an approved source. Rationexa returns grounded evidence and waits for a person to decide what happens next.</p>
+        </div>
+        <LandingMonitorPreview />
+        <p className="landing-monitor-boundary">The skill can investigate and propose. It cannot rewrite a finalized decision, send a message, or execute an external action.</p>
       </section>
 
       <section id="privacy" className="landing-privacy">

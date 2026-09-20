@@ -267,6 +267,52 @@ class RevisitRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
+class AssumptionMonitorRow(Base):
+    __tablename__ = "assumption_monitors"
+    __table_args__ = (
+        Index("ix_assumption_monitors_decision_created", "decision_id", "created_at"),
+        Index("ix_assumption_monitors_premise_status", "premise_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    decision_id: Mapped[str] = mapped_column(ForeignKey("decisions.id"), index=True)
+    premise_id: Mapped[str] = mapped_column(ForeignKey("premises.id"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    source_urls: Mapped[list[str]] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class MonitorEvidenceProposalRow(Base):
+    __tablename__ = "monitor_evidence_proposals"
+    __table_args__ = (
+        Index("ix_monitor_evidence_monitor_created", "monitor_id", "created_at"),
+        Index("ix_monitor_evidence_monitor_status", "monitor_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    monitor_id: Mapped[str] = mapped_column(ForeignKey("assumption_monitors.id"), index=True)
+    evidence_artifact_id: Mapped[str] = mapped_column(ForeignKey("artifacts.id"))
+    source_url: Mapped[str] = mapped_column(String(1000))
+    source_title: Mapped[str] = mapped_column(String(255))
+    exact_excerpt: Mapped[str] = mapped_column(Text)
+    start_offset: Mapped[int] = mapped_column()
+    end_offset: Mapped[int] = mapped_column()
+    relationship: Mapped[str] = mapped_column(String(30))
+    confidence_band: Mapped[str] = mapped_column(String(20), default="medium")
+    explanation: Mapped[str] = mapped_column(Text)
+    recommendation: Mapped[str] = mapped_column(Text)
+    submitted_by: Mapped[str] = mapped_column(String(80), default="agent_skill")
+    status: Mapped[str] = mapped_column(String(30), default="needs_review")
+    human_action: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    human_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_action: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class DecisionShareRow(Base):
     __tablename__ = "decision_shares"
     __table_args__ = (Index("ix_decision_shares_decision_id", "decision_id"),)

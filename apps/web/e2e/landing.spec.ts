@@ -38,6 +38,7 @@ test("offers concrete guided decision cases", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Start with a decision you recognize." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Let agents watch what could change." })).toBeVisible();
   const cases = page.getByRole("region", { name: "Guided decision cases" });
   await expect(cases.getByRole("link")).toHaveCount(6);
   await expect(cases.getByRole("link", { name: /Choose an identity provider/ })).toHaveAttribute("href", "/workspace?sample=vendor-review");

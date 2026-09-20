@@ -17,10 +17,11 @@ import { ImportStage } from "./import-stage";
 import { UsageView } from "./usage-view";
 import { accountSettingsKey, decisionWorkspaceKey, fetchAccountSettings, fetchDecisionWorkspace, fetchUsageDashboard, usageDashboardKey } from "./workspace-api";
 import { browserShareUrl, clearPersistedDecision, evidenceDraftsKey, formatDate, formatDateTime, guestWorkspaceId, provenanceLabel, readEvidenceDraft, workspacePaths, workspaceSessionKey, workspaceViewFromPath, writeEvidenceDraft } from "./workspace-utils";
-import type { AuditEvent, ComparisonRun, Criticality, Decision, DecisionChallenge, DecisionDraft, DecisionLibrary, DecisionListItem, Extraction, Finding, FindingJudgment, Job, ModelCatalog, ModelOption, PersonalWorkspace, PersistedWorkspaceSession, PremiseReview, RevisitResult, ReviewAction, Share, UsageSummary, PilotMetrics, WorkflowStep, WorkspaceBootstrap, WorkspaceView } from "./workspace-types";
+import type { AssumptionMonitor, AuditEvent, ComparisonRun, Criticality, Decision, DecisionChallenge, DecisionDraft, DecisionLibrary, DecisionListItem, Extraction, Finding, FindingJudgment, Job, ModelCatalog, ModelOption, PersonalWorkspace, PersistedWorkspaceSession, PremiseReview, RevisitResult, ReviewAction, Share, UsageSummary, PilotMetrics, WorkflowStep, WorkspaceBootstrap, WorkspaceView } from "./workspace-types";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { readRefreshSnapshot, writeRefreshSnapshot } from "./refresh-cache";
 import { guidedSamples, isGuidedSampleId, type GuidedSampleId } from "./guided-samples";
+import { MonitorPanel } from "./monitor-panel";
 
 declare global {
   interface Window {
@@ -97,6 +98,7 @@ export default function Home() {
   const [exportBusy, setExportBusy] = useState(false);
   const [pdfExportBusy, setPdfExportBusy] = useState(false);
   const [shares, setShares] = useState<Share[]>([]);
+  const [monitors, setMonitors] = useState<AssumptionMonitor[]>([]);
   const [shareBusy, setShareBusy] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
@@ -455,8 +457,27 @@ export default function Home() {
         });
       });
     });
+    monitors.forEach((monitor) => {
+      events.push({
+        id: `monitor-${monitor.id}`,
+        kind: "monitor",
+        title: monitor.name,
+        detail: `${monitor.source_urls.length} approved source${monitor.source_urls.length === 1 ? "" : "s"} · ${monitor.status}`,
+        timestamp: monitor.created_at,
+      });
+      monitor.proposals.forEach((proposal) => {
+        if (!proposal.reviewed_at || !proposal.human_action) return;
+        events.push({
+          id: `monitor-review-${proposal.id}`,
+          kind: "monitor",
+          title: `Monitor proposal: ${proposal.human_action.replaceAll("_", " ")}`,
+          detail: `${proposal.source_title} · finalized decision unchanged`,
+          timestamp: proposal.reviewed_at,
+        });
+      });
+    });
     return events.sort((first, second) => new Date(first.timestamp).getTime() - new Date(second.timestamp).getTime());
-  }, [challenge, decision, revisitHistory]);
+  }, [challenge, decision, monitors, revisitHistory]);
   const findingReviewProgress = useMemo(() => {
     const total = revisitHistory.reduce((count, run) => count + run.findings.length, 0);
     const reviewed = revisitHistory.reduce((count, run) => count + run.findings.filter((finding) => finding.human_judgment).length, 0);
@@ -800,6 +821,7 @@ export default function Home() {
       setDraft({ title: record.title, question: record.question, context: record.context, chosenOption: record.chosen_option ?? "", rationale: record.rationale });
        setRevisitHistory(history);
        setShares(bundle.shares);
+       setMonitors(bundle.monitors ?? []);
        setExtraction(null);
        setFindings([]);
        setComparisonRuns([]);
@@ -899,7 +921,7 @@ export default function Home() {
     }
 
   function resetWorkspace() {
-    setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setExportBusy(false); setPdfExportBusy(false); setError(null); setShares([]); setCopiedToken(null);
+    setView("workspace"); setExtraction(null); setDecision(null); setFindings([]); setComparisonRuns([]); setRevisitHistory([]); setRevisitCompleted(false); setLastRevisitModel(null); setLastRevisitProvenance(null); setActiveRevisitId(null); setReviews({}); setDraft(null); setSelectedPremise(null); setActiveJobs([]); setBusyPhase(null); setExportBusy(false); setPdfExportBusy(false); setError(null); setShares([]); setMonitors([]); setCopiedToken(null);
     setRenamingDecision(false);
     setDecisionTitleDraft("");
     setRenameBusy(false);
@@ -1252,6 +1274,7 @@ export default function Home() {
             <div><span className="review-progress-icon">{findingReviewProgress.pending === 0 ? <Check aria-hidden="true" /> : <ListChecks aria-hidden="true" />}</span><span><strong>{findingReviewProgress.pending === 0 ? "Human review complete" : `${findingReviewProgress.pending} finding${findingReviewProgress.pending === 1 ? "" : "s"} awaiting judgment`}</strong><small>{findingReviewProgress.reviewed} of {findingReviewProgress.total} findings reviewed</small></span></div>
             <div className="review-progress-track"><span style={{ width: `${findingReviewProgress.percent}%` }} /></div>
           </section> : null}
+          <MonitorPanel decision={decision} monitors={monitors} onChange={setMonitors} />
             <section className="history-strip"><div className="history-heading"><div><span className="overline">Decision conversation</span><h3>{revisitHistory.length + 1} message{revisitHistory.length ? "s" : ""}</h3><p>The original decision starts the thread. Every later evidence check stays attached to it.</p></div><span>Oldest first · open a message to review findings</span></div><div className="history-list conversation-timeline">
               <article className="history-message decision-origin"><div className="history-bubble"><span className="history-message-copy"><small>Decision created</small><strong>{decision.title}</strong><span>{decision.question}</span><time dateTime={decision.created_at}>{formatDateTime(decision.created_at)}</time></span><span className="history-message-result"><span className="history-status confirmed">Human reviewed</span></span></div></article>
               {[...revisitHistory].reverse().map((run) => {
@@ -1293,7 +1316,7 @@ export default function Home() {
           </div> : !comparisonRuns.length && revisitCompleted ? <div className="empty-findings"><strong>No material relationship found</strong><span>{lastRevisitModel} found no material effect on the consequential premises preserved in this decision.</span>{lastRevisitProvenance ? <span>Run provenance: {lastRevisitProvenance}</span> : null}</div> : null}
           <section className="conversation-drawers" aria-label="Decision details">
             <Disclosure title="Audit trail" summary={`${auditEvents.length} recorded events`}>
-              <div className="audit-timeline">{auditEvents.map((event, index) => <article className={`audit-event ${event.kind}`} key={event.id}><span className="audit-marker">{event.kind === "decision" ? "✓" : event.kind === "evidence" ? "•" : "●"}</span><div><small>{event.kind === "decision" ? "Human-reviewed record" : event.kind === "challenge" ? "Challenge review" : event.kind === "evidence" ? "Evidence check" : "Reviewer judgment"}</small><strong>{event.title}</strong><p>{event.detail}</p><time dateTime={event.timestamp}>{formatDateTime(event.timestamp)}</time></div>{index < auditEvents.length - 1 ? <span className="audit-line" /> : null}</article>)}</div>
+              <div className="audit-timeline">{auditEvents.map((event, index) => <article className={`audit-event ${event.kind}`} key={event.id}><span className="audit-marker">{event.kind === "decision" ? "✓" : event.kind === "evidence" ? "•" : "●"}</span><div><small>{event.kind === "decision" ? "Human-reviewed record" : event.kind === "challenge" ? "Challenge review" : event.kind === "evidence" ? "Evidence check" : event.kind === "monitor" ? "Assumption monitor" : "Reviewer judgment"}</small><strong>{event.title}</strong><p>{event.detail}</p><time dateTime={event.timestamp}>{formatDateTime(event.timestamp)}</time></div>{index < auditEvents.length - 1 ? <span className="audit-line" /> : null}</article>)}</div>
             </Disclosure>
             <Disclosure title="Challenge brief" summary={challenge?.status === "confirmed" ? "Human confirmed" : challenge ? "Needs confirmation" : "Not generated"}>{challengePanel}</Disclosure>
             <Disclosure title="Sharing" summary={`${shares.filter((share) => share.status === "active").length} active links`}>{sharePanel}</Disclosure>
