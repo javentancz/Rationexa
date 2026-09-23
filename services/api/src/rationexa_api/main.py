@@ -28,6 +28,7 @@ from .auth import (
     verify_password,
 )
 from .config import get_settings
+from .database_migrations import database_is_at_head
 from .db import (
     AccountRow,
     ArtifactRow,
@@ -47,6 +48,7 @@ from .db import (
     SessionRow,
     SourceAnchorRow,
     WorkspaceRow,
+    engine,
     get_db,
     init_db,
     new_share_token,
@@ -443,6 +445,8 @@ def readiness(db: Db) -> HealthRead:
         db.execute(text("SELECT 1"))
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Database is not ready") from exc
+    if not database_is_at_head(engine):
+        raise HTTPException(status_code=503, detail="Database migration is required")
     if settings.artifact_storage == "filesystem" and (
         not settings.artifact_dir.exists() or not settings.artifact_dir.is_dir()
     ):

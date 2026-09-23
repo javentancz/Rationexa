@@ -1,4 +1,5 @@
 import time
+from unittest.mock import patch
 
 from alembic.runtime.migration import MigrationContext
 from fastapi.testclient import TestClient
@@ -33,6 +34,16 @@ def test_readiness_checks_database_and_artifact_storage() -> None:
         response = client.get("/readyz")
         assert response.status_code == 200
         assert response.json()["status"] == "ready"
+
+
+def test_readiness_rejects_schema_drift() -> None:
+    with TestClient(app) as client, patch(
+        "rationexa_api.main.database_is_at_head",
+        return_value=False,
+    ):
+        response = client.get("/readyz")
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Database migration is required"
 
 
 def test_database_artifact_storage_preserves_original_bytes() -> None:
